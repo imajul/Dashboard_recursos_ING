@@ -49,6 +49,31 @@ class Api(unittest.TestCase):
         self.assertAlmostEqual(base["hhForecastTotal"], corto["hhForecastTotal"], places=6)
         self.assertNotAlmostEqual(base["hhExcedidas"], corto["hhExcedidas"], places=2)
 
+    def test_parametros_cambian_hh(self):
+        par = self.c.get("/api/parametros").json()["parametros"]
+        antes = self.c.post("/api/simular", json={"cambios": {}}).json()["kpis"]["hhForecastTotal"]
+        par["parque"]["Solar|Muy Grande"] = [[300, 7000], [500, 12000]]
+        r = self.c.put("/api/parametros", json=par)
+        self.assertEqual(r.status_code, 200, r.text)
+        despues = self.c.post("/api/simular", json={"cambios": {}}).json()["kpis"]["hhForecastTotal"]
+        self.assertGreater(despues, antes)
+        par["parque"]["Solar|Muy Grande"] = [[300, -1]]
+        self.assertEqual(self.c.put("/api/parametros", json=par).status_code, 422)
+        par["parque"]["Solar|Muy Grande"] = [[300, 7000], [500, 10000]]
+        self.assertEqual(self.c.put("/api/parametros", json=par).status_code, 200)
+
+    def test_curva_valida_y_normaliza(self):
+        original = self.c.get("/api/parametros").json()["curvas"]["Línea MT"]
+        self.addCleanup(lambda: self.c.put("/api/curvas/Línea MT", json=original))
+        mala = {"Eléctricos": [0.5, 0.7]}
+        self.assertEqual(self.c.put("/api/curvas/Línea MT", json=mala).status_code, 422)
+        r = self.c.put("/api/curvas/Línea MT?normalizar=true", json=mala).json()
+        self.assertAlmostEqual(r["suma"], 1.0)
+        self.assertEqual(r["meses"], 2)
+        curvas = self.c.get("/api/parametros").json()["curvas"]
+        self.assertEqual(list(curvas["Línea MT"]), ["Eléctricos"])
+        self.assertEqual(self.c.put("/api/curvas/Solar", json={"Pintores": [1]}).status_code, 422)
+
     def test_mejor_inicio_y_detalle(self):
         r = self.c.get("/api/proyectos/8/mejor-inicio").json()
         self.assertIn("mejor", r)

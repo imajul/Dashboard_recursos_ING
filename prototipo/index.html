@@ -284,6 +284,22 @@ dialog.moving #dlgBar{cursor:grabbing}
 .sc{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--rule-soft)}
 .sc small{color:var(--ink-soft)}
 .tablewrap{overflow-x:auto}
+/* parámetros */
+.ptabs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 12px;padding-bottom:10px;border-bottom:1px solid var(--rule-soft)}
+.psub{color:var(--ink-soft);font-size:12px;line-height:1.45;max-width:72ch}
+.pgrid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:760px){.pgrid{grid-template-columns:1fr}}
+table.pk td.tam{font-weight:600;vertical-align:top;padding-top:8px}
+table.pk tr.grp td{border-top:1px solid var(--rule)}
+table.pk input.pct{min-width:58px}
+table.cm{font-size:12px}
+table.cm th,table.cm td{padding:3px 3px;text-align:right}
+table.cm th:first-child,table.cm td:first-child{text-align:left;white-space:nowrap;padding-right:8px}
+table.cm input[type=number]{min-width:0;width:58px;padding:3px 4px;font-size:11.5px}
+table.cm tfoot td{font:600 11px/1.2 var(--f-num);color:var(--ink-soft);border-bottom:none}
+.mb{height:26px;display:flex;align-items:flex-end;justify-content:center;margin-bottom:2px}
+.mb i{display:block;width:60%;min-height:1px;background:var(--ink-soft);border-radius:2px 2px 0 0}
+.chip{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
 #tip{position:fixed;z-index:1200;pointer-events:none;background:var(--band);color:var(--band-ink);border-radius:6px;
   padding:7px 9px;font-size:12px;line-height:1.4;box-shadow:var(--shadow);max-width:280px;display:none}
 #tip.on{display:block}
@@ -325,6 +341,7 @@ kbd{font:600 11px var(--f-num);background:var(--band-3);border:1px solid var(--r
     <button class="btn" id="undo" disabled>Deshacer</button>
     <div class="sep"></div>
     <button class="btn" id="resBtn" title="Dotación, HH por persona, eficiencia, horizonte">Recursos</button>
+    <button class="btn" id="parBtn" title="Tablas de HH por tecnología y tamaño, ET, Línea, DNN, O&amp;M y curvas">Parámetros</button>
     <button class="btn" id="minBtn" title="Personas mínimas para que ningún mes supere el 100 %">Nivelar</button>
     <div class="sep"></div>
     <button class="btn" id="scenBtn">Escenarios</button>
@@ -425,8 +442,8 @@ function load(){
 }
 function snap(){return clone({datos:S.datos,nombre:S.nombre});}
 function push(){undoStack.push(snap());if(undoStack.length>60)undoStack.shift();redoStack=[];updUndo();}
-function undo(){if(!undoStack.length)return;redoStack.push(snap());var p=undoStack.pop();S.datos=p.datos;S.nombre=p.nombre;recalc();render();save();toast("Deshecho");}
-function redo(){if(!redoStack.length)return;undoStack.push(snap());var p=redoStack.pop();S.datos=p.datos;S.nombre=p.nombre;recalc();render();save();}
+function undo(){if(!undoStack.length)return;redoStack.push(snap());var p=undoStack.pop();S.datos=p.datos;S.nombre=p.nombre;recalc();render();save();refreshParam();toast("Deshecho");}
+function redo(){if(!redoStack.length)return;undoStack.push(snap());var p=redoStack.pop();S.datos=p.datos;S.nombre=p.nombre;recalc();render();save();refreshParam();}
 function updUndo(){document.getElementById("undo").disabled=!undoStack.length;}
 
 /* ===================== cálculo ===================== */
@@ -1042,6 +1059,189 @@ function openNivelar(){
   if(b)b.onclick=function(){push();Object.keys(sug).forEach(function(e){cap.dotacion[e]=(cap.dotacion[e]||0)+sug[e];});recalc();render();save();dlg.close();toast("Dotación nivelada");};
 }
 
+/* ===================== parámetros del modelo ===================== */
+/* Edita S.datos.parametros y S.datos.curvas (≙ tablas param_parque, param_valor y DIM_Curvas).
+   Cada cambio entra en la pila de deshacer y recalcula todo al instante. */
+var PTAB="parque",PTEC="Solar",PCUR="Solar";
+var PTABS=[["parque","HH Parque"],["etl","ET y Línea"],["dnn","DNN y O&M"],["curvas","Curvas"]];
+var NFX=new Intl.NumberFormat("es-AR",{maximumFractionDigits:2});
+function pct(v){return Math.round(v*10000)/100;}
+function numIn(attr,val,extra){return '<input type="number" '+attr+' value="'+val+'" min="0" step="any"'+(extra||"")+'>';}
+function openParametros(){renderParam();openDlg(true);}
+function refreshParam(){if(document.getElementById("parBox"))renderParam();}
+function usaCurva(nombre){
+  var P=S.datos.parametros;
+  return S.datos.proyectos.filter(function(p){return E.componentes(p,P).some(function(c){return c.curva===nombre;});});
+}
+function renderParam(){
+  var P=S.datos.parametros,top=dlg.scrollTop;
+  var html='<h3>Parámetros del modelo</h3><div id="parBox"><div class="psub">Definen cuántas HH requiere cada proyecto y cómo se reparten en el tiempo. Cada cambio recalcula la herramienta al instante, se deshace con Ctrl+Z y se guarda junto con el escenario.</div>'
+    +'<div class="ptabs">'+PTABS.map(function(t){return '<button class="btn sm'+(PTAB===t[0]?" on":"")+'" data-ptab="'+t[0]+'">'+t[1]+'</button>';}).join("")+'</div>';
+  if(PTAB==="parque")html+=tabParque(P);
+  else if(PTAB==="etl")html+=tabETL(P);
+  else if(PTAB==="dnn")html+=tabDNN(P);
+  else html+=tabCurvas();
+  html+='<div class="row-actions" style="margin-top:14px"><button class="btn sm" data-preset="1">Restablecer '+(PTAB==="parque"?PTEC:PTAB==="curvas"?"la curva "+esc(PCUR):"esta pestaña")+' a los valores de ejemplo</button></div></div>';
+  document.getElementById("dlgBody").innerHTML=html;
+  document.getElementById("dlgTitle").textContent="Parámetros del modelo";
+  dlg.scrollTop=top;
+  wireParam();
+}
+function tabParque(P){
+  var html='<div class="chip">'+TECNOS.map(function(t){return '<button class="fchip'+(PTEC===t?" on":"")+'" data-ptec="'+t+'">'+t+'</button>';}).join("")+'</div>'
+    +'<div class="pgrid" style="margin-top:12px"><div><div class="psub" style="margin-bottom:8px">HH del parque según la potencia. Entre dos puntos se interpola en línea recta; fuera del rango se extiende el tramo más cercano.</div>'
+    +'<table class="pk"><tr><th>Tamaño</th><th class="r">MW</th><th class="r">HH</th><th class="r">HH/MW</th><th></th></tr>';
+  TAMANOS.forEach(function(tam){
+    var pts=P.parque[PTEC+"|"+tam]||[];
+    pts.forEach(function(pt,i){
+      html+='<tr'+(i===0?' class="grp"':'')+'>'+(i===0?'<td class="tam" rowspan="'+(pts.length+1)+'">'+tam+'</td>':'')
+        +'<td>'+numIn('data-pp="'+tam+'|'+i+'|0" aria-label="MW, '+tam+', punto '+(i+1)+'"',pt[0])+'</td>'
+        +'<td>'+numIn('data-pp="'+tam+'|'+i+'|1" aria-label="HH, '+tam+', punto '+(i+1)+'"',pt[1])+'</td>'
+        +'<td class="calc">'+(pt[0]>0?NF0.format(pt[1]/pt[0]):"—")+'</td>'
+        +'<td class="x"><button data-pdel="'+tam+'|'+i+'" title="Quitar punto"'+(pts.length<2?" disabled":"")+'>✕</button></td></tr>';
+    });
+    var addBtn='<td colspan="4"><button class="btn sm" data-padd="'+tam+'">+ punto</button></td></tr>';
+    html+=pts.length?'<tr>'+addBtn:'<tr class="grp"><td class="tam">'+tam+'</td>'+addBtn;
+  });
+  html+='</table></div><div><h4 style="margin-top:0">Proyectos '+PTEC+' con estos valores</h4>';
+  var ps=S.datos.proyectos.filter(function(p){return p.tecnologia===PTEC;});
+  if(!ps.length)html+='<div class="psub">Ningún proyecto usa esta tecnología.</div>';
+  else{
+    html+='<table class="pk"><tr><th>Proyecto</th><th>Tamaño</th><th class="r">MW</th><th class="r">HH parque</th><th class="r">HH usadas</th></tr>';
+    ps.forEach(function(p){
+      var pts=P.parque[PTEC+"|"+p.tamano],base=pts?E.interpolar(pts,+p.potencia||0):0,c=E.componentes(p,P)[0];
+      var man=(p.tipoCliente==="DPI"&&p.hhParque!=null&&p.hhParque!=="")||(p.tipoCliente!=="DPI"&&p.hhProy!=null&&p.hhProy!=="");
+      html+='<tr class="click" data-goto="'+esc(p.id)+'"><td>'+esc(p.proyecto)+' <span class="fl">'+esc(p.tipoCliente)+'</span></td><td>'+esc(p.tamano)+'</td><td class="calc">'+NF0.format(+p.potencia||0)+'</td><td class="calc">'+hh(base)+'</td><td class="calc">'+(man?'<span class="fl warn" title="Valor manual del proyecto: no usa esta tabla">manual</span> ':'')+hh(c.hh)+'</td></tr>';
+    });
+    html+='</table><div class="psub" style="margin-top:6px">«HH usadas» es lo que entra al cálculo: igual a la tabla en DPI, multiplicado por el factor en DNN y O&amp;M, o el valor manual si el proyecto lo tiene.</div>';
+  }
+  return html+'</div></div>';
+}
+function tabETL(P){
+  var html='<div class="pgrid"><div><table class="pk"><tr><th>Tamaño</th><th class="r">ET Nueva</th><th class="r">Ampliación ET</th><th class="r">Línea AT</th><th class="r">Línea MT</th></tr>';
+  TAMANOS.forEach(function(t){
+    html+='<tr><td>'+t+'</td><td>'+numIn('data-et="'+t+'" aria-label="HH ET Nueva '+t+'"',P.et[t]||0)+'</td><td class="calc">'+hh((P.et[t]||0)*P.factorAmpliacionET)+'</td>'
+      +'<td>'+numIn('data-ln="'+t+'" aria-label="HH Línea AT '+t+'"',P.linea[t]||0)+'</td><td class="calc">'+hh((P.linea[t]||0)*P.factorLineaMT)+'</td></tr>';
+  });
+  html+='</table><div class="psub" style="margin-top:6px">HH por componente según el tamaño del proyecto. Ampliación ET y Línea MT se calculan con los porcentajes de la derecha.</div></div>'
+    +'<div><div class="f"><label for="fxAmp">Ampliación ET (% de una ET Nueva)</label>'+numIn('id="fxAmp" data-fx="factorAmpliacionET" class="pct"',pct(P.factorAmpliacionET))+'</div>'
+    +'<div class="f"><label for="fxMT">Línea MT (% de una Línea AT)</label>'+numIn('id="fxMT" data-fx="factorLineaMT" class="pct"',pct(P.factorLineaMT))+'</div>'
+    +'<h4>Proyectos con ET o Línea</h4><table class="pk"><tr><th>Proyecto</th><th class="r">ET</th><th class="r">Línea</th></tr>';
+  S.datos.proyectos.forEach(function(p){
+    var cs=E.componentes(p,P),et=cs.filter(function(c){return c.componente==="ET";})[0],ln=cs.filter(function(c){return c.componente==="Línea";})[0];
+    if(et||ln)html+='<tr class="click" data-goto="'+esc(p.id)+'"><td>'+esc(p.proyecto)+'</td><td class="calc">'+(et?hh(et.hh):"—")+'</td><td class="calc">'+(ln?hh(ln.hh):"—")+'</td></tr>';
+  });
+  return html+'</table></div></div>';
+}
+function tabDNN(P){
+  var html='<div class="pgrid"><div><div class="psub" style="margin-bottom:10px">DNN y O&amp;M no tienen tabla propia: usan las HH de parque equivalentes (tecnología, tamaño y MW) multiplicadas por estos porcentajes. Si el proyecto tiene «HH Estimadas Proy» cargadas, se usa ese valor.</div>'
+    +'<div class="two"><div class="f"><label for="fxC1">DNN Cat1 (% · 3 meses)</label>'+numIn('id="fxC1" data-fdnn="DNN Cat1" class="pct"',pct(P.factorDNN["DNN Cat1"]||0))+'</div>'
+    +'<div class="f"><label for="fxC2">DNN Cat2 (% · 9 meses)</label>'+numIn('id="fxC2" data-fdnn="DNN Cat2" class="pct"',pct(P.factorDNN["DNN Cat2"]||0))+'</div></div>'
+    +'<div class="f"><label for="fxOM">O&amp;M (% · 12 meses)</label>'+numIn('id="fxOM" data-fx="factorOM" class="pct"',pct(P.factorOM))+'</div></div>'
+    +'<div><table class="pk"><tr><th>Proyecto</th><th>Curva</th><th class="r">HH</th></tr>';
+  S.datos.proyectos.forEach(function(p){
+    if(p.tipoCliente==="DPI")return;
+    var c=E.componentes(p,P)[0],man=p.hhProy!=null&&p.hhProy!=="";
+    html+='<tr class="click" data-goto="'+esc(p.id)+'"><td>'+esc(p.proyecto)+'</td><td>'+esc(c.curva||"—")+'</td><td class="calc">'+(man?'<span class="fl warn" title="HH Estimadas Proy cargadas en el proyecto">manual</span> ':'')+hh(c.hh)+'</td></tr>';
+  });
+  return html+'</table></div></div>';
+}
+function tabCurvas(){
+  var C=S.datos.curvas,names=Object.keys(C);
+  if(!C[PCUR])PCUR=names[0];
+  var cur=C[PCUR],esps=R.especialidades,n=E.largoCurva(C,PCUR),tot=0,col=[];
+  for(var k=0;k<n;k++)col.push(0);
+  esps.forEach(function(e){(cur[e]||[]).forEach(function(f,k){col[k]+=f;tot+=f;});});
+  var mx=Math.max.apply(null,col.concat([1e-9])),usos=usaCurva(PCUR);
+  var ok=Math.abs(tot-1)<=0.005;
+  var html='<div class="row-actions" style="align-items:center;margin-top:0"><label for="pcurSel" style="font-size:12px;color:var(--ink-soft)">Curva</label>'
+    +'<select id="pcurSel" style="border:1px solid var(--rule);border-radius:6px;padding:5px 8px;background:var(--chip)">'+names.map(function(c){return '<option'+(c===PCUR?" selected":"")+'>'+esc(c)+'</option>';}).join("")+'</select>'
+    +'<span class="fl">'+n+' meses</span><span class="fl '+(ok?"ok":"crit")+'" title="Suma de todos los factores">total '+NFX.format(pct(tot))+' %</span>'
+    +'<span class="psub">'+(usos.length?'Usada por '+usos.length+' proyecto(s): '+usos.slice(0,4).map(function(p){return esc(p.proyecto);}).join(", ")+(usos.length>4?"…":""):"Ningún proyecto la usa")+'</span></div>'
+    +'<div class="psub" style="margin:8px 0">Porcentaje de las HH del componente que cae en cada mes y especialidad. El total debería dar 100 %; si no, la demanda se infla o se achica en la misma proporción.</div>'
+    +'<div class="tablewrap"><table class="pk cm"><thead><tr><th>Especialidad</th>';
+  for(k=0;k<n;k++)html+='<th>M'+(k+1)+'</th>';
+  html+='<th>Total</th></tr></thead><tbody>';
+  esps.forEach(function(e){
+    var f=cur[e]||[],se=0;
+    html+='<tr><td>'+esc(e)+'</td>';
+    for(var k=0;k<n;k++){var v=f[k]||0;se+=v;html+='<td>'+numIn('data-cf="'+esc(e)+'|'+k+'" aria-label="'+esc(e)+' mes '+(k+1)+' (%)"',pct(v))+'</td>';}
+    html+='<td class="calc">'+NFX.format(pct(se))+' %</td></tr>';
+  });
+  html+='</tbody><tfoot><tr><td>Total mes</td>';
+  col.forEach(function(v){html+='<td><div class="mb" title="'+NFX.format(pct(v))+' %"><i style="height:'+(v/mx*100)+'%"></i></div>'+NFX.format(pct(v))+'</td>';});
+  html+='<td>'+NFX.format(pct(tot))+' %</td></tr></tfoot></table></div>'
+    +'<div class="row-actions"><button class="btn sm" data-cact="add">+ mes al final</button><button class="btn sm" data-cact="del"'+(n<2?" disabled":"")+'>Quitar último mes</button>'
+    +'<button class="btn sm primary" data-cact="norm"'+(ok||tot<=0?" disabled":"")+' title="Escala todos los factores para que sumen 100 %">Normalizar a 100 %</button></div>';
+  return html;
+}
+function keyOf(el){
+  if(!el||!el.attributes)return null;
+  for(var i=0;i<el.attributes.length;i++){var a=el.attributes[i];if(/^data-(pp|et|ln|fx|fdnn|cf|pdel|padd|cact|ptab|ptec|preset)$/.test(a.name))return '['+a.name+'="'+a.value.replace(/"/g,'\\"')+'"]';}
+  return el.id==="pcurSel"?"#pcurSel":null;
+}
+function wireParam(){
+  var box=document.getElementById("parBox");
+  box.onclick=function(e){
+    var b=e.target.closest("button,[data-goto]");if(!b)return;
+    var P=S.datos.parametros,C=S.datos.curvas,d=b.dataset;
+    if(d.goto){sel_({p:d.goto});return;}
+    if(d.ptab){PTAB=d.ptab;renderParam();return;}
+    if(d.ptec){PTEC=d.ptec;renderParam();return;}
+    if(d.padd){
+      push();var key=PTEC+"|"+d.padd,pts=P.parque[key]=P.parque[key]||[];
+      var last=pts[pts.length-1];pts.push(last?[Math.round(last[0]*1.5),Math.round(last[1]*1.3)]:[100,1000]);
+      aplicarParam();return;
+    }
+    if(d.pdel){var a=d.pdel.split("|"),pts2=P.parque[PTEC+"|"+a[0]];if(pts2.length<2)return;push();pts2.splice(+a[1],1);aplicarParam();return;}
+    if(d.cact){
+      var cur=C[PCUR],n=E.largoCurva(C,PCUR);
+      push();
+      R.especialidades.forEach(function(e){var f=cur[e]=cur[e]||[];while(f.length<n)f.push(0);});
+      if(d.cact==="add")Object.keys(cur).forEach(function(e){cur[e].push(0);});
+      if(d.cact==="del")Object.keys(cur).forEach(function(e){cur[e].pop();});
+      if(d.cact==="norm"){
+        var t=0;Object.keys(cur).forEach(function(e){cur[e].forEach(function(f){t+=f;});});
+        if(t>0)Object.keys(cur).forEach(function(e){cur[e]=cur[e].map(function(f){return Math.round(f/t*1e6)/1e6;});});
+      }
+      aplicarParam();toast(d.cact==="norm"?"Curva normalizada a 100 %":"Curva "+PCUR+": "+E.largoCurva(C,PCUR)+" meses");return;
+    }
+    if(d.preset){
+      var M=window.SAMPLE_DATA.parametros;push();
+      if(PTAB==="parque")TAMANOS.forEach(function(t){var k=PTEC+"|"+t;if(M.parque[k])P.parque[k]=clone(M.parque[k]);else delete P.parque[k];});
+      if(PTAB==="etl"){P.et=clone(M.et);P.linea=clone(M.linea);P.factorAmpliacionET=M.factorAmpliacionET;P.factorLineaMT=M.factorLineaMT;}
+      if(PTAB==="dnn"){P.factorDNN=clone(M.factorDNN);P.factorOM=M.factorOM;}
+      if(PTAB==="curvas"&&window.SAMPLE_DATA.curvas[PCUR])C[PCUR]=clone(window.SAMPLE_DATA.curvas[PCUR]);
+      aplicarParam();toast("Valores de ejemplo restaurados · Ctrl+Z para deshacer");
+    }
+  };
+  box.onchange=function(e){
+    var t=e.target;
+    if(t.id==="pcurSel"){PCUR=t.value;renderParam();return;}
+    var d0=t.dataset;if(!(d0.pp||d0.et||d0.ln||d0.fx||d0.fdnn||d0.cf))return;
+    var v=parseFloat(String(t.value).replace(",","."));
+    if(isNaN(v)||v<0){toast("Ingresá un número mayor o igual a cero");renderParam();return;}
+    var P=S.datos.parametros,C=S.datos.curvas,d=t.dataset;
+    push();
+    if(d.pp){var a=d.pp.split("|"),pts=P.parque[PTEC+"|"+a[0]];pts[+a[1]][+a[2]]=v;pts.sort(function(x,y){return x[0]-y[0];});}
+    else if(d.et)P.et[d.et]=v;
+    else if(d.ln)P.linea[d.ln]=v;
+    else if(d.fx)P[d.fx]=v/100;
+    else if(d.fdnn)P.factorDNN[d.fdnn]=v/100;
+    else if(d.cf){var b=d.cf.split("|"),f=C[PCUR][b[0]]=C[PCUR][b[0]]||[];while(f.length<=+b[1])f.push(0);f[+b[1]]=Math.round(v*1e4)/1e6;}
+    aplicarParam();
+  };
+}
+/* recalcula, y re-dibuja el diálogo conservando el campo que tenía el foco */
+function aplicarParam(){
+  recalc();render();save();
+  setTimeout(function(){
+    var k=keyOf(document.activeElement);
+    renderParam();
+    if(k){var el=document.querySelector("#parBox "+k);if(el){el.focus();if(el.select)el.select();}}
+  },0);
+}
+
 /* ===================== escenarios ===================== */
 function scenList(){try{return JSON.parse(localStorage.getItem(KEY+"-sc")||"[]");}catch(e){return [];}}
 function scenSet(a){try{localStorage.setItem(KEY+"-sc",JSON.stringify(a));}catch(e){toast("No se pudo guardar en este navegador");}}
@@ -1225,7 +1425,7 @@ function openPDF(){
 function abrirBuscar(){var b=document.getElementById("buscar");b.className="on";var i=document.getElementById("buscarInp");i.value=S.q||"";i.focus();i.select();}
 function cerrarBuscar(){document.getElementById("buscar").className="";S.q="";renderRows();}
 function openAtajos(){
-  var A=[["Ctrl+Z / Ctrl+Y","Deshacer / rehacer"],["Ctrl+S","Guardar en este navegador"],["Ctrl+F","Buscar proyecto"],["Ctrl+P","Reporte PDF"],
+  var A=[["Ctrl+Z / Ctrl+Y","Deshacer / rehacer (también los cambios de parámetros)"],["Ctrl+S","Guardar en este navegador"],["Ctrl+F","Buscar proyecto"],["Ctrl+P","Reporte PDF"],
     ["↑ / ↓","Proyecto anterior / siguiente"],["← / →","Mover el proyecto elegido 1 mes"],["Ctrl+← / Ctrl+→","Mover 12 meses"],["Shift+← / Shift+→","Acortar / alargar 1 mes"],
     ["+ / −","Zoom de la línea de tiempo"],["Ctrl+rueda","Zoom con el mouse"],["Esc","Cerrar diálogo o soltar selección"],["F1 o ?","Esta ayuda"]];
   document.getElementById("dlgBody").innerHTML='<h3>Atajos de teclado</h3><table class="atajos">'+A.map(function(a){return '<tr><td><kbd>'+a[0]+'</kbd></td><td>'+a[1]+'</td></tr>';}).join("")+'</table>'
@@ -1289,6 +1489,7 @@ function boot(){
     var n=document.getElementById("edName");if(n){n.focus();n.select();}
   };
   document.getElementById("resBtn").onclick=openRecursos;
+  document.getElementById("parBtn").onclick=openParametros;
   document.getElementById("minBtn").onclick=openNivelar;
   document.getElementById("scenBtn").onclick=openScen;
   document.getElementById("cmpBtn").onclick=openComparar;

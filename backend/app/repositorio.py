@@ -32,19 +32,8 @@ def cargar_dataset(cn: sqlite3.Connection, datos: dict) -> None:
             cn.execute("INSERT OR REPLACE INTO especialidad VALUES (?,?)", (e, i))
         cn.execute("DELETE FROM dim_curva")
         for curva, esps in datos["curvas"].items():
-            for esp, factores in esps.items():
-                cn.executemany("INSERT INTO dim_curva VALUES (?,?,?,?)",
-                               [(curva, k + 1, esp, f) for k, f in enumerate(factores)])
-        p = datos["parametros"]
-        cn.execute("DELETE FROM param_parque")
-        for clave, puntos in p["parque"].items():
-            tec, tam = clave.split("|")
-            cn.executemany("INSERT INTO param_parque VALUES (?,?,?,?)", [(tec, tam, mw, hh) for mw, hh in puntos])
-        cn.execute("DELETE FROM param_valor")
-        filas = [("et", k, v) for k, v in p["et"].items()] + [("linea", k, v) for k, v in p["linea"].items()]
-        filas += [("factorDNN", k, v) for k, v in p["factorDNN"].items()]
-        filas += [("factor", k, p[k]) for k in ("factorAmpliacionET", "factorLineaMT", "factorOM")]
-        cn.executemany("INSERT INTO param_valor VALUES (?,?,?)", filas)
+            _escribir_curva(cn, curva, esps)
+        _escribir_parametros(cn, datos["parametros"])
         cap = datos["capacidad"]
         cn.execute("INSERT OR REPLACE INTO capacidad_global VALUES (1,?,?,?,?)",
                    (cap["hhMesPersona"], cap["eficiencia"], datos["horizonte"]["desde"], datos["horizonte"]["meses"]))
@@ -169,3 +158,58 @@ def materializar_forecast(cn: sqlite3.Connection, esc_id: int | None, filas: lis
         if esc_id is not None and kpis is not None:
             cn.execute("INSERT OR REPLACE INTO resultado_escenario (escenario_id, kpis_json) VALUES (?,?)",
                        (esc_id, json.dumps(kpis, ensure_ascii=False, default=str)))
+
+
+# ---------------------------------------------------------------- parámetros del modelo
+def _escribir_parametros(cn: sqlite3.Connection, p: dict) -> None:
+    cn.execute("DELETE FROM param_parque")
+    for clave, puntos in p["parque"].items():
+        tec, tam = clave.split("|")
+        cn.executemany("INSERT INTO param_parque VALUES (?,?,?,?)", [(tec, tam, mw, hh) for mw, hh in puntos])
+    cn.execute("DELETE FROM param_valor")
+    filas = [("et", k, v) for k, v in p["et"].items()] + [("linea", k, v) for k, v in p["linea"].items()]
+    filas += [("factorDNN", k, v) for k, v in p["factorDNN"].items()]
+    filas += [("factor", k, p[k]) for k in ("factorAmpliacionET", "factorLineaMT", "factorOM")]
+    cn.executemany("INSERT INTO param_valor VALUES (?,?,?)", filas)
+
+
+def _escribir_curva(cn: sqlite3.Connection, nombre: str, curva: dict) -> None:
+    cn.execute("DELETE FROM dim_curva WHERE tipo_curva = ?", (nombre,))
+    for esp, factores in curva.items():
+        cn.executemany("INSERT INTO dim_curva VALUES (?,?,?,?)",
+                       [(nombre, k + 1, esp, f) for k, f in enumerate(factores)])
+
+
+def validar_parametros(p: dict) -> list[str]:
+    errores = []
+    for clave, puntos in p.get("parque", {}).items():
+        if "|" not in clave:
+            errores.append(f"Clave de parque inválida: {clave!r} (se espera 'Tecnología|Tamaño')")
+        if not puntos:
+            errores.append(f"{clave}: necesita al menos un punto [MW, HH]")
+        if any(len(pt) != 2 or pt[0] < 0 or pt[1] < 0 for pt in puntos):
+            errores.append(f"{clave}: los puntos deben ser [MW, HH] no negativos")
+        if len({pt[0] for pt in puntos}) != len(puntos):
+            errores.append(f"{clave}: hay dos puntos con la misma potencia")
+    for grupo in ("et", "linea", "factorDNN"):
+        if any(v < 0 for v in p.get(grupo, {}).values()):
+            errores.append(f"{grupo}: no se admiten valores negativos")
+    for k in ("factorAmpliacionET", "factorLineaMT", "factorOM"):
+        if k not in p or p[k] < 0:
+            errores.append(f"Falta {k} o es negativo")
+    return errores
+
+
+def guardar_parametros(cn: sqlite3.Connection, p: dict, usuario: str | None) -> None:
+    p = {**p, "parque": {k: sorted(v, key=lambda pt: pt[0]) for k, v in p["parque"].items()}}
+    with cn:
+        _escribir_parametros(cn, p)
+        cn.execute("INSERT INTO auditoria (usuario, entidad, entidad_id, accion, detalle) VALUES (?,?,?,?,?)",
+                   (usuario, "parametros", None, "modificar", json.dumps(p, ensure_ascii=False)))
+
+
+def guardar_curva(cn: sqlite3.Connection, nombre: str, curva: dict, usuario: str | None) -> None:
+    with cn:
+        _escribir_curva(cn, nombre, curva)
+        cn.execute("INSERT INTO auditoria (usuario, entidad, entidad_id, accion, detalle) VALUES (?,?,?,?,?)",
+                   (usuario, "curva", nombre, "modificar", json.dumps(curva, ensure_ascii=False)))

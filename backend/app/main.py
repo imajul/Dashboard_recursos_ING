@@ -139,6 +139,61 @@ def comparar(ids: str, cn=Depends(get_cn)):
     return _json_seguro(out)
 
 
+# ---------------------------------------------------------------- parámetros del modelo
+class Parametros(BaseModel):
+    parque: dict[str, list[list[float]]] = Field(description="'Tecnología|Tamaño' -> [[MW, HH], ...]")
+    et: dict[str, float]
+    linea: dict[str, float]
+    factorAmpliacionET: float
+    factorLineaMT: float
+    factorDNN: dict[str, float]
+    factorOM: float
+
+
+@app.get("/api/parametros")
+def leer_parametros(cn=Depends(get_cn)):
+    d = repositorio.leer_dataset(cn)
+    return {"parametros": d["parametros"], "curvas": d["curvas"]}
+
+
+@app.put("/api/parametros")
+def modificar_parametros(body: Parametros, cn=Depends(get_cn), user=Depends(usuario_actual)):
+    """Reemplaza las tablas de HH (param_parque, param_valor). Solo rol Administrador en producción."""
+    p = body.model_dump()
+    errores = repositorio.validar_parametros(p)
+    if errores:
+        raise HTTPException(422, errores)
+    repositorio.guardar_parametros(cn, p, user)
+    _recalcular(cn, None)
+    return repositorio.leer_dataset(cn)["parametros"]
+
+
+@app.put("/api/curvas/{tipo_curva}")
+def modificar_curva(tipo_curva: str, curva: dict[str, list[float]], normalizar: bool = False,
+                    cn=Depends(get_cn), user=Depends(usuario_actual)):
+    """Reemplaza una curva de DIM_Curvas: {especialidad: [factor_mes_1, ...]}.
+
+    Rechaza curvas cuya suma se aleje más de 2 % de 1, salvo ``normalizar=true``.
+    """
+    d = repositorio.leer_dataset(cn)
+    desconocidas = set(curva) - set(d["especialidades"])
+    if desconocidas:
+        raise HTTPException(422, f"Especialidades desconocidas: {sorted(desconocidas)}")
+    if any(f < 0 for v in curva.values() for f in v):
+        raise HTTPException(422, "Los factores no pueden ser negativos")
+    total = sum(sum(v) for v in curva.values())
+    if total <= 0:
+        raise HTTPException(422, "La curva está vacía")
+    if normalizar:
+        curva = {e: [f / total for f in v] for e, v in curva.items()}
+    elif abs(total - 1) > 0.02:
+        raise HTTPException(422, f"La curva suma {total:.4f}; debe sumar 1 (o usar normalizar=true)")
+    repositorio.guardar_curva(cn, tipo_curva, curva, user)
+    _recalcular(cn, None)
+    return {"tipoCurva": tipo_curva, "meses": max(len(v) for v in curva.values()),
+            "suma": sum(sum(v) for v in curva.values())}
+
+
 # ---------------------------------------------------------------- SharePoint
 @app.post("/api/sync/sharepoint")
 def sync(cn=Depends(get_cn)):

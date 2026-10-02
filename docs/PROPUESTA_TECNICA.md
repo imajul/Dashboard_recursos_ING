@@ -225,6 +225,8 @@ Código en [`backend/app/`](../backend/app).
 | GET/POST/PUT | `/api/escenarios[/{id}]` | Alta, modificación y lista de escenarios (con auditoría). |
 | GET | `/api/escenarios/{id}/resultado` | Resultado completo de un escenario. |
 | GET | `/api/comparar?ids=0,3,5` | KPIs y cuellos de botella lado a lado (0 = base). |
+| GET/PUT | `/api/parametros` | Lee o reemplaza las tablas de HH (parque por tecnología y tamaño, ET, Línea, factores DNN y O&M). Valida y audita. |
+| PUT | `/api/curvas/{tipo}` | Reemplaza una curva. Rechaza sumas que se alejen más de 2 % de 1, salvo `?normalizar=true`. |
 | POST | `/api/sync/sharepoint` | Dispara la sincronización (también la llama la tarea programada). |
 
 OpenAPI automático en `/docs`.
@@ -353,6 +355,25 @@ Puntos prácticos:
 | Impacto **ET y Líneas** | `mixComponente` (Parque / ET / Línea / DNN / O&M) | `calcular()` |
 | Duración fija de cada curva (no editable en el modelo actual) | `duracion` por proyecto + `reescalar()`: la curva se estira o comprime conservando HH totales y forma | `motor.py` |
 | Formato condicional (semáforo) | Clases `ok` < 0,80 · `warn` < 1,00 · `crit` ≥ 1,00 | front |
+
+### Mantenimiento de los parámetros
+
+Las tablas que determinan las HH ya no están escondidas en DAX: se editan desde la ventana
+**Parámetros** de la herramienta, con cuatro pestañas.
+
+| Pestaña | Qué se edita | Vista previa |
+|---|---|---|
+| HH Parque | Puntos [MW, HH] por tecnología y tamaño. Se pueden agregar o quitar puntos; entre puntos se interpola y fuera del rango se extiende el tramo más cercano. | Proyectos de esa tecnología con sus HH de tabla y las HH que realmente entran al cálculo (marcando los valores manuales). |
+| ET y Línea | HH de ET Nueva y Línea AT por tamaño; % de Ampliación ET y de Línea MT. | Proyectos con ET o Línea y sus HH. |
+| DNN y O&M | % de las HH de parque para DNN Cat1, DNN Cat2 y O&M. | Proyectos DNN y O&M con sus HH. |
+| Curvas | Matriz especialidad × mes en %, con totales por fila y por mes. Permite agregar o quitar meses y normalizar a 100 %. | Total de la curva con alerta si no da 100 %, y lista de proyectos que la usan. |
+
+Todo recalcula al instante, entra en la pila de deshacer y viaja con el escenario. Por eso se puede
+simular, por ejemplo, "¿qué pasa si las ET Nuevas Muy Grandes pasan a 3.500 HH?" y compararlo con la
+base. En producción, la misma pantalla llama a `PUT /api/parametros` y `PUT /api/curvas/{tipo}`, que
+validan, registran el cambio en `auditoria` y recalculan. Solo el rol Administrador puede publicar
+parámetros en la base. Si las curvas siguen manteniéndose en la lista SharePoint `DIM_Curvas`, la
+edición de curvas queda en modo simulación y la lista sigue siendo la fuente oficial.
 
 ### Ejemplo verificado (PPSDV)
 
