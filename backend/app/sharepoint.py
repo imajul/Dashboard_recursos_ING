@@ -43,6 +43,7 @@ MAPEO_PROYECTO = {
     "HH_x0020_Estimadas_x0020_L_x00ed_nea": "hhLinea",
     "HH_x0020_Estimadas_x0020_Proy": "hhProy",
     "Factor_x0020_Solapamiento": "factorSolapamiento",
+    "Duraci_x00f3_n_x0020_meses": "duracion",  # opcional: vacío = la de las curvas
 }
 MAPEO_CURVA = {"Tecnolog_x00ed_a": "tipoCurva", "Mes": "mes", "Especialidad": "especialidad", "Factor": "factor"}
 
@@ -122,6 +123,8 @@ def mapear_proyecto(item: dict) -> dict:
     for k in ("potencia", "hhParque", "hhEt", "hhLinea", "hhProy", "factorSolapamiento"):
         if p.get(k) not in (None, ""):
             p[k] = float(p[k])
+    if p.get("duracion") not in (None, ""):
+        p["duracion"] = int(float(p["duracion"]))
     p["id"] = int(item["id"])
     return p
 
@@ -137,6 +140,8 @@ def validar_proyecto(p: dict) -> list[str]:
     fs = p.get("factorSolapamiento")
     if fs is not None and not 0 <= fs <= 1:
         errores.append(f"Factor Solapamiento fuera de rango: {fs}")
+    if p.get("duracion") is not None and p["duracion"] < 1:
+        errores.append(f"Duración inválida: {p['duracion']}")
     return errores
 
 

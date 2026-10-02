@@ -83,17 +83,52 @@
     return { proyectos, cap };
   }
 
+  const largoCurva = (curvas, nombre) =>
+    Math.max(0, ...Object.values(curvas[nombre] || {}).map((v) => v.length));
+
+  function duracionBase(p, curvas, params) {
+    return Math.max(0, ...componentes(p, params).map((c) => largoCurva(curvas, c.curva)));
+  }
+
+  // Estira o comprime una curva a nNuevo meses conservando su suma y su forma.
+  function reescalar(factores, nNuevo) {
+    const n = factores.length;
+    if (nNuevo === n || n === 0) return factores.slice();
+    const acum = [0];
+    for (const f of factores) acum.push(acum[acum.length - 1] + f);
+    const c = (t) => {
+      const i = Math.floor(t);
+      if (i >= n) return acum[n];
+      return acum[i] + factores[i] * (t - i);
+    };
+    const out = [];
+    for (let j = 0; j < nNuevo; j++) out.push(c((j + 1) * n / nNuevo) - c(j * n / nNuevo));
+    return out;
+  }
+
+  function largoComponente(nC, nBase, duracion) {
+    if (vacio(duracion) || !nBase) return nC;
+    return Math.max(1, Math.floor(nC * Math.trunc(Number(duracion)) / nBase + 0.5));
+  }
+
   // ≙ Forecast_Mes_V4 : HH Forecast = HHComponente × Factor × Factor Solapamiento
+  // Con p.duracion (meses) cada curva se reescala: mismas HH totales, otra intensidad mensual.
   function forecast(proyectos, curvas, params) {
     const filas = [];
     for (const p of proyectos) {
       if (p.incluir === false) continue;
       const inicio = mesIdx(p.fechaInicio) + (Number(p.desplazamiento) || 0);
       const solap = vacio(p.factorSolapamiento) ? 1 : Number(p.factorSolapamiento);
-      for (const c of componentes(p, params)) {
+      const comps = componentes(p, params);
+      const nBase = Math.max(0, ...comps.map((c) => largoCurva(curvas, c.curva)));
+      for (const c of comps) {
         const curva = curvas[c.curva] || {};
+        const nC = largoCurva(curvas, c.curva);
+        const nNuevo = largoComponente(nC, nBase, p.duracion);
         for (const esp of Object.keys(curva)) {
-          curva[esp].forEach((f, k) => {
+          let factores = curva[esp];
+          if (nNuevo !== nC) factores = reescalar(factores.concat(new Array(nC - factores.length).fill(0)), nNuevo);
+          factores.forEach((f, k) => {
             if (f === 0) return;
             filas.push({
               proyectoId: p.id, proyecto: p.proyecto, tipoCliente: p.tipoCliente,
@@ -256,5 +291,6 @@
   }
 
   return { TIPOS_CLIENTE, mesIdx, mesStr, interpolar, componentes, aplicarEscenario, forecast,
+    largoCurva, duracionBase, reescalar, largoComponente,
     capacidadMes, calcular, detalle, mejorInicio, dotacionMinima };
 });

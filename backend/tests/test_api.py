@@ -43,6 +43,12 @@ class Api(unittest.TestCase):
         self.assertAlmostEqual(motor.calcular(d)["kpis"]["hhExcedidas"],
                                motor.calcular(dataset())["kpis"]["hhExcedidas"], places=6)
 
+    def test_duracion_en_escenario(self):
+        base = self.c.post("/api/simular", json={"cambios": {}}).json()["kpis"]
+        corto = self.c.post("/api/simular", json={"cambios": {"proyectos": {"2": {"duracion": 6}}}}).json()["kpis"]
+        self.assertAlmostEqual(base["hhForecastTotal"], corto["hhForecastTotal"], places=6)
+        self.assertNotAlmostEqual(base["hhExcedidas"], corto["hhExcedidas"], places=2)
+
     def test_mejor_inicio_y_detalle(self):
         r = self.c.get("/api/proyectos/8/mejor-inicio").json()
         self.assertIn("mejor", r)

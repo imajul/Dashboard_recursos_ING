@@ -901,7 +901,8 @@ window.SAMPLE_DATA = {
    "hhEt": null,
    "hhLinea": null,
    "hhProy": null,
-   "factorSolapamiento": 1.0
+   "factorSolapamiento": 1.0,
+   "duracion": null
   },
   {
    "id": 2,
@@ -920,7 +921,8 @@ window.SAMPLE_DATA = {
    "hhEt": null,
    "hhLinea": null,
    "hhProy": null,
-   "factorSolapamiento": 1.0
+   "factorSolapamiento": 1.0,
+   "duracion": null
   },
   {
    "id": 3,
@@ -939,7 +941,8 @@ window.SAMPLE_DATA = {
    "hhEt": null,
    "hhLinea": null,
    "hhProy": null,
-   "factorSolapamiento": 0.6
+   "factorSolapamiento": 0.6,
+   "duracion": null
   },
   {
    "id": 4,
@@ -958,7 +961,8 @@ window.SAMPLE_DATA = {
    "hhEt": null,
    "hhLinea": null,
    "hhProy": null,
-   "factorSolapamiento": 0.6
+   "factorSolapamiento": 0.6,
+   "duracion": null
   },
   {
    "id": 5,
@@ -977,7 +981,8 @@ window.SAMPLE_DATA = {
    "hhEt": null,
    "hhLinea": null,
    "hhProy": null,
-   "factorSolapamiento": 0.6
+   "factorSolapamiento": 0.6,
+   "duracion": null
   },
   {
    "id": 6,
@@ -996,7 +1001,8 @@ window.SAMPLE_DATA = {
    "hhEt": null,
    "hhLinea": null,
    "hhProy": null,
-   "factorSolapamiento": 1.0
+   "factorSolapamiento": 1.0,
+   "duracion": null
   },
   {
    "id": 7,
@@ -1015,7 +1021,8 @@ window.SAMPLE_DATA = {
    "hhEt": null,
    "hhLinea": null,
    "hhProy": null,
-   "factorSolapamiento": 1.0
+   "factorSolapamiento": 1.0,
+   "duracion": null
   },
   {
    "id": 8,
@@ -1034,7 +1041,8 @@ window.SAMPLE_DATA = {
    "hhEt": null,
    "hhLinea": null,
    "hhProy": null,
-   "factorSolapamiento": 1.0
+   "factorSolapamiento": 1.0,
+   "duracion": null
   },
   {
    "id": 9,
@@ -1053,7 +1061,8 @@ window.SAMPLE_DATA = {
    "hhEt": null,
    "hhLinea": null,
    "hhProy": null,
-   "factorSolapamiento": 1.0
+   "factorSolapamiento": 1.0,
+   "duracion": null
   },
   {
    "id": 10,
@@ -1072,7 +1081,8 @@ window.SAMPLE_DATA = {
    "hhEt": null,
    "hhLinea": null,
    "hhProy": null,
-   "factorSolapamiento": 1.0
+   "factorSolapamiento": 1.0,
+   "duracion": null
   },
   {
    "id": 11,
@@ -1091,7 +1101,8 @@ window.SAMPLE_DATA = {
    "hhEt": null,
    "hhLinea": null,
    "hhProy": null,
-   "factorSolapamiento": 1.0
+   "factorSolapamiento": 1.0,
+   "duracion": null
   },
   {
    "id": 12,
@@ -1110,7 +1121,8 @@ window.SAMPLE_DATA = {
    "hhEt": null,
    "hhLinea": null,
    "hhProy": null,
-   "factorSolapamiento": 1.0
+   "factorSolapamiento": 1.0,
+   "duracion": null
   },
   {
    "id": 13,
@@ -1129,7 +1141,8 @@ window.SAMPLE_DATA = {
    "hhEt": null,
    "hhLinea": null,
    "hhProy": 2400,
-   "factorSolapamiento": 1.0
+   "factorSolapamiento": 1.0,
+   "duracion": null
   },
   {
    "id": 14,
@@ -1148,7 +1161,8 @@ window.SAMPLE_DATA = {
    "hhEt": null,
    "hhLinea": null,
    "hhProy": 1800,
-   "factorSolapamiento": 1.0
+   "factorSolapamiento": 1.0,
+   "duracion": null
   },
   {
    "id": 15,
@@ -1167,7 +1181,8 @@ window.SAMPLE_DATA = {
    "hhEt": null,
    "hhLinea": null,
    "hhProy": 1200,
-   "factorSolapamiento": 1.0
+   "factorSolapamiento": 1.0,
+   "duracion": null
   }
  ]
 };

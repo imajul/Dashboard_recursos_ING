@@ -161,6 +161,12 @@ input[type=range]{width:90px;accent-color:var(--focus)}
   touch-action:none;-webkit-user-select:none;cursor:pointer}
 .seg.mov{cursor:grab}
 .seg.dragging{cursor:grabbing;opacity:.85;z-index:15}
+.seg .h{position:absolute;top:0;bottom:0;width:8px;cursor:ew-resize;z-index:3}
+.seg .h.l{left:0}.seg .h.r{right:0}
+.seg .h::after{content:"";position:absolute;top:4px;bottom:4px;width:2px;border-radius:1px;background:rgba(0,0,0,.35);opacity:0;transition:opacity .12s}
+.seg .h.l::after{left:2px}.seg .h.r::after{right:2px}
+.seg.mov:hover .h::after,.seg.sel .h::after{opacity:1}
+.seg.resizing{cursor:ew-resize;opacity:.85;z-index:15}
 .seg.sel{box-shadow:inset 0 0 0 1px rgba(0,0,0,.10),0 0 0 2px var(--today);z-index:12}
 .seg.dim{opacity:.16;filter:grayscale(.6)}
 .seg.excl{opacity:.35;background-image:repeating-linear-gradient(45deg,rgba(0,0,0,.12) 0 3px,transparent 3px 6px)!important}
@@ -305,7 +311,7 @@ kbd{font:600 11px var(--f-num);background:var(--band-3);border:1px solid var(--r
   .kpi .s{display:none}
   .kpi .v b{font-size:16px}
 }
-@media (prefers-reduced-motion:reduce){#toast{transition:none}}
+@media (prefers-reduced-motion:reduce){#toast,.seg .h::after{transition:none}}
 </style>
 </head>
 <body>
@@ -436,14 +442,17 @@ function recalc(){R=E.calcular(datosVista(S.datos));RB=E.calcular(datosVista(S.b
 function mIdx(ym){return E.mesIdx(ym)-E.mesIdx(S.datos.horizonte.desde);}
 /* span de un proyecto: inicio y duración en meses (componente más largo) */
 function spanOf(p){
-  var comps=E.componentes(p,S.datos.parametros),dur=0,parts=[];
+  var comps=E.componentes(p,S.datos.parametros),base=0,dur=0,parts=[];
+  comps.forEach(function(c){base=Math.max(base,E.largoCurva(S.datos.curvas,c.curva));});
   comps.forEach(function(c){
-    var cur=S.datos.curvas[c.curva]||{},n=0;
-    Object.keys(cur).forEach(function(k){n=Math.max(n,cur[k].length);});
-    parts.push({c:c,n:n});dur=Math.max(dur,n);
+    var nc=E.largoCurva(S.datos.curvas,c.curva),n=E.largoComponente(nc,base,p.duracion);
+    parts.push({c:c,n:n,n0:nc});dur=Math.max(dur,n);
   });
-  return {start:mIdx(p.fechaInicio)+(+p.desplazamiento||0),dur:dur,comps:comps,parts:parts};
+  return {start:mIdx(p.fechaInicio)+(+p.desplazamiento||0),dur:dur,base:base,comps:comps,parts:parts};
 }
+function durMod(p){return p.duracion!=null&&p.duracion!=="";}
+/* fija la duración; si coincide con la de las curvas vuelve a "automática" */
+function setDur(p,n){var b=spanOf(Object.assign({},p,{duracion:null})).base;n=Math.max(1,Math.min(60,Math.round(n)));p.duracion=(n===b)?null:n;}
 /* HH mensuales de un proyecto (todas las especialidades) */
 function hhMensual(p){
   var f=E.forecast([Object.assign({incluir:true},p)],S.datos.curvas,S.datos.parametros),m0=E.mesIdx(S.datos.horizonte.desde),out={};
@@ -484,6 +493,7 @@ function renderRows(){
         +'<span class="nm" title="'+esc(p.proyecto)+'">'+esc(p.proyecto)+'</span>'
         +'<span class="fl hide-s">'+esc(p.tecnologia)+' '+NF0.format(+p.potencia||0)+' MW</span>'
         +'<span class="fl">'+hhK(tot)+'</span>'
+        +(durMod(p)?'<span class="fl warn" title="Duración modificada: '+spanOf(p).base+' meses según curvas">'+p.duracion+' m</span>':'')
         +(p.simulable?'':'<span class="fl lock" title="Proyecto no simulable: fecha fija">fijo</span>')
         +'</div>';
       tls+=barHTML(p,w,hit);
@@ -504,9 +514,10 @@ function barHTML(p,w,hit){
     if(pt.c.componente==="ET")g+='<div class="ghost et" style="left:'+px(sp.start*cw+2)+';width:'+px(pt.n*cw-4)+'" title="ET"></div>';
     if(pt.c.componente==="Línea")g+='<div class="ghost ln" style="left:'+px(sp.start*cw+2)+';width:'+px(pt.n*cw-4)+';bottom:0"></div>';
   });
+  var hd=p.simulable?'<div class="h l" data-h="l" title="Arrastrá para cambiar el inicio y la duración"></div><div class="h r" data-h="r" title="Arrastrá para cambiar la duración"></div>':'';
   return '<div class="tl'+(hit?"":" off")+'" style="width:'+px(w)+'">'
     +'<div class="'+cls+'" data-seg="'+esc(p.id)+'" style="left:'+px(sp.start*cw)+';width:'+px(sp.dur*cw)
-    +';background:'+t.c+';grid-template-columns:repeat('+sp.dur+',1fr)">'+cells+'</div>'+g+'</div>';
+    +';background:'+t.c+';grid-template-columns:repeat('+sp.dur+',1fr)">'+cells+hd+'</div>'+g+'</div>';
 }
 
 /* ===================== render: capacidad / ocupación ===================== */
@@ -629,7 +640,7 @@ function renderFooter(){
   });
   html+='<span class="sep"></span><span class="sem">Semáforo <i class="fl ok">&lt; 0,80</i><i class="fl warn">&lt; 1,00</i><i class="fl crit">≥ 1,00</i></span>'
     +'<span class="sep"></span><span class="leg">Base de comparación: <b style="color:var(--ink)">'+esc(S.baseNombre)+'</b></span>'
-    +'<span class="leg">Barra gris fina: ET · barra oscura: Línea</span>';
+    +'<span class="leg">Barra gris fina: ET · barra oscura: Línea · bordes de la barra: duración</span>';
   f.innerHTML=html;
 }
 
@@ -687,7 +698,9 @@ function edProyecto(p){
     +'<div class="two"><div class="f"><label for="edTec">Tecnología</label><select id="edTec">'+opt(TECNOS,p.tecnologia)+'</select></div>'
     +'<div class="f"><label for="edMW">Potencia (MW)</label><input type="number" id="edMW" min="0" step="10" value="'+esc(p.potencia)+'"></div></div>'
     +'<div class="two"><div class="f"><label for="edTam">Tamaño</label><select id="edTam">'+opt(TAMANOS,p.tamano)+'</select></div>'
-    +'<div class="f"><label for="edIni">Fecha inicio</label><input type="month" id="edIni" value="'+esc(p.fechaInicio)+'"></div></div>';
+    +'<div class="f"><label for="edIni">Fecha inicio</label><input type="month" id="edIni" value="'+esc(p.fechaInicio)+'"></div></div>'
+    +'<div class="two"><div class="f"><label for="edDur">Duración (meses)</label><input type="number" id="edDur" min="1" max="60" step="1" value="'+sp.dur+'"></div>'
+    +'<div class="f"><label>Fin</label><div class="holg" style="margin:0;padding:6px 8px">'+mlabel(E.mesStr(E.mesIdx(p.fechaInicio)+sp.dur-1))+(durMod(p)?' · curvas: '+sp.base+' m <button class="btn sm" id="edDurReset" style="padding:0 6px" title="Volver a la duración de las curvas">auto</button>':' · según curvas')+'</div></div></div>';
   if(tipo==="DPI"){
     html+='<div class="two"><div class="f"><label for="edEt">Est. transformadora</label><select id="edEt">'+opt(["ET Nueva","Ampliación ET"],p.est,true)+'</select></div>'
       +'<div class="f"><label for="edLn">Línea</label><select id="edLn">'+opt(["Línea AT","Línea MT"],p.linea,true)+'</select></div></div>';
@@ -698,13 +711,18 @@ function edProyecto(p){
     +'<div class="row-actions"><label class="chk"><input type="checkbox" id="edSim"'+(p.simulable?" checked":"")+'> Proyecto simulable</label>'
     +'<label class="chk"><input type="checkbox" id="edInc"'+(p.incluir===false?"":" checked")+'> Incluir en el cálculo</label></div>';
   html+='<h4>Componentes · Forecast_Componentes</h4><table class="pk"><tr><th>Componente</th><th>Curva</th><th class="r">HH</th><th class="r">Meses</th></tr>';
-  sp.parts.forEach(function(pt){html+='<tr><td>'+esc(pt.c.componente)+'</td><td>'+esc(pt.c.curva)+'</td><td class="calc">'+hh(pt.c.hh)+'</td><td class="calc">'+pt.n+'</td></tr>';});
+  sp.parts.forEach(function(pt){html+='<tr><td>'+esc(pt.c.componente)+'</td><td>'+esc(pt.c.curva)+'</td><td class="calc">'+hh(pt.c.hh)+'</td><td class="calc">'+(pt.n!==pt.n0?'<span title="Curva original: '+pt.n0+' meses">'+pt.n0+' → '+pt.n+'</span>':pt.n)+'</td></tr>';});
   html+='<tr><td><b>Total</b></td><td>× '+NF2.format(solap)+'</td><td class="calc">'+hh(tot*solap)+'</td><td></td></tr></table>';
+  if(durMod(p))html+='<div class="hint">Duración modificada: cada curva se reescala en el tiempo y conserva sus HH totales. Acortar concentra la demanda (más HH por mes); alargar la diluye.</div>';
   if(solap<1)html+='<div class="hint">El factor de solapamiento descuenta '+NFP.format(1-solap)+' de las HH por ejecución simultánea con proyectos similares.</div>';
   html+='<h4>Mover inicio</h4><div class="row-actions">'
     +'<button class="btn sm" data-mv="-3"'+(p.simulable?"":" disabled")+'>−3 m</button><button class="btn sm" data-mv="-1"'+(p.simulable?"":" disabled")+'>−1 m</button>'
     +'<button class="btn sm" data-mv="1"'+(p.simulable?"":" disabled")+'>+1 m</button><button class="btn sm" data-mv="3"'+(p.simulable?"":" disabled")+'>+3 m</button>'
-    +'<button class="btn sm primary" id="bestBtn"'+(p.simulable?"":" disabled")+' title="Prueba de −3 a +12 meses y elige el que menos HH excede">Mejor inicio</button></div><div id="bestBox"></div>';
+    +'<button class="btn sm primary" id="bestBtn"'+(p.simulable?"":" disabled")+' title="Prueba de −3 a +12 meses y elige el que menos HH excede">Mejor inicio</button></div><div id="bestBox"></div>'
+    +'<h4>Duración</h4><div class="row-actions">'
+    +'<button class="btn sm" data-du="-3"'+(p.simulable?"":" disabled")+'>−3 m</button><button class="btn sm" data-du="-1"'+(p.simulable?"":" disabled")+'>−1 m</button>'
+    +'<button class="btn sm" data-du="1"'+(p.simulable?"":" disabled")+'>+1 m</button><button class="btn sm" data-du="3"'+(p.simulable?"":" disabled")+'>+3 m</button>'
+    +'<button class="btn sm primary" id="bestDurBtn"'+(p.simulable?"":" disabled")+' title="Prueba duraciones de 50 % a 200 % y elige la que menos HH excede">Mejor duración</button></div><div id="bestDurBox"></div>';
   html+='<div class="row-actions" style="margin-top:16px"><button class="btn sm" id="dupBtn">Duplicar</button><button class="btn sm" id="delBtn" style="color:var(--danger)">Eliminar</button></div>';
   ed.innerHTML=html;
 
@@ -725,6 +743,10 @@ function edProyecto(p){
   ge("edSim").onchange=function(){var v=this.checked;set(function(){p.simulable=v;});};
   ge("edInc").onchange=function(){var v=this.checked;set(function(){p.incluir=v;});};
   ed.querySelectorAll("[data-mv]").forEach(function(b){b.onclick=function(){moverP(p,+b.dataset.mv);};});
+  ed.querySelectorAll("[data-du]").forEach(function(b){b.onclick=function(){durP(p,+b.dataset.du);};});
+  ge("edDur").onchange=function(){var v=Math.round(+this.value);if(v>=1)set(function(){setDur(p,v);});};
+  if(ge("edDurReset"))ge("edDurReset").onclick=function(){set(function(){p.duracion=null;});};
+  ge("bestDurBtn").onclick=function(){mejorDuracion(p);};
   ge("bestBtn").onclick=function(){mejorInicio(p);};
   ge("dupBtn").onclick=function(){set(function(){var q=clone(p);q.id=nextId();q.proyecto=p.proyecto+" (copia)";S.datos.proyectos.push(q);sel={p:String(q.id)};});toast("Proyecto duplicado");};
   ge("delBtn").onclick=function(){set(function(){S.datos.proyectos=S.datos.proyectos.filter(function(q){return q!==p;});sel=null;});toast("Proyecto eliminado · Ctrl+Z para deshacer");};
@@ -732,6 +754,37 @@ function edProyecto(p){
 function moverP(p,k){
   if(!p.simulable){toast("Proyecto no simulable");return;}
   push();p.fechaInicio=E.mesStr(E.mesIdx(p.fechaInicio)+k);recalc();render();save();
+}
+function durP(p,k){
+  if(!p.simulable){toast("Proyecto no simulable");return;}
+  var d=spanOf(p).dur;if(d+k<1)return;
+  push();setDur(p,d+k);recalc();render();save();
+}
+/* Barre duraciones y muestra las HH excedidas de cada una (misma idea que «Mejor inicio») */
+function mejorDuracion(p){
+  var base=spanOf(Object.assign({},p,{duracion:null})).base,actual=spanOf(p).dur,dv=datosVista(S.datos);
+  var lo=Math.max(1,Math.ceil(base*0.5)),hi=Math.min(60,Math.floor(base*2)),pr=[];
+  for(var n=lo;n<=hi;n++){
+    var cambios={proyectos:{}};cambios.proyectos[String(p.id)]={duracion:n};
+    pr.push({n:n,exc:E.calcular(dv,cambios).kpis.hhExcedidas});
+  }
+  var best=pr.reduce(function(a,b){var ra=Math.round(a.exc*1e6),rb=Math.round(b.exc*1e6);return rb<ra||(rb===ra&&Math.abs(b.n-actual)<Math.abs(a.n-actual))?b:a;});
+  var cur=pr.filter(function(x){return x.n===actual;})[0]||{exc:R.kpis.hhExcedidas};
+  var mx=Math.max.apply(null,pr.map(function(x){return x.exc;}))||1,W=320,H=70,bw=W/pr.length;
+  var svg='<svg class="spark" viewBox="0 0 '+W+' '+(H+14)+'" preserveAspectRatio="none" role="img" aria-label="HH excedidas según duración">';
+  pr.forEach(function(x,i){
+    var h=Math.max(1,(x.exc/mx)*(H-6)),isB=x.n===best.n,isA=x.n===actual;
+    svg+='<rect x="'+(i*bw+1)+'" y="'+(H-h)+'" width="'+Math.max(1,bw-2)+'" height="'+h+'" rx="1.5" fill="'+(isB?"var(--focus)":isA?"var(--ink-soft)":"var(--rule)")+'"><title>'+x.n+' meses: '+hh(x.exc)+' HH excedidas</title></rect>';
+    if(x.n%3===0)svg+='<text x="'+(i*bw+bw/2)+'" y="'+(H+11)+'" text-anchor="middle">'+x.n+'</text>';
+  });
+  svg+='</svg>';
+  var box=document.getElementById("bestDurBox");
+  box.innerHTML='<div class="hint">HH excedidas del área según la duración del proyecto, de '+lo+' a '+hi+' meses (las HH del proyecto no cambian):</div>'+svg
+    +'<div class="holg'+(best.n===actual?"":" crit")+'">'+(best.n===actual?'La duración actual ('+actual+' meses) ya es la mejor del rango probado.'
+      :'Con <b>'+best.n+' meses</b> (hoy '+actual+') las HH excedidas bajan de '+hh(cur.exc)+' a '+hh(best.exc)+'.')+'</div>'
+    +(best.n===actual?'':'<button class="btn sm primary" id="bestDurApply">Aplicar '+best.n+' meses</button>');
+  var a=document.getElementById("bestDurApply");
+  if(a)a.onclick=function(){push();setDur(p,best.n);recalc();render();save();toast("Duración: "+best.n+" meses");};
 }
 function mejorInicio(p){
   var r=E.mejorInicio(datosVista(S.datos),{},p.id,-3,12),box=document.getElementById("bestBox");
@@ -812,32 +865,43 @@ function wireDrag(){
   rows.addEventListener("pointerdown",function(e){
     var b=e.target.closest(".seg");if(!b)return;
     var p=findP(b.dataset.seg);if(!p)return;
-    if(!p.simulable){sel_({p:String(p.id)});toast("Proyecto no simulable: fecha fija");return;}
-    drag={el:b,p:p,x0:e.clientX,k:0,orig:p.fechaInicio,left:parseFloat(b.style.left),moved:false};
-    b.setPointerCapture(e.pointerId);b.classList.add("dragging");
+    if(!p.simulable){sel_({p:String(p.id)});toast("Proyecto no simulable: fecha y duración fijas");return;}
+    var h=e.target.closest(".h"),sp=spanOf(p);
+    drag={el:b,p:p,mode:h?h.dataset.h:"m",x0:e.clientX,k:0,orig:p.fechaInicio,origDur:p.duracion==null?null:p.duracion,
+      dur0:sp.dur,left:parseFloat(b.style.left),width:parseFloat(b.style.width)};
+    b.setPointerCapture(e.pointerId);b.classList.add(h?"resizing":"dragging");
     e.preventDefault();
   });
   rows.addEventListener("pointermove",function(e){
     if(!drag)return;
-    var dx=e.clientX-drag.x0,k=Math.round(dx/S.cw);
-    drag.el.style.left=px(drag.left+dx);
-    if(Math.abs(dx)>3)drag.moved=true;
-    if(k!==drag.k){
-      drag.k=k;
-      drag.p.fechaInicio=E.mesStr(E.mesIdx(drag.orig)+k);
-      recalc();renderLive();
-      var tag=document.querySelector(".dragtag");
-      if(!tag){tag=document.createElement("div");tag.className="dragtag";drag.el.parentNode.appendChild(tag);}
-      tag.style.left=px(drag.left+k*S.cw);
-      tag.textContent=(k>0?"+":"")+k+" m · "+mlabel(drag.p.fechaInicio);
+    var d=drag,dx=e.clientX-d.x0,cw=S.cw,k=Math.round(dx/cw);
+    if(d.mode==="r"){k=Math.max(1-d.dur0,k);d.el.style.width=px(Math.max(cw,d.width+dx));}
+    else if(d.mode==="l"){k=Math.min(d.dur0-1,k);var dd=Math.min(dx,d.width-cw);d.el.style.left=px(d.left+dd);d.el.style.width=px(d.width-dd);}
+    else d.el.style.left=px(d.left+dx);
+    if(k===d.k)return;
+    d.k=k;
+    var txt;
+    if(d.mode==="m"){d.p.fechaInicio=E.mesStr(E.mesIdx(d.orig)+k);txt=(k>0?"+":"")+k+" m · "+mlabel(d.p.fechaInicio);}
+    else{
+      d.p.duracion=d.origDur;
+      if(d.mode==="l")d.p.fechaInicio=E.mesStr(E.mesIdx(d.orig)+k);
+      setDur(d.p,d.dur0+(d.mode==="r"?k:-k));
+      txt=d.dur0+" → "+spanOf(d.p).dur+" meses"+(d.mode==="l"?" · inicio "+mlabel(d.p.fechaInicio):"");
     }
+    recalc();renderLive();
+    var tag=document.querySelector(".dragtag");
+    if(!tag){tag=document.createElement("div");tag.className="dragtag";d.el.parentNode.appendChild(tag);}
+    tag.style.left=px(d.mode==="r"?d.left:d.left+k*cw);
+    tag.textContent=txt;
   });
   function end(){
     if(!drag)return;
     var d=drag;drag=null;
     if(d.k!==0){
-      var fin=d.p.fechaInicio;d.p.fechaInicio=d.orig;push();d.p.fechaInicio=fin;
-      toast(d.p.proyecto+" "+(d.k>0?"+":"")+d.k+" meses");
+      var fin=d.p.fechaInicio,durFin=d.p.duracion==null?null:d.p.duracion;
+      d.p.fechaInicio=d.orig;d.p.duracion=d.origDur;push();d.p.fechaInicio=fin;d.p.duracion=durFin;
+      if(d.mode==="m")toast(d.p.proyecto+" "+(d.k>0?"+":"")+d.k+" meses");
+      else toast(d.p.proyecto+": "+spanOf(d.p).dur+" meses de duración");
     }
     sel={p:String(d.p.id)};recalc();render();save();
   }
@@ -892,7 +956,7 @@ function wireClicks(){
     var seg=t.closest&&t.closest(".seg");
     if(seg){
       var p=findP(seg.dataset.seg),sp=spanOf(p),r=seg.getBoundingClientRect(),k=Math.floor((e.clientX-r.left)/S.cw),m=hhMensual(p);
-      h='<div><b style="font-family:inherit">'+esc(p.proyecto)+'</b></div>'+mlabel(E.mesStr(E.mesIdx(R.meses[0])+sp.start+k))+': <b>'+hh(m[sp.start+k]||0)+'</b> HH<br>Total <b>'+hh(totalP(p))+'</b> HH'+(p.simulable?'<br>Arrastrá para mover el inicio':'<br>Fecha fija');
+      h='<div><b style="font-family:inherit">'+esc(p.proyecto)+'</b></div>'+mlabel(E.mesStr(E.mesIdx(R.meses[0])+sp.start+k))+': <b>'+hh(m[sp.start+k]||0)+'</b> HH<br>Total <b>'+hh(totalP(p))+'</b> HH'+'<br>Duración <b>'+sp.dur+'</b> meses'+(durMod(p)?' (curvas: '+sp.base+')':'')+(p.simulable?'<br>Arrastrá para mover · bordes para la duración':'<br>Fecha y duración fijas');
     }
     if(!h){tip.className="";return;}
     tip.innerHTML=h;tip.className="on";
@@ -1162,10 +1226,10 @@ function abrirBuscar(){var b=document.getElementById("buscar");b.className="on";
 function cerrarBuscar(){document.getElementById("buscar").className="";S.q="";renderRows();}
 function openAtajos(){
   var A=[["Ctrl+Z / Ctrl+Y","Deshacer / rehacer"],["Ctrl+S","Guardar en este navegador"],["Ctrl+F","Buscar proyecto"],["Ctrl+P","Reporte PDF"],
-    ["↑ / ↓","Proyecto anterior / siguiente"],["← / →","Mover el proyecto elegido 1 mes"],["Ctrl+← / Ctrl+→","Mover 12 meses"],
+    ["↑ / ↓","Proyecto anterior / siguiente"],["← / →","Mover el proyecto elegido 1 mes"],["Ctrl+← / Ctrl+→","Mover 12 meses"],["Shift+← / Shift+→","Acortar / alargar 1 mes"],
     ["+ / −","Zoom de la línea de tiempo"],["Ctrl+rueda","Zoom con el mouse"],["Esc","Cerrar diálogo o soltar selección"],["F1 o ?","Esta ayuda"]];
   document.getElementById("dlgBody").innerHTML='<h3>Atajos de teclado</h3><table class="atajos">'+A.map(function(a){return '<tr><td><kbd>'+a[0]+'</kbd></td><td>'+a[1]+'</td></tr>';}).join("")+'</table>'
-    +'<div class="hint">Arrastrá una barra de proyecto simulable para mover su inicio: la matriz, el gráfico y los KPIs se recalculan mientras arrastrás.</div>';
+    +'<div class="hint">Arrastrá una barra de proyecto simulable para mover su inicio, o tomala de un borde para cambiar su duración: la matriz, el gráfico y los KPIs se recalculan mientras arrastrás.</div>';
   openDlg(false);
 }
 var tt=null;
@@ -1193,7 +1257,11 @@ document.addEventListener("keydown",function(e){
   if(enCampo)return;
   if(k==="F1"||k==="?"){e.preventDefault();openAtajos();return;}
   if(k==="ArrowUp"||k==="ArrowDown"){e.preventDefault();selRow(k==="ArrowDown"?1:-1);return;}
-  if((k==="ArrowLeft"||k==="ArrowRight")&&sel&&sel.p){e.preventDefault();var p=findP(sel.p);if(p)moverP(p,(k==="ArrowRight"?1:-1)*(mod?12:1));return;}
+  if((k==="ArrowLeft"||k==="ArrowRight")&&sel&&sel.p){
+    e.preventDefault();var p=findP(sel.p);if(!p)return;
+    if(e.shiftKey)durP(p,k==="ArrowRight"?1:-1);else moverP(p,(k==="ArrowRight"?1:-1)*(mod?12:1));
+    return;
+  }
   if(k==="+"||k==="="){e.preventDefault();zoom(S.cw+6);return;}
   if(k==="-"||k==="_"){e.preventDefault();zoom(S.cw-6);return;}
 });
@@ -1216,7 +1284,7 @@ function boot(){
     push();
     var ini=E.mesStr(Math.max(E.mesIdx(todayYM()),E.mesIdx(S.datos.horizonte.desde))+3);
     var p={id:nextId(),proyecto:"Nuevo proyecto",tipoCliente:"DPI",tecnologia:"Solar",potencia:100,tamano:"Grande",nivelDNN:null,
-      estado:"En estudio",fechaInicio:ini,est:"ET Nueva",linea:"Línea MT",simulable:true,hhParque:null,hhEt:null,hhLinea:null,hhProy:null,factorSolapamiento:1};
+      estado:"En estudio",fechaInicio:ini,est:"ET Nueva",linea:"Línea MT",simulable:true,hhParque:null,hhEt:null,hhLinea:null,hhProy:null,factorSolapamiento:1,duracion:null};
     S.datos.proyectos.push(p);sel={p:String(p.id)};recalc();render();save();
     var n=document.getElementById("edName");if(n){n.focus();n.select();}
   };

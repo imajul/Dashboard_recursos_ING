@@ -95,7 +95,8 @@ def aplicar_escenario(datos: dict, escenario: dict | None) -> tuple[list[dict], 
 
     escenario = {
       "proyectos": {"<id>": {"incluir": bool, "desplazamiento": int, "potencia": float,
-                              "factorSolapamiento": float, "fechaInicio": "YYYY-MM"}},
+                              "factorSolapamiento": float, "fechaInicio": "YYYY-MM",
+                              "duracion": int}},          # meses; None = la de las curvas
       "capacidad": {"dotacion": {...}, "hhMesPersona": n, "eficiencia": f,
                     "subcontratoHH": {...}, "eventos": [...]}   # eventos se suman a los base
     }
@@ -124,10 +125,52 @@ def aplicar_escenario(datos: dict, escenario: dict | None) -> tuple[list[dict], 
 
 
 # --------------------------------------------------------------- forecast
+def largo_curva(curvas: dict, nombre: str) -> int:
+    """Meses de una curva (la especialidad más larga)."""
+    return max((len(v) for v in (curvas.get(nombre) or {}).values()), default=0)
+
+
+def duracion_base(p: dict, curvas: dict, params: dict) -> int:
+    """Duración del proyecto según sus curvas: la del componente más largo."""
+    return max((largo_curva(curvas, c["curva"]) for c in componentes(p, params)), default=0)
+
+
+def reescalar(factores: list[float], n_nuevo: int) -> list[float]:
+    """Estira o comprime una curva a ``n_nuevo`` meses conservando su suma y su forma.
+
+    Trata la curva como una densidad constante dentro de cada mes y reparte la
+    acumulada original sobre la nueva grilla de meses.
+    """
+    n = len(factores)
+    if n_nuevo == n or n == 0:
+        return list(factores)
+    acum = [0.0]
+    for f in factores:
+        acum.append(acum[-1] + f)
+
+    def c(t: float) -> float:
+        i = math.floor(t)
+        if i >= n:
+            return acum[n]
+        return acum[i] + factores[i] * (t - i)
+
+    return [c((j + 1) * n / n_nuevo) - c(j * n / n_nuevo) for j in range(n_nuevo)]
+
+
+def largo_componente(n_c: int, n_base: int, duracion) -> int:
+    """Meses de un componente cuando el proyecto dura ``duracion`` (proporcional al componente más largo)."""
+    if _vacio(duracion) or not n_base:
+        return n_c
+    return max(1, math.floor(n_c * int(duracion) / n_base + 0.5))
+
+
 def forecast(proyectos: list[dict], curvas: dict, params: dict) -> list[dict]:
     """Distribución mensual de HH por proyecto/componente/especialidad (Forecast_Mes_V4).
 
     HH Forecast = HHComponente × Factor × Factor Solapamiento
+
+    Si el proyecto tiene ``duracion`` (meses), cada curva se reescala en el tiempo
+    con ``reescalar``: las HH totales no cambian, cambia su intensidad mensual.
     """
     filas = []
     for p in proyectos:
@@ -136,9 +179,15 @@ def forecast(proyectos: list[dict], curvas: dict, params: dict) -> list[dict]:
         inicio = mes_idx(p["fechaInicio"]) + int(p.get("desplazamiento") or 0)
         solap = p.get("factorSolapamiento")
         solap = 1.0 if _vacio(solap) else float(solap)
-        for c in componentes(p, params):
+        comps = componentes(p, params)
+        n_base = max((largo_curva(curvas, c["curva"]) for c in comps), default=0)
+        for c in comps:
             curva = curvas.get(c["curva"]) or {}
+            n_c = largo_curva(curvas, c["curva"])
+            n_nuevo = largo_componente(n_c, n_base, p.get("duracion"))
             for esp, factores in curva.items():
+                if n_nuevo != n_c:
+                    factores = reescalar(factores + [0.0] * (n_c - len(factores)), n_nuevo)
                 for k, f in enumerate(factores):
                     if f == 0:
                         continue

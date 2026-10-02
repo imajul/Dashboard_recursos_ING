@@ -79,6 +79,34 @@ class ReglasDeNegocio(unittest.TestCase):
         nuevo = motor.calcular(self.d, esc)["cuellos"]["Eléctricos"]["hhExcedidas"]
         self.assertLess(nuevo, base)
 
+    def test_reescalar_conserva_suma_y_forma(self):
+        curva = [0.1, 0.2, 0.3, 0.4]
+        for n in (1, 2, 3, 6, 9):
+            r = motor.reescalar(curva, n)
+            self.assertEqual(len(r), n)
+            self.assertAlmostEqual(sum(r), 1.0)
+        self.assertEqual([round(x, 9) for x in motor.reescalar(curva, 2)], [0.3, 0.7])
+        self.assertEqual(motor.reescalar(curva, 4), curva)
+
+    def test_duracion_comprime_sin_perder_hh(self):
+        d = dataset()
+        ppsdv = dict(d["proyectos"][0])
+        self.assertEqual(motor.duracion_base(ppsdv, d["curvas"], d["parametros"]), 12)
+        base = motor.forecast([ppsdv], d["curvas"], d["parametros"])
+        corto = motor.forecast([dict(ppsdv, duracion=6)], d["curvas"], d["parametros"])
+        self.assertAlmostEqual(sum(f["hh"] for f in base), sum(f["hh"] for f in corto), places=6)
+        meses = lambda filas, comp: {f["mes"] for f in filas if f["componente"] == comp}
+        self.assertEqual(len(meses(corto, "Parque")), 6)       # Solar 12 m -> 6 m
+        self.assertEqual(len(meses(corto, "ET")), 5)           # ET Nueva 10 m -> 5 m
+        self.assertEqual(len(meses(corto, "Línea")), 5)        # Línea AT 9 m -> 4,5 -> 5 m
+        pico = lambda filas: max(sum(f["hh"] for f in filas if f["mes"] == m) for m in {f["mes"] for f in filas})
+        self.assertGreater(pico(corto), pico(base))
+
+    def test_duracion_estira(self):
+        d = dataset()
+        largo = motor.forecast([dict(d["proyectos"][0], duracion=18)], d["curvas"], d["parametros"])
+        self.assertEqual(len({f["mes"] for f in largo if f["componente"] == "Parque"}), 18)
+
     def test_mejor_inicio_no_empeora(self):
         r = motor.mejor_inicio(self.d, None, 8)
         actual = next(x for x in r["pruebas"] if x["desplazamiento"] == 0)
@@ -122,7 +150,8 @@ class ParidadJavaScript(unittest.TestCase):
 
     def test_paridad_escenario(self):
         self._comparar({
-            "proyectos": {"8": {"desplazamiento": 4}, "3": {"incluir": False}},
+            "proyectos": {"8": {"desplazamiento": 4}, "3": {"incluir": False},
+                          "1": {"duracion": 7}, "2": {"duracion": 20}, "9": {"duracion": 4}},
             "capacidad": {"dotacion": {"Eléctricos": 16}, "eficiencia": 0.8,
                           "eventos": [{"especialidad": "Civiles", "desde": "2027-01", "hasta": "2027-09", "delta": 2}]},
         })

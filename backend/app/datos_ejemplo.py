@@ -111,6 +111,7 @@ def _p(id_, nombre, tipo, tec, mw, tam, desde, est=P, linea=P, nivel=P, solap=1.
         "fechaInicio": desde, "est": est, "linea": linea, "simulable": simulable,
         "hhParque": P, "hhEt": P, "hhLinea": P, "hhProy": hh_proy,
         "factorSolapamiento": solap,
+        "duracion": None,  # meses; None = la que dan las curvas
     }
 
 

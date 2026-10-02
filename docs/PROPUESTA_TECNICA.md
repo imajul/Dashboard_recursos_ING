@@ -132,6 +132,7 @@ erDiagram
     bool simulable
     real hh_parque_manual "NULL = modelo"
     real factor_solapamiento
+    int duracion_meses "NULL = curvas"
   }
   DIM_CURVA {
     text tipo_curva PK
@@ -235,7 +236,8 @@ OpenAPI automático en `/docs`.
   "proyectos": {
     "8":  { "desplazamiento": 4 },
     "3":  { "incluir": false },
-    "2":  { "factorSolapamiento": 0.8, "potencia": 220 }
+    "2":  { "factorSolapamiento": 0.8, "potencia": 220 },
+    "5":  { "duracion": 6 }
   },
   "capacidad": {
     "dotacion":      { "Eléctricos": 16 },
@@ -349,6 +351,7 @@ Puntos prácticos:
 | Visual **Pareto** | `pareto` (HH, % y % acumulado) | `calcular()` |
 | % **DPI / DNN / O&M** | `mixTipoCliente` | `calcular()` |
 | Impacto **ET y Líneas** | `mixComponente` (Parque / ET / Línea / DNN / O&M) | `calcular()` |
+| Duración fija de cada curva (no editable en el modelo actual) | `duracion` por proyecto + `reescalar()`: la curva se estira o comprime conservando HH totales y forma | `motor.py` |
 | Formato condicional (semáforo) | Clases `ok` < 0,80 · `warn` < 1,00 · `crit` ≥ 1,00 | front |
 
 ### Ejemplo verificado (PPSDV)
@@ -405,6 +408,7 @@ sequenceDiagram
 | Palanca | Interfaz | Efecto en el motor |
 |---|---|---|
 | Mover el inicio de un proyecto | Arrastrar la barra · flechas ← → · botones ±1/±3 | `fechaInicio` |
+| Cambiar la duración de un proyecto | Arrastrar el borde derecho (o el izquierdo, que también mueve el inicio) · Shift+← → · campo «Duración» · botones ±1/±3 | `duracion` (ver 7.1) |
 | Incluir o excluir un proyecto | Casilla en la fila | `incluir` |
 | Potencia, tamaño, tecnología, ET, línea, nivel DNN | Editor lateral | Recalcula HH por componente |
 | Factor de solapamiento | Editor lateral | Multiplica HH Forecast |
@@ -415,10 +419,29 @@ sequenceDiagram
 | HH por persona y eficiencia | Diálogo Recursos | Capacidad global |
 | Horizonte | Diálogo Recursos | Meses evaluados |
 
+### 7.1 Duración editable
+
+Cada curva de `DIM_Curvas` tiene una duración propia (Solar 12 meses, ET Nueva 10, Línea AT 9…), y en
+Power BI esa duración no se puede tocar. En la app cada proyecto tiene un campo opcional `duracion`
+(meses). Cuando está cargado:
+
+1. El componente más largo pasa a durar exactamente `duracion` meses; los demás se escalan en la misma
+   proporción (PPSDV a 6 meses: Parque 12 → 6, ET 10 → 5, Línea 9 → 5).
+2. Cada curva se **reescala** tratándola como una densidad constante dentro de cada mes y repartiendo
+   la acumulada sobre la nueva grilla (`reescalar()`). **Las HH totales no cambian** y la forma de la
+   curva se conserva: acortar concentra la demanda (más HH por mes), alargar la diluye.
+3. Vacío significa la duración de las curvas. En SharePoint puede agregarse una columna opcional
+   «Duración meses» para fijarla desde la lista; si no existe, la duración se simula solo en la app.
+
+Está cubierto por `test_reescalar_conserva_suma_y_forma`, `test_duracion_comprime_sin_perder_hh` y
+por el test de paridad Python/JavaScript.
+
 **Asistentes que Power BI no puede ofrecer:**
 
 - **Mejor inicio:** prueba desplazamientos de −3 a +12 meses de un proyecto simulable y muestra las HH
   excedidas para cada uno; aplica el mejor con un clic.
+- **Mejor duración:** prueba duraciones entre el 50 % y el 200 % de la original y muestra las HH
+  excedidas de cada una; útil para decidir si conviene estirar un proyecto en lugar de sumar gente.
 - **Refuerzo sugerido:** por especialidad, cuántas personas faltan en el peor mes; con un clic agrega
   el alta desde el primer mes crítico.
 - **Nivelar:** dotación mínima por especialidad para que ningún mes supere 1,00.
@@ -466,7 +489,7 @@ Lo que muestra el prototipo, todo sobre **una sola línea de tiempo compartida**
 1. **Franja de KPIs:** máxima ocupación (especialidad y mes), primer mes crítico, HH excedidas, HH
    forecast, mix DPI/DNN/O&M, ET + Líneas. Todos con delta contra la base.
 2. **Gantt de proyectos** agrupado por tipo de cliente. Cada barra muestra las **HH del mes dentro de la
-   celda**; líneas finas bajo la barra indican la duración de la ET y de la Línea; los proyectos no
+   celda** y se puede arrastrar para mover el inicio o tomar de un borde para cambiar la duración; líneas finas bajo la barra indican la duración de la ET y de la Línea; los proyectos no
    simulables aparecen marcados como `fijo`.
 3. **Matriz de ocupación** (especialidades × meses) con semáforo, alineada al Gantt: lo que se mueve
    arriba se ve abajo en el mismo mes. Fila de total del área.
@@ -489,7 +512,7 @@ búsqueda (Ctrl+F); atajos (F1); deshacer y rehacer; tema claro y oscuro; vista 
 |---|---|---|---|
 | Matriz con semáforo, gráfico, pareto, KPIs | ✔ | ✔ | Paridad |
 | What-if de recursos | Parámetros what-if limitados (un valor por slicer) | ✔ Por especialidad, por mes, con altas y bajas | Ventaja clara de la app |
-| Mover proyectos en el tiempo | ✗ (requiere editar SharePoint y refrescar) | ✔ Arrastrar, con recálculo en vivo | Diferencial principal |
+| Mover proyectos en el tiempo y cambiar su duración | ✗ (requiere editar SharePoint y refrescar; la duración está fija en las curvas) | ✔ Arrastrar barra o bordes, con recálculo en vivo | Diferencial principal |
 | Escenarios guardados y comparados | ✗ (no nativo) | ✔ | |
 | Escritura (write-back) | ✗ (requiere Power Apps) | ✔ | |
 | Recálculo | Refresco programado (minutos) | Instantáneo | |
