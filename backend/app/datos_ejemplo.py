@@ -100,50 +100,26 @@ CAPACIDAD = {
     ],
 }
 
-P = None  # alias corto para campos vacíos
+# Proyectos reales: export de la lista SharePoint DIM_Proyecto (data/proyectos.csv).
+CSV_PROYECTOS = Path(__file__).resolve().parents[2] / "data" / "proyectos.csv"
 
 
-def _p(id_, nombre, tipo, tec, mw, tam, desde, est=P, linea=P, nivel=P, solap=1.0,
-       simulable=False, estado="Confirmado", hh_proy=P):
-    return {
-        "id": id_, "proyecto": nombre, "tipoCliente": tipo, "tecnologia": tec,
-        "potencia": mw, "tamano": tam, "nivelDNN": nivel, "estado": estado,
-        "fechaInicio": desde, "est": est, "linea": linea, "simulable": simulable,
-        "hhParque": P, "hhEt": P, "hhLinea": P, "hhProy": hh_proy,
-        "factorSolapamiento": solap,
-        "duracion": None,  # meses; None = la que dan las curvas
-    }
+def proyectos() -> list[dict]:
+    from .importar_csv import leer_archivo
 
-
-PROYECTOS = [
-    _p(1, "PPSDV", "DPI", "Solar", 300, "Muy Grande", "2026-09", "ET Nueva", "Línea AT", simulable=True),
-    _p(2, "PE Pampa Sur", "DPI", "Eólico", 180, "Grande", "2026-11", "ET Nueva", "Línea AT", simulable=True),
-    _p(3, "BESS Norte I", "DPI", "Bess", 120, "Grande", "2026-10", "Ampliación ET", "Línea MT", solap=0.6),
-    _p(4, "BESS Norte II", "DPI", "Bess", 80, "Mediano", "2027-01", "Ampliación ET", solap=0.6, simulable=True),
-    _p(5, "BESS Cuyo", "DPI", "Bess", 60, "Mediano", "2027-03", linea="Línea MT", solap=0.6, simulable=True),
-    _p(6, "PS Valle Fértil", "DPI", "Solar", 90, "Mediano", "2027-02", "ET Nueva", "Línea MT", simulable=True),
-    _p(7, "CC Luján", "DPI", "Termico", 250, "Grande", "2027-05", "Ampliación ET", estado="Probable", simulable=True),
-    _p(8, "PS Altiplano", "DPI", "Solar", 450, "Muy Grande", "2027-06", "ET Nueva", "Línea AT",
-       estado="Probable", simulable=True),
-    _p(9, "DNN Eólico Patagonia", "DNN", "Eólico", 400, "Muy Grande", "2026-10", nivel="DNN Cat2", estado="En estudio"),
-    _p(10, "DNN Solar Catamarca", "DNN", "Solar", 200, "Grande", "2026-12", nivel="DNN Cat1", estado="En estudio"),
-    _p(11, "DNN BESS Litoral", "DNN", "Bess", 150, "Grande", "2027-02", nivel="DNN Cat1", estado="En estudio"),
-    _p(12, "DNN Solar La Rioja", "DNN", "Solar", 350, "Muy Grande", "2027-04", nivel="DNN Cat2", estado="En estudio"),
-    _p(13, "O&M Parques Solares", "O&M", "Solar", 600, "Muy Grande", "2027-01", hh_proy=2400),
-    _p(14, "O&M Parques Eólicos", "O&M", "Eólico", 350, "Muy Grande", "2027-01", hh_proy=1800),
-    _p(15, "O&M BESS", "O&M", "Bess", 200, "Grande", "2026-10", hh_proy=1200),
-]
+    return leer_archivo(CSV_PROYECTOS)[0]
 
 
 def dataset() -> dict:
     return {
-        "meta": {"origen": "ejemplo", "nota": "Datos ilustrativos, no reales"},
+        "meta": {"origen": "data/proyectos.csv", "version": "proyectos-csv-2026-10",
+                 "nota": "Proyectos del CSV de SharePoint; parámetros, curvas y capacidad ilustrativos"},
         "horizonte": {"desde": "2026-10", "meses": 24},
         "especialidades": ESPECIALIDADES,
         "parametros": PARAMETROS,
         "capacidad": CAPACIDAD,
         "curvas": generar_curvas(),
-        "proyectos": PROYECTOS,
+        "proyectos": proyectos(),
     }
 
 
@@ -153,7 +129,7 @@ def main() -> None:
     texto = json.dumps(datos, ensure_ascii=False, indent=1)
     (raiz / "data" / "sample_data.json").write_text(texto + "\n", encoding="utf-8")
     (raiz / "prototipo" / "data.js").write_text(
-        "// Generado por backend/app/datos_ejemplo.py — datos ilustrativos.\n"
+        "// Generado por backend/app/datos_ejemplo.py — proyectos de data/proyectos.csv.\n"
         f"window.SAMPLE_DATA = {texto};\n",
         encoding="utf-8",
     )

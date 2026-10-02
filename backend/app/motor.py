@@ -49,8 +49,28 @@ def _vacio(v) -> bool:
 
 
 # ------------------------------------------------------- HH por componente
+TAMANOS = ["Chico", "Mediano", "Grande", "Muy Grande"]
+
+
+def tamano(p: dict, params: dict) -> str:
+    """Tamaño del proyecto: el cargado, o el que corresponde a su potencia.
+
+    Sin dato, se toma el mayor tamaño cuya tabla de HH Parque empieza en una
+    potencia menor o igual a la del proyecto (Solar: 300 MW -> Muy Grande).
+    """
+    if not _vacio(p.get("tamano")):
+        return p["tamano"]
+    mw = float(p.get("potencia") or 0)
+    elegido = TAMANOS[0]
+    for t in TAMANOS:
+        puntos = params["parque"].get(f"{p.get('tecnologia')}|{t}")
+        if puntos and min(pt[0] for pt in puntos) <= mw:
+            elegido = t
+    return elegido
+
+
 def hh_parque_base(p: dict, params: dict) -> float:
-    puntos = params["parque"].get(f"{p['tecnologia']}|{p['tamano']}")
+    puntos = params["parque"].get(f"{p['tecnologia']}|{tamano(p, params)}")
     if not puntos:
         return 0.0
     return interpolar(puntos, float(p.get("potencia") or 0))
@@ -74,7 +94,7 @@ def componentes(p: dict, params: dict) -> list[dict]:
         if not _vacio(p.get("hhEt")):
             hh = p["hhEt"]
         else:
-            hh = params["et"].get(p["tamano"], 0)
+            hh = params["et"].get(tamano(p, params), 0)
             if p["est"] == "Ampliación ET":
                 hh *= params["factorAmpliacionET"]
         comps.append({"componente": "ET", "curva": p["est"], "hh": float(hh)})
@@ -82,7 +102,7 @@ def componentes(p: dict, params: dict) -> list[dict]:
         if not _vacio(p.get("hhLinea")):
             hh = p["hhLinea"]
         else:
-            hh = params["linea"].get(p["tamano"], 0)
+            hh = params["linea"].get(tamano(p, params), 0)
             if p["linea"] == "Línea MT":
                 hh *= params["factorLineaMT"]
         comps.append({"componente": "Línea", "curva": p["linea"], "hh": float(hh)})

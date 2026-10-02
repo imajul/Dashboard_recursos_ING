@@ -24,8 +24,22 @@
     return Math.max(0, y0 + (y1 - y0) * (x - x0) / (x1 - x0));
   }
 
+  const TAMANOS = ['Chico', 'Mediano', 'Grande', 'Muy Grande'];
+
+  // Tamaño cargado o, si falta, el que corresponde a la potencia según las tablas de HH Parque.
+  function tamano(p, params) {
+    if (!vacio(p.tamano)) return p.tamano;
+    const mw = Number(p.potencia) || 0;
+    let elegido = TAMANOS[0];
+    for (const t of TAMANOS) {
+      const puntos = params.parque[`${p.tecnologia}|${t}`];
+      if (puntos && Math.min(...puntos.map((q) => q[0])) <= mw) elegido = t;
+    }
+    return elegido;
+  }
+
   function hhParqueBase(p, params) {
-    const puntos = params.parque[`${p.tecnologia}|${p.tamano}`];
+    const puntos = params.parque[`${p.tecnologia}|${tamano(p, params)}`];
     return puntos ? interpolar(puntos, Number(p.potencia) || 0) : 0;
   }
 
@@ -45,7 +59,7 @@
       let hh;
       if (!vacio(p.hhEt)) hh = p.hhEt;
       else {
-        hh = params.et[p.tamano] || 0;
+        hh = params.et[tamano(p, params)] || 0;
         if (p.est === 'Ampliación ET') hh *= params.factorAmpliacionET;
       }
       comps.push({ componente: 'ET', curva: p.est, hh: Number(hh) });
@@ -54,7 +68,7 @@
       let hh;
       if (!vacio(p.hhLinea)) hh = p.hhLinea;
       else {
-        hh = params.linea[p.tamano] || 0;
+        hh = params.linea[tamano(p, params)] || 0;
         if (p.linea === 'Línea MT') hh *= params.factorLineaMT;
       }
       comps.push({ componente: 'Línea', curva: p.linea, hh: Number(hh) });
@@ -290,7 +304,7 @@
     return res;
   }
 
-  return { TIPOS_CLIENTE, mesIdx, mesStr, interpolar, componentes, aplicarEscenario, forecast,
+  return { TIPOS_CLIENTE, TAMANOS, tamano, mesIdx, mesStr, interpolar, componentes, aplicarEscenario, forecast,
     largoCurva, duracionBase, reescalar, largoComponente,
     capacidadMes, calcular, detalle, mejorInicio, dotacionMinima };
 });

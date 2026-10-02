@@ -16,8 +16,13 @@ class Api(unittest.TestCase):
         os.environ["CAPACIDAD_DB"] = os.path.join(cls.tmp.name, "test.db")
         from fastapi.testclient import TestClient
 
-        from app import main
+        from app import main, repositorio
+        from tests.test_motor import dataset
         main.DB = os.environ["CAPACIDAD_DB"]
+        cn = repositorio.conectar(main.DB)  # base con dotación chica: hay meses críticos
+        repositorio.crear_esquema(cn)
+        repositorio.cargar_dataset(cn, dataset())
+        cn.close()
         cls.c = TestClient(main.app)
 
     @classmethod
@@ -27,7 +32,7 @@ class Api(unittest.TestCase):
     def test_flujo_escenario(self):
         base = self.c.post("/api/simular", json={"cambios": {}}).json()["kpis"]
         r = self.c.post("/api/escenarios", json={
-            "nombre": "+4 eléctricos", "cambios": {"capacidad": {"dotacion": {"Eléctricos": 18}}}})
+            "nombre": "+4 eléctricos", "cambios": {"capacidad": {"dotacion": {"Eléctricos": 9}}}})
         self.assertEqual(r.status_code, 201)
         esc = r.json()
         res = self.c.get(f"/api/escenarios/{esc['id']}/resultado").json()["kpis"]
@@ -38,21 +43,21 @@ class Api(unittest.TestCase):
     def test_dataset_roundtrip(self):
         """La base SQLite devuelve exactamente el mismo resultado que el dataset en memoria."""
         from app import motor
-        from app.datos_ejemplo import dataset
+        from tests.test_motor import dataset
         d = self.c.get("/api/datos").json()
         self.assertAlmostEqual(motor.calcular(d)["kpis"]["hhExcedidas"],
                                motor.calcular(dataset())["kpis"]["hhExcedidas"], places=6)
 
     def test_duracion_en_escenario(self):
         base = self.c.post("/api/simular", json={"cambios": {}}).json()["kpis"]
-        corto = self.c.post("/api/simular", json={"cambios": {"proyectos": {"2": {"duracion": 6}}}}).json()["kpis"]
+        corto = self.c.post("/api/simular", json={"cambios": {"proyectos": {"4": {"duracion": 4}}}}).json()["kpis"]
         self.assertAlmostEqual(base["hhForecastTotal"], corto["hhForecastTotal"], places=6)
         self.assertNotAlmostEqual(base["hhExcedidas"], corto["hhExcedidas"], places=2)
 
     def test_parametros_cambian_hh(self):
         par = self.c.get("/api/parametros").json()["parametros"]
         antes = self.c.post("/api/simular", json={"cambios": {}}).json()["kpis"]["hhForecastTotal"]
-        par["parque"]["Solar|Muy Grande"] = [[300, 7000], [500, 12000]]
+        par["parque"]["Solar|Muy Grande"] = [[300, 8000], [500, 12000]]
         r = self.c.put("/api/parametros", json=par)
         self.assertEqual(r.status_code, 200, r.text)
         despues = self.c.post("/api/simular", json={"cambios": {}}).json()["kpis"]["hhForecastTotal"]

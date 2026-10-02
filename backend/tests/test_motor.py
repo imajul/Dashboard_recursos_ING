@@ -8,7 +8,18 @@ import unittest
 from pathlib import Path
 
 from app import motor
-from app.datos_ejemplo import dataset
+from app.datos_ejemplo import dataset as _dataset
+from app.importar_csv import leer
+
+# Dotación chica para que los proyectos del CSV generen meses críticos y los
+# tests ejerciten excesos, cuellos y escenarios.
+DOTACION_TEST = {"Civiles": 3, "Coordinadores": 2, "Eléctricos": 5, "Electrónicos": 1, "Mecánicos": 1}
+
+
+def dataset():
+    d = _dataset()
+    d["capacidad"]["dotacion"] = dict(DOTACION_TEST)
+    return d
 
 RAIZ = Path(__file__).resolve().parents[2]
 
@@ -27,7 +38,8 @@ class ReglasDeNegocio(unittest.TestCase):
         self.assertEqual(motor.hh_parque_base(p, self.params), 8500)
 
     def test_componentes_ppsdv_suman_11800(self):
-        ppsdv = next(p for p in self.d["proyectos"] if p["proyecto"] == "PPSDV")
+        ppsdv = next(p for p in self.d["proyectos"] if p["proyecto"] == "PSSDV")
+        self.assertEqual(motor.tamano(ppsdv, self.params), "Muy Grande")  # 300 MW, sin Tamaño en el CSV
         comps = {c["componente"]: c for c in motor.componentes(ppsdv, self.params)}
         self.assertEqual(comps["Parque"]["hh"], 7000)
         self.assertEqual(comps["ET"]["hh"], 3000)
@@ -75,9 +87,33 @@ class ReglasDeNegocio(unittest.TestCase):
 
     def test_escenario_sumar_electricos_baja_exceso(self):
         base = motor.calcular(self.d)["cuellos"]["Eléctricos"]["hhExcedidas"]
-        esc = {"capacidad": {"dotacion": {"Eléctricos": 18}}}
+        esc = {"capacidad": {"dotacion": {"Eléctricos": 9}}}
         nuevo = motor.calcular(self.d, esc)["cuellos"]["Eléctricos"]["hhExcedidas"]
         self.assertLess(nuevo, base)
+
+    def test_tamano_por_potencia(self):
+        t = lambda tec, mw: motor.tamano({"tecnologia": tec, "potencia": mw}, self.params)
+        self.assertEqual(t("Bess", 15), "Chico")
+        self.assertEqual(t("Bess", 40), "Mediano")
+        self.assertEqual(t("Bess", 100), "Grande")
+        self.assertEqual(t("Solar", 299), "Grande")
+        self.assertEqual(t("Solar", 300), "Muy Grande")
+        self.assertEqual(motor.tamano({"tecnologia": "Solar", "potencia": 300, "tamano": "Chico"}, self.params), "Chico")
+
+    def test_importar_csv(self):
+        texto = ('"Proyectos","Nombre","Tipo Cliente","Nivel DNN","Tecnología","Factor Solapa","Potencia",'
+                 '"Tensión POE","Est Transformadora","Linea","Fecha Inicio","Estado","Calendario Fijo","% Avance"\n'
+                 '"PSSDV","Sol del Valle","DPI","N/A","Solar","1,00","300","132","Et Nueva","Línea AT",'
+                 '"01/02/2027 0:00","No Iniciado","Si",\n'
+                 '"PABRA","Bragado","DPI","N/A","Bess","0,43","100","33","N/A","N/A","28/01/2027 0:00","En Proceso","No",\n'
+                 '"PEVI3","Villalonga III","DNN","Cat 2","Eólico","1,00","33","33","N/A","N/A","01/05/2026 0:00","En Proceso","Si",\n')
+        ps, avisos = leer("\ufeff" + texto)
+        self.assertEqual(avisos, [])
+        a, b, c = ps
+        self.assertEqual((a["est"], a["linea"], a["fechaInicio"], a["simulable"]), ("ET Nueva", "Línea AT", "2027-02", False))
+        self.assertEqual((b["est"], b["linea"], b["factorSolapamiento"], b["simulable"]), (None, None, 0.43, True))
+        self.assertEqual((c["nivelDNN"], c["tipoCliente"]), ("DNN Cat2", "DNN"))
+        self.assertEqual(sum(x["hh"] for x in motor.componentes(a, self.params)), 11800)
 
     def test_reescalar_conserva_suma_y_forma(self):
         curva = [0.1, 0.2, 0.3, 0.4]
@@ -132,6 +168,7 @@ class ParidadJavaScript(unittest.TestCase):
 
     def _comparar(self, escenario):
         d = json.loads((RAIZ / "data" / "sample_data.json").read_text(encoding="utf-8"))
+        escenario = {**escenario, "capacidad": {"dotacion": DOTACION_TEST, **escenario.get("capacidad", {})}}
         py = motor.calcular(d, escenario)
         js = self._js(escenario)
         for clave in ("hhExcedidas", "hhForecastHorizonte", "hhForecastTotal"):
