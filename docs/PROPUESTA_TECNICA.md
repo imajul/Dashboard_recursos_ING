@@ -565,6 +565,26 @@ gantt
 
 ---
 
+## 11 bis. Etapa intermedia: carpeta sincronizada con SharePoint
+
+Mientras se define la versión con servidor o web part, la herramienta funciona en modo **carpeta
+compartida**: el HTML y el plan (`plan-capacidad.json`) viven en una carpeta de Windows sincronizada con
+SharePoint por OneDrive. La herramienta lee y escribe esa carpeta con la API de acceso a archivos de
+Edge y Chrome.
+
+| Aspecto | Cómo se resuelve |
+|---|---|
+| Fuente única | `plan-capacidad.json` con `revision`, `guardadoPor`, `guardadoEn` y `datos` (proyectos, parámetros, curvas, capacidad). |
+| Ver cambios de otros | Revisión de la carpeta cada 20 s y al volver a la ventana; carga automática si no hay cambios locales. |
+| Escrituras simultáneas | Control optimista por número de revisión: antes de guardar se relee el plan; si cambió, se ofrece guardar lo propio como escenario, cargar lo ajeno o reemplazar. Las «copias en conflicto» de OneDrive se detectan y se muestran. |
+| Volver atrás | Subcarpeta `historial` con una copia por revisión (últimas 60). |
+| Escenarios | Un archivo por escenario en `escenarios`, visible para todo el equipo. |
+| Identidad | Nombre que escribe cada usuario (no hay login: es una carpeta de confianza del equipo). |
+
+Límites: no hay permisos por rol (quien edita la carpeta edita el plan), la propagación depende de
+OneDrive (segundos a minutos) y no es edición simultánea en tiempo real. Para eso está la versión de la
+sección 1 o el web part de SharePoint.
+
 ## 12. Riesgos y mitigaciones
 
 | Riesgo | Mitigación |

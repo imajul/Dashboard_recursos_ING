@@ -1,29 +1,11 @@
-"""Genera dist/capacidad-ingenieria.html: la herramienta en UN solo archivo.
-
-Incluye el motor (engine.js) y los datos (data.js) dentro del HTML, así se puede
-mandar por mail/Teams o subir a SharePoint y abrir con doble clic, sin servidor
-ni cuenta. Solo usa internet (opcional) para las fuentes y el reporte PDF.
-
-Uso:  python scripts/build_standalone.py
-"""
-from __future__ import annotations
-
-from datetime import date
-from pathlib import Path
-
-RAIZ = Path(__file__).resolve().parents[1]
-PROTO = RAIZ / "prototipo"
-SALIDA = RAIZ / "dist" / "capacidad-ingenieria.html"
-
-
-LEEME = """CAPACIDAD DE INGENIERÍA - cómo usar la herramienta compartida
-(versión del {fecha})
+﻿CAPACIDAD DE INGENIERÍA - cómo usar la herramienta compartida
+(versión del 05/10/2026)
 
 QUÉ HAY EN ESTA CARPETA
   capacidad-ingenieria.html  La herramienta. Se abre con doble clic.
   plan-capacidad.json        El plan vigente (lo crea y actualiza la herramienta).
-  escenarios\\               Simulaciones guardadas por el equipo.
-  historial\\                Una copia de cada versión guardada del plan.
+  escenarios\               Simulaciones guardadas por el equipo.
+  historial\                Una copia de cada versión guardada del plan.
 
 Esta carpeta se sincroniza con SharePoint mediante OneDrive: todo lo que se
 guarda acá lo ve el resto del equipo en segundos. No hace falta cuenta en
@@ -53,7 +35,7 @@ USO DIARIO
 
 SIMULAR SIN TOCAR EL PLAN VIGENTE
   Hacer los cambios y, en lugar de Guardar, usar "Escenarios > Guardar
-  actual". El escenario queda en la carpeta escenarios\\ para todos y el
+  actual". El escenario queda en la carpeta escenarios\ para todos y el
   plan vigente no cambia. Para descartar tus cambios: "Recargar el plan
   vigente" en el diálogo de la carpeta.
 
@@ -69,28 +51,3 @@ SI APARECE "COPIAS EN CONFLICTO"
 ACTUALIZAR LA HERRAMIENTA
   Reemplazar capacidad-ingenieria.html por la versión nueva. El plan, los
   escenarios y el historial no se tocan.
-"""
-
-
-def inline(nombre: str) -> str:
-    codigo = (PROTO / nombre).read_text(encoding="utf-8").replace("</script", "<\\/script")
-    return f"<script>/* {nombre} */\n{codigo}\n</script>"
-
-
-def main() -> None:
-    html = (PROTO / "index.html").read_text(encoding="utf-8")
-    for nombre in ("data.js", "engine.js"):
-        etiqueta = f'<script src="{nombre}"></script>'
-        assert etiqueta in html, f"No se encontró {etiqueta} en index.html"
-        html = html.replace(etiqueta, inline(nombre), 1)
-    html = html.replace("<head>", f"<head>\n<!-- Versión autocontenida generada el {date.today():%d/%m/%Y} -->", 1)
-    SALIDA.parent.mkdir(exist_ok=True)
-    SALIDA.write_text(html, encoding="utf-8")
-    print(f"Escrito {SALIDA.relative_to(RAIZ)} ({SALIDA.stat().st_size / 1024:.0f} KB)")
-    leeme = SALIDA.parent / "LEEME.txt"
-    leeme.write_text(LEEME.replace("{fecha}", f"{date.today():%d/%m/%Y}"), encoding="utf-8-sig")
-    print(f"Escrito {leeme.relative_to(RAIZ)}")
-
-
-if __name__ == "__main__":
-    main()

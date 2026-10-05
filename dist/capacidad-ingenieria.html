@@ -301,6 +301,16 @@ table.cm tfoot td{font:600 11px/1.2 var(--f-num);color:var(--ink-soft);border-bo
 .mb{height:26px;display:flex;align-items:flex-end;justify-content:center;margin-bottom:2px}
 .mb i{display:block;width:60%;min-height:1px;background:var(--ink-soft);border-radius:2px 2px 0 0}
 .chip{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+/* carpeta compartida */
+#fsBar{display:none;align-items:center;gap:8px 12px;flex-wrap:wrap;padding:7px 16px;border-bottom:1px solid var(--rule);background:var(--warn-bg);color:var(--warn-ink);font-size:12.5px}
+#fsBar.on{display:flex}
+#fsBar.crit{background:var(--crit-bg);color:var(--crit-ink)}
+#fsBar .btn{color:var(--ink)}
+#fsChip{cursor:pointer;border:1px solid var(--rule);background:var(--chip);border-radius:999px;padding:3px 9px;font-size:11.5px;color:var(--ink-soft);white-space:nowrap;max-width:320px;overflow:hidden;text-overflow:ellipsis}
+#fsChip b{color:var(--ink);font-weight:600}
+#fsChip.dirty{border-color:var(--warn-ink);color:var(--warn-ink)}
+#fsChip:hover{border-color:var(--ink-soft)}
+ol.pasos{margin:6px 0 0;padding-left:20px;font-size:12.5px;line-height:1.55}
 #tip{position:fixed;z-index:1200;pointer-events:none;background:var(--band);color:var(--band-ink);border-radius:6px;
   padding:7px 9px;font-size:12px;line-height:1.4;box-shadow:var(--shadow);max-width:280px;display:none}
 #tip.on{display:block}
@@ -336,6 +346,7 @@ kbd{font:600 11px var(--f-num);background:var(--band-3);border:1px solid var(--r
 <header>
   <input id="title" value="Plan de capacidad · Ingeniería" aria-label="Título del plan">
   <span id="escName" title="Escenario abierto"></span>
+  <button id="fsChip" title="Carpeta compartida (OneDrive / SharePoint)">Sin carpeta compartida</button>
   <span class="muestra" title="Proyectos del CSV de SharePoint; parámetros, curvas y dotación son ilustrativos">capacidad de ejemplo</span>
   <div class="tools">
     <button class="btn" id="addBtn">Agregar proyecto</button>
@@ -345,9 +356,10 @@ kbd{font:600 11px var(--f-num);background:var(--band-3);border:1px solid var(--r
     <button class="btn" id="parBtn" title="Tablas de HH por tecnología y tamaño, ET, Línea, DNN, O&amp;M y curvas">Parámetros</button>
     <button class="btn" id="minBtn" title="Personas mínimas para que ningún mes supere el 100 %">Nivelar</button>
     <div class="sep"></div>
+    <button class="btn primary" id="fsSave" title="Guardar el plan en la carpeta compartida (Ctrl+S)">Guardar</button>
     <button class="btn" id="scenBtn">Escenarios</button>
     <button class="btn" id="cmpBtn">Comparar</button>
-    <button class="btn primary" id="pdfBtn" title="Reporte PDF para la dirección">Reporte PDF</button>
+    <button class="btn" id="pdfBtn" title="Reporte PDF para la dirección">Reporte PDF</button>
     <button class="btn" id="exportBtn">Exportar</button>
     <button class="btn" id="importBtn" title="Escenario (JSON) o lista de proyectos exportada de SharePoint (CSV)">Importar</button>
     <input type="file" id="file" accept=".json,.csv" hidden>
@@ -359,6 +371,7 @@ kbd{font:600 11px var(--f-num);background:var(--band-3);border:1px solid var(--r
 </header>
 
 <div id="kpis"></div>
+<div id="fsBar" role="status"></div>
 <div id="buscar"><input type="text" id="buscarInp" placeholder="Buscar proyecto…" aria-label="Buscar proyecto"><button class="btn sm" id="buscarX" title="Cerrar">✕</button></div>
 <div id="errbar"></div>
 
@@ -2003,7 +2016,7 @@ function todayYM(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth
 var S=null,R=null,RB=null,sel=null,undoStack=[],redoStack=[],downloads=null,dlg,ed;
 function nuevoWS(){
   var d=clone(window.SAMPLE_DATA);
-  return {version:versionDatos(),title:"Plan de capacidad · Ingeniería",nombre:"Base",datos:d,base:clone(d),baseNombre:"Base",
+  return {version:versionDatos(),fsRev:0,fsCarpeta:"",dirty:false,title:"Plan de capacidad · Ingeniería",nombre:"Base",datos:d,base:clone(d),baseNombre:"Base",
     cw:46,filtro:"",espChart:"",q:""};
 }
 function versionDatos(){return (window.SAMPLE_DATA.meta&&window.SAMPLE_DATA.meta.version)||"1";}
@@ -2020,7 +2033,7 @@ function load(){
   return nuevoWS();
 }
 function snap(){return clone({datos:S.datos,nombre:S.nombre});}
-function push(){undoStack.push(snap());if(undoStack.length>60)undoStack.shift();redoStack=[];updUndo();}
+function push(){undoStack.push(snap());if(undoStack.length>60)undoStack.shift();redoStack=[];updUndo();S.dirty=true;fsChip();}
 function undo(){if(!undoStack.length)return;redoStack.push(snap());var p=undoStack.pop();S.datos=p.datos;S.nombre=p.nombre;recalc();render();save();refreshParam();toast("Deshecho");}
 function redo(){if(!redoStack.length)return;undoStack.push(snap());var p=redoStack.pop();S.datos=p.datos;S.nombre=p.nombre;recalc();render();save();refreshParam();}
 function updUndo(){document.getElementById("undo").disabled=!undoStack.length;}
@@ -2826,37 +2839,53 @@ function aplicarParam(){
 /* ===================== escenarios ===================== */
 function scenList(){try{return JSON.parse(localStorage.getItem(KEY+"-sc")||"[]");}catch(e){return [];}}
 function scenSet(a){try{localStorage.setItem(KEY+"-sc",JSON.stringify(a));}catch(e){toast("No se pudo guardar en este navegador");}}
+function scenListA(){return FS.dir?fsListarEsc():Promise.resolve(scenList());}
+function scenGuardarA(rec){
+  rec.autor=rec.autor||usuario();
+  if(FS.dir)return fsGuardarEsc(rec);
+  var a=scenList();a.unshift(rec);scenSet(a.slice(0,20));return Promise.resolve();
+}
+function scenBorrarA(rec){
+  if(FS.dir)return fsBorrarEsc(rec);
+  scenSet(scenList().filter(function(r){return r.id!==rec.id;}));return Promise.resolve();
+}
 function openScen(){
-  var html='<h3>Escenarios</h3><div style="color:var(--ink-soft);font-size:12px;margin-bottom:10px">Una foto completa de proyectos, fechas y recursos. La base de comparación define los deltas de la franja de KPIs.</div>'
+  var donde=FS.dir?'Se guardan en la carpeta compartida «'+esc(FS.dir.name)+'\\escenarios»: los ve todo el equipo.':'Se guardan en este navegador. Conectá la carpeta compartida para que los vea todo el equipo.';
+  var html='<h3>Escenarios</h3><div style="color:var(--ink-soft);font-size:12px;margin-bottom:10px">Una foto completa de proyectos, fechas, recursos y parámetros. '+donde+' La base de comparación define los deltas de la franja de KPIs.</div>'
     +'<div class="row-actions"><input type="text" id="scName" placeholder="Nombre (ej. +2 eléctricos desde mar-27)" style="flex:1;min-width:0;border:1px solid var(--rule);border-radius:6px;padding:6px 8px;background:var(--chip)" aria-label="Nombre del escenario">'
     +'<button class="btn primary" id="scSave">Guardar actual</button></div>'
-    +'<div class="row-actions"><button class="btn sm" id="scBase">Usar el actual como base</button><button class="btn sm" id="scReset">Volver a los datos de ejemplo</button></div><div id="scList" style="margin-top:12px"></div>';
+    +'<div class="row-actions"><button class="btn sm" id="scBase">Usar el actual como base</button><button class="btn sm" id="scReset">Volver a los datos del archivo</button></div><div id="scList" style="margin-top:12px">Cargando…</div>';
   document.getElementById("dlgBody").innerHTML=html;openDlg(false);
-  var list=scenList(),el=document.getElementById("scList");
-  if(!list.length)el.innerHTML='<div style="color:var(--ink-soft);font-size:13px">Todavía no guardaste ninguno.</div>';
-  else el.innerHTML=list.map(function(r){
-    var k=E.calcular(datosVista(r.datos)).kpis;
-    return '<div class="sc"><div><b>'+esc(r.name)+'</b><br><small>'+new Date(r.ts).toLocaleString("es-AR")+' · máx '+oc(k.maxOcupacion.valor)+' · '+hh(k.hhExcedidas)+' HH exc.</small></div>'
-      +'<div class="row-actions" style="margin:0"><button class="btn sm" data-load="'+r.id+'">Abrir</button><button class="btn sm" data-base="'+r.id+'">Base</button><button class="btn sm" data-del="'+r.id+'">Borrar</button></div></div>';
-  }).join("");
   document.getElementById("scSave").onclick=function(){
     var n=document.getElementById("scName").value.trim()||("Escenario "+new Date().toLocaleDateString("es-AR"));
-    var a=scenList();a.unshift({id:Math.random().toString(36).slice(2,9),name:n,ts:Date.now(),datos:clone(S.datos)});scenSet(a.slice(0,20));
-    S.nombre=n;save();renderKPIs();openScen();toast("Escenario guardado");
+    scenGuardarA({id:Math.random().toString(36).slice(2,9),name:n,ts:Date.now(),datos:clone(S.datos)})
+      .then(function(){openScen();toast("Escenario guardado");},function(e){toast("No se pudo guardar el escenario: "+(e&&e.message||e));});
   };
   document.getElementById("scBase").onclick=function(){S.base=clone(S.datos);S.baseNombre=S.nombre;recalc();render();save();toast("Base de comparación: "+S.nombre);};
-  document.getElementById("scReset").onclick=function(){push();var w=nuevoWS();S.datos=w.datos;S.base=w.base;S.baseNombre="Base";S.nombre="Base";sel=null;recalc();render();save();toast("Datos de ejemplo restaurados · Ctrl+Z para deshacer");};
-  el.onclick=function(e){
-    var b=e.target.closest("button");if(!b)return;
-    var a=scenList(),rec=a.filter(function(r){return r.id===(b.dataset.load||b.dataset.base||b.dataset.del);})[0];
-    if(!rec)return;
-    if(b.dataset.load){push();S.datos=clone(rec.datos);S.nombre=rec.name;sel=null;recalc();render();save();dlg.close();toast("Escenario abierto");}
-    if(b.dataset.base){S.base=clone(rec.datos);S.baseNombre=rec.name;recalc();render();save();toast("Base de comparación: "+rec.name);}
-    if(b.dataset.del){scenSet(a.filter(function(r){return r!==rec;}));openScen();}
-  };
+  document.getElementById("scReset").onclick=function(){push();var w=nuevoWS();S.datos=w.datos;S.base=w.base;S.baseNombre="Base";S.nombre="Base";sel=null;recalc();render();save();toast("Datos del archivo restaurados · Ctrl+Z para deshacer");};
+  scenListA().then(function(list){
+    var el=document.getElementById("scList");if(!el)return;
+    if(!list.length){el.innerHTML='<div style="color:var(--ink-soft);font-size:13px">Todavía no hay escenarios guardados.</div>';return;}
+    el.innerHTML=list.map(function(r){
+      var k=E.calcular(datosVista(r.datos)).kpis;
+      return '<div class="sc"><div><b>'+esc(r.name)+'</b><br><small>'+(r.autor?esc(r.autor)+' · ':'')+new Date(r.ts).toLocaleString("es-AR")+' · máx '+oc(k.maxOcupacion.valor)+' · '+hh(k.hhExcedidas)+' HH exc.</small></div>'
+        +'<div class="row-actions" style="margin:0"><button class="btn sm" data-load="'+esc(r.id)+'">Abrir</button><button class="btn sm" data-base="'+esc(r.id)+'">Base</button><button class="btn sm" data-del="'+esc(r.id)+'">Borrar</button></div></div>';
+    }).join("");
+    el.onclick=function(e){
+      var b=e.target.closest("button");if(!b)return;
+      var rec=list.filter(function(r){return String(r.id)===(b.dataset.load||b.dataset.base||b.dataset.del);})[0];
+      if(!rec)return;
+      if(b.dataset.load){push();S.datos=clone(rec.datos);S.nombre=rec.name;sel=null;recalc();render();save();dlg.close();toast("Escenario abierto · «Guardar» lo convierte en el plan vigente");}
+      if(b.dataset.base){S.base=clone(rec.datos);S.baseNombre=rec.name;recalc();render();save();toast("Base de comparación: "+rec.name);}
+      if(b.dataset.del)scenBorrarA(rec).then(openScen,function(){toast("No se pudo borrar");});
+    };
+  },function(e){var el=document.getElementById("scList");if(el)el.textContent="No se pudieron leer los escenarios: "+(e&&e.message||e);});
 }
 function openComparar(){
-  var filas=[{name:S.nombre+" (abierto)",datos:S.datos},{name:S.baseNombre+" (base)",datos:S.base}].concat(scenList().map(function(r){return {name:r.name,datos:r.datos};}));
+  scenListA().then(function(l){compararTabla(l);},function(){compararTabla([]);});
+}
+function compararTabla(lista){
+  var filas=[{name:S.nombre+" (abierto)",datos:S.datos},{name:S.baseNombre+" (base)",datos:S.base}].concat(lista.map(function(r){return {name:r.name+(r.autor?" · "+r.autor:""),datos:r.datos};}));
   var html='<h3>Comparar escenarios</h3><div style="color:var(--ink-soft);font-size:12px;margin-bottom:10px">Mismo motor, mismas curvas: cambia solo lo que difiere entre escenarios.'+(S.filtro?' Filtro activo: solo '+S.filtro+'.':'')+'</div>'
     +'<div class="tablewrap"><table class="pk"><tr><th>Escenario</th><th class="r">Máx. ocup.</th><th>Dónde</th><th>1.er crítico</th><th class="r">HH excedidas</th><th class="r">HH forecast</th><th class="r">Personas</th>'
     +R.especialidades.map(function(e){return '<th class="r" title="Ocupación pico de '+esc(e)+'">'+esc(ABREV[e]||e)+'</th>';}).join("")+'</tr>';
@@ -3068,7 +3097,7 @@ function openPDF(){
 function abrirBuscar(){var b=document.getElementById("buscar");b.className="on";var i=document.getElementById("buscarInp");i.value=S.q||"";i.focus();i.select();}
 function cerrarBuscar(){document.getElementById("buscar").className="";S.q="";renderRows();}
 function openAtajos(){
-  var A=[["Ctrl+Z / Ctrl+Y","Deshacer / rehacer (también los cambios de parámetros)"],["Ctrl+S","Guardar en este navegador"],["Ctrl+F","Buscar proyecto"],["Ctrl+P","Reporte PDF"],
+  var A=[["Ctrl+Z / Ctrl+Y","Deshacer / rehacer (también los cambios de parámetros)"],["Ctrl+S","Guardar el plan en la carpeta compartida"],["Ctrl+F","Buscar proyecto"],["Ctrl+P","Reporte PDF"],
     ["↑ / ↓","Proyecto anterior / siguiente"],["← / →","Mover el proyecto elegido 1 mes"],["Ctrl+← / Ctrl+→","Mover 12 meses"],["Shift+← / Shift+→","Acortar / alargar 1 mes"],
     ["+ / −","Zoom de la línea de tiempo"],["Ctrl+rueda","Zoom con el mouse"],["Esc","Cerrar diálogo o soltar selección"],["F1 o ?","Esta ayuda"]];
   document.getElementById("dlgBody").innerHTML='<h3>Atajos de teclado</h3><table class="atajos">'+A.map(function(a){return '<tr><td><kbd>'+a[0]+'</kbd></td><td>'+a[1]+'</td></tr>';}).join("")+'</table>'
@@ -3088,7 +3117,7 @@ document.addEventListener("keydown",function(e){
   var mod=e.ctrlKey||e.metaKey,k=e.key,enCampo=/input|textarea|select/i.test(e.target.tagName);
   if(mod&&(k==="z"||k==="Z")&&!e.shiftKey){e.preventDefault();undo();return;}
   if(mod&&(k==="y"||k==="Y"||((k==="z"||k==="Z")&&e.shiftKey))){e.preventDefault();redo();return;}
-  if(mod&&(k==="s"||k==="S")){e.preventDefault();save();toast("Guardado en este navegador");return;}
+  if(mod&&(k==="s"||k==="S")){e.preventDefault();save();if(FS.dir)fsGuardar();else toast("Guardado en este navegador · conectá la carpeta compartida para que lo vea el equipo");return;}
   if(mod&&(k==="p"||k==="P")){e.preventDefault();openPDF();return;}
   if(mod&&(k==="f"||k==="F")){e.preventDefault();abrirBuscar();return;}
   if(k==="Escape"){
@@ -3110,6 +3139,312 @@ document.addEventListener("keydown",function(e){
 });
 function zoom(v){S.cw=Math.max(26,Math.min(90,v));document.getElementById("zoom").value=Math.max(30,Math.min(80,S.cw));render();save();}
 
+/* ===================== carpeta compartida (OneDrive / SharePoint sincronizado) ===================== */
+/* La herramienta lee y escribe plan-capacidad.json en una carpeta local sincronizada.
+   OneDrive la replica en SharePoint, así todo el equipo trabaja sobre el mismo plan.
+   Cada guardado incrementa la revisión; si otro guardó antes, se avisa en lugar de pisar. */
+var PLAN="plan-capacidad.json",HISTDIR="historial",ESCDIR="escenarios",HISTMAX=60,FS_INTERVALO=20000;
+var FS={dir:null,pend:null,plan:null,ultimo:null,aviso:0,timer:null,ocupado:false,copias:[],sinPlan:false};
+function fsSoportado(){return typeof window.showDirectoryPicker==="function";}
+function usuario(){try{return localStorage.getItem(KEY+"-usuario")||"";}catch(e){return "";}}
+function setUsuario(v){try{localStorage.setItem(KEY+"-usuario",v);}catch(e){}}
+function fechaHora(iso){if(!iso)return "—";var d=new Date(iso);return d.toLocaleDateString("es-AR")+" "+d.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"});}
+function slugTxt(t){return String(t||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40)||"x";}
+function stamp(d){var z=function(n){return String(n).padStart(2,"0");};return d.getFullYear()+z(d.getMonth()+1)+z(d.getDate())+"-"+z(d.getHours())+z(d.getMinutes());}
+
+/* IndexedDB: recuerda la carpeta elegida para no pedirla cada vez */
+function idb(){return new Promise(function(ok,ko){var q=indexedDB.open("capacidad-ing",1);q.onupgradeneeded=function(){q.result.createObjectStore("kv");};q.onsuccess=function(){ok(q.result);};q.onerror=function(){ko(q.error);};});}
+function idbGet(k){return idb().then(function(db){return new Promise(function(ok,ko){var r=db.transaction("kv").objectStore("kv").get(k);r.onsuccess=function(){ok(r.result);};r.onerror=function(){ko(r.error);};});});}
+function idbSet(k,v){return idb().then(function(db){return new Promise(function(ok,ko){var t=db.transaction("kv","readwrite");if(v===undefined)t.objectStore("kv").delete(k);else t.objectStore("kv").put(v,k);t.oncomplete=function(){ok();};t.onerror=function(){ko(t.error);};});});}
+
+function leerJSON(dir,nombre){
+  return dir.getFileHandle(nombre).then(function(fh){return fh.getFile();}).then(function(f){return f.text();})
+    .then(function(t){return JSON.parse(t.replace(/^﻿/,""));},function(e){if(e&&(e.name==="NotFoundError"||e.name==="TypeMismatchError"))return null;throw e;});
+}
+function escribirJSON(dir,nombre,obj){
+  return dir.getFileHandle(nombre,{create:true}).then(function(fh){return fh.createWritable();})
+    .then(function(w){return w.write(JSON.stringify(obj,null,1)).then(function(){return w.close();});});
+}
+function subdir(n){return FS.dir.getDirectoryHandle(n,{create:true});}
+function listar(dir){
+  var out=[],it=dir.values();
+  function next(){return it.next().then(function(r){if(r.done)return out;out.push(r.value);return next();});}
+  return next();
+}
+function permiso(h,pedir){
+  if(!h.queryPermission)return Promise.resolve(true);
+  var o={mode:"readwrite"};
+  return h.queryPermission(o).then(function(st){
+    if(st==="granted")return true;
+    if(!pedir)return false;
+    return h.requestPermission(o).then(function(s2){return s2==="granted";});
+  });
+}
+function planValido(p){return p&&p.datos&&p.datos.proyectos&&p.datos.curvas&&p.datos.capacidad&&p.datos.parametros;}
+
+/* ---- conexión ---- */
+function fsConectar(){
+  if(!fsSoportado()){openCarpeta();return;}
+  window.showDirectoryPicker({id:"capacidad-ingenieria",mode:"readwrite"}).then(function(d){
+    return permiso(d,true).then(function(ok){
+      if(!ok)throw new Error("sin permiso de escritura");
+      FS.dir=d;FS.pend=null;
+      return idbSet("carpeta",d).catch(function(){});
+    });
+  }).then(function(){return fsAlConectar();}).then(function(){if(dlg.open&&document.getElementById("fsBox"))openCarpeta();})
+    .catch(function(e){
+      if(e&&e.name==="AbortError")return;
+      if(e&&e.name==="SecurityError"){toast("Este entorno no permite usar carpetas: abrí el archivo capacidad-ingenieria.html desde la carpeta, con Edge o Chrome");return;}
+      toast("No se pudo usar esa carpeta: "+(e&&e.message||e));
+    });
+}
+function fsReconectar(){
+  var h=FS.pend;if(!h){fsConectar();return;}
+  permiso(h,true).then(function(ok){
+    if(!ok){toast("Sin permiso para la carpeta «"+h.name+"»");return;}
+    FS.dir=h;FS.pend=null;fsAlConectar();
+  },function(){fsConectar();});
+}
+function fsRestaurar(){
+  if(!fsSoportado()||!window.indexedDB)return;
+  idbGet("carpeta").then(function(h){
+    if(!h||!h.getFileHandle)return;
+    return permiso(h,false).then(function(ok){if(ok){FS.dir=h;return fsAlConectar();}FS.pend=h;fsBarra();fsChip();});
+  }).catch(function(){});
+}
+function fsDesconectar(){
+  FS.dir=null;FS.pend=null;FS.plan=null;FS.ultimo=null;FS.copias=[];FS.sinPlan=false;clearInterval(FS.timer);
+  idbSet("carpeta",undefined).catch(function(){});
+  fsBarra();fsChip();toast("Carpeta desconectada: los cambios quedan solo en este navegador");
+}
+function fsMeta(p){return {revision:p.revision||0,guardadoPor:p.guardadoPor||"",guardadoEn:p.guardadoEn||""};}
+function fsAlConectar(){
+  fsChip();
+  return leerJSON(FS.dir,PLAN).then(function(plan){
+    FS.sinPlan=!plan;
+    clearInterval(FS.timer);FS.timer=setInterval(fsRevisar,FS_INTERVALO);
+    fsCopias();
+    if(!plan){fsBarra();toast("La carpeta «"+FS.dir.name+"» todavía no tiene plan: usá «Guardar» para crearlo");return;}
+    if(!planValido(plan)){toast(PLAN+" no tiene el formato esperado");return;}
+    FS.ultimo=plan;FS.plan=fsMeta(plan);
+    var mismaBase=S.fsCarpeta===FS.dir.name&&S.fsRev===plan.revision;
+    if(mismaBase){fsBarra();fsChip();if(S.dirty)toast("Tenés cambios sin guardar sobre la revisión "+plan.revision);return;}
+    if(!S.dirty){fsCargar(plan,"Plan vigente cargado · revisión "+plan.revision+(plan.guardadoPor?" de "+plan.guardadoPor:""));return;}
+    fsConflicto(plan);
+  });
+}
+function fsCargar(plan,msg){
+  var selPrev=sel;
+  push();
+  S.datos=clone(plan.datos);S.base=clone(plan.datos);S.baseNombre="Plan vigente";S.nombre="Plan vigente";
+  S.fsRev=plan.revision||0;S.fsCarpeta=FS.dir?FS.dir.name:"";S.dirty=false;
+  FS.ultimo=plan;FS.plan=fsMeta(plan);FS.aviso=0;FS.sinPlan=false;
+  sel=(selPrev&&selPrev.p&&!findP(selPrev.p))?null:selPrev;
+  recalc();render();save();fsChip();fsBarra();
+  if(msg)toast(msg);
+}
+
+/* ---- guardar ---- */
+function fsGuardar(forzar){
+  if(!FS.dir){if(FS.pend){fsReconectar();return Promise.resolve();}openCarpeta();return Promise.resolve();}
+  if(FS.ocupado)return Promise.resolve();
+  var u=usuario();
+  if(!u){openCarpeta();toast("Escribí tu nombre: firma cada versión guardada");return Promise.resolve();}
+  FS.ocupado=true;
+  return leerJSON(FS.dir,PLAN).then(function(act){
+    var revAct=act?(act.revision||0):0;
+    if(act&&!forzar&&(revAct!==S.fsRev||S.fsCarpeta!==FS.dir.name)){FS.ocupado=false;fsConflicto(act);return;}
+    var ahora=new Date(),rev=revAct+1;
+    var plan={formato:"capacidad-ingenieria/plan",version:1,revision:rev,guardadoPor:u,guardadoEn:ahora.toISOString(),
+      titulo:S.title||"",datos:S.datos};
+    return escribirJSON(FS.dir,PLAN,plan).then(function(){
+      return subdir(HISTDIR).then(function(h){
+        return escribirJSON(h,"plan-r"+String(rev).padStart(4,"0")+"-"+stamp(ahora)+"-"+slugTxt(u)+".json",plan).then(function(){return podar(h);});
+      }).catch(function(){});
+    }).then(function(){
+      S.fsRev=rev;S.fsCarpeta=FS.dir.name;S.dirty=false;S.base=clone(S.datos);S.baseNombre="Plan vigente";S.nombre="Plan vigente";
+      FS.ultimo=plan;FS.plan=fsMeta(plan);FS.aviso=0;FS.sinPlan=false;
+      recalc();render();save();fsChip();fsBarra();
+      toast("Plan guardado en «"+FS.dir.name+"» · revisión "+rev);
+    });
+  }).catch(function(e){toast("No se pudo guardar en la carpeta: "+(e&&e.message||e));})
+    .then(function(){FS.ocupado=false;});
+}
+function podar(h){
+  return listar(h).then(function(es){
+    var f=es.filter(function(e){return e.kind==="file"&&/^plan-r\d+.*\.json$/i.test(e.name);}).map(function(e){return e.name;}).sort();
+    var sobran=f.slice(0,Math.max(0,f.length-HISTMAX));
+    return Promise.all(sobran.map(function(n){return h.removeEntry(n).catch(function(){});}));
+  });
+}
+
+/* ---- otro usuario guardó antes ---- */
+function fsConflicto(plan){
+  var mio=E.calcular(datosVista(S.datos)).kpis,suyo=E.calcular(datosVista(plan.datos)).kpis,quien=esc(plan.guardadoPor||"Otro usuario");
+  var fila=function(n,k){return '<tr><td>'+n+'</td><td class="calc"><span class="fl '+sem(k.maxOcupacion.valor)+'">'+oc(k.maxOcupacion.valor)+'</span></td><td class="calc">'+hh(k.hhExcedidas)+'</td><td>'+(k.primerMesCritico?mlabel(k.primerMesCritico.mes):"ninguno")+'</td></tr>';};
+  document.getElementById("dlgBody").innerHTML='<h3>El plan cambió en la carpeta</h3>'
+    +'<div class="holg crit"><b>'+quien+'</b> guardó la revisión '+plan.revision+' el '+fechaHora(plan.guardadoEn)+'. Tus cambios parten de la revisión '+(S.fsRev||"—")+' y todavía no están guardados.</div>'
+    +'<table class="pk"><tr><th>Versión</th><th class="r">Máx. ocup.</th><th class="r">HH excedidas</th><th>1.er crítico</th></tr>'+fila("La de "+quien,suyo)+fila("La tuya",mio)+'</table>'
+    +'<div class="row-actions" style="margin-top:12px;flex-direction:column;align-items:stretch">'
+    +'<button class="btn primary" id="cfEsc">Guardar mis cambios como escenario y cargar la versión de '+quien+'</button>'
+    +'<button class="btn" id="cfCargar">Cargar la versión de '+quien+' (descarto mis cambios; Ctrl+Z los recupera)</button>'
+    +'<button class="btn" id="cfPisar" style="color:var(--danger)">Reemplazar la versión de '+quien+' por la mía</button></div>'
+    +'<div class="hint">Recomendado: la primera opción. Tus cambios quedan en «Escenarios» para revisarlos y volver a aplicarlos sobre el plan nuevo. Las versiones anteriores quedan en la subcarpeta «historial».</div>';
+  openDlg(false);
+  document.getElementById("cfEsc").onclick=function(){
+    var u=usuario()||"sin nombre";
+    scenGuardarA({id:Math.random().toString(36).slice(2,9),name:"Cambios de "+u+" sin guardar ("+fechaHora(new Date().toISOString())+")",ts:Date.now(),datos:clone(S.datos)})
+      .then(function(){dlg.close();fsCargar(plan,"Tus cambios quedaron en Escenarios · plan de "+(plan.guardadoPor||"otro usuario")+" cargado");},
+            function(e){toast("No se pudo guardar el escenario: "+(e&&e.message||e));});
+  };
+  document.getElementById("cfCargar").onclick=function(){dlg.close();fsCargar(plan,"Plan de "+(plan.guardadoPor||"otro usuario")+" cargado · Ctrl+Z recupera tus cambios");};
+  document.getElementById("cfPisar").onclick=function(){dlg.close();fsGuardar(true);};
+}
+
+/* ---- vigilancia: OneDrive trae los cambios de otros; los mostramos solos ---- */
+function fsRevisar(){
+  if(!FS.dir||FS.ocupado||drag||document.visibilityState==="hidden")return;
+  leerJSON(FS.dir,PLAN).then(function(plan){
+    if(!planValido(plan)||plan.revision===S.fsRev&&S.fsCarpeta===FS.dir.name)return;
+    FS.ultimo=plan;FS.plan=fsMeta(plan);FS.sinPlan=false;
+    if(!S.dirty){fsCargar(plan,"Plan actualizado por "+(plan.guardadoPor||"otro usuario")+" · revisión "+plan.revision);return;}
+    if(FS.aviso!==plan.revision){FS.aviso=plan.revision;fsBarra();fsChip();}
+  }).catch(function(){});
+  fsCopias();
+}
+function fsCopias(){
+  if(!FS.dir)return;
+  listar(FS.dir).then(function(es){
+    var c=es.filter(function(e){return e.kind==="file"&&/^plan-capacidad.+\.json$/i.test(e.name)&&e.name!==PLAN;}).map(function(e){return e.name;});
+    if(c.join("|")!==FS.copias.join("|")){FS.copias=c;fsBarra();}
+  }).catch(function(){});
+}
+
+/* ---- indicadores ---- */
+function fsChip(){
+  var c=document.getElementById("fsChip");if(!c||!S)return;
+  var t;
+  if(FS.dir)t='Carpeta <b>'+esc(FS.dir.name)+'</b> · '+(S.fsRev?'rev '+S.fsRev:'sin plan')+(S.dirty?' · <b>sin guardar</b>':' · al día');
+  else if(FS.pend)t='Reconectar <b>'+esc(FS.pend.name)+'</b>';
+  else t=S.dirty?'Solo en este navegador · <b>sin compartir</b>':'Sin carpeta compartida';
+  c.innerHTML=t;c.className=(S.dirty&&(FS.dir||FS.pend))?"dirty":"";
+  c.title=FS.plan&&FS.plan.guardadoPor?"Última versión: revisión "+FS.plan.revision+" de "+FS.plan.guardadoPor+" ("+fechaHora(FS.plan.guardadoEn)+")":"Carpeta compartida (OneDrive / SharePoint)";
+  var g=document.getElementById("fsSave");if(g)g.textContent=S.dirty&&FS.dir?"Guardar •":"Guardar";
+}
+function fsBarra(){
+  var b=document.getElementById("fsBar");if(!b)return;
+  var h="",crit=false;
+  if(FS.pend){h='La herramienta necesita permiso para volver a usar la carpeta <b>'+esc(FS.pend.name)+'</b>.<button class="btn sm" data-fs="reconectar">Permitir y cargar el plan</button>';}
+  else if(FS.dir&&S.dirty&&FS.plan&&FS.plan.revision!==S.fsRev&&FS.ultimo){crit=true;h='<b>'+esc(FS.plan.guardadoPor||"Otro usuario")+'</b> guardó una versión nueva del plan ('+fechaHora(FS.plan.guardadoEn)+'). Tus cambios todavía no están guardados.<button class="btn sm" data-fs="conflicto">Ver opciones</button>';}
+  else if(FS.dir&&FS.sinPlan){h='La carpeta <b>'+esc(FS.dir.name)+'</b> no tiene plan todavía.<button class="btn sm" data-fs="guardar">Crear el plan con los datos actuales</button>';}
+  if(FS.dir&&FS.copias.length){crit=true;h+=(h?'<span class="sep"></span>':'')+'OneDrive creó copias en conflicto: '+FS.copias.map(esc).join(", ")+'.<button class="btn sm" data-fs="carpeta">Revisar</button>';}
+  b.innerHTML=h;b.className=h?("on"+(crit?" crit":"")):"";
+}
+function wireFs(){
+  document.getElementById("fsBar").onclick=function(e){
+    var a=e.target.closest("[data-fs]");if(!a)return;
+    var k=a.dataset.fs;
+    if(k==="reconectar")fsReconectar();
+    if(k==="conflicto"&&FS.ultimo)fsConflicto(FS.ultimo);
+    if(k==="guardar")fsGuardar();
+    if(k==="carpeta")openCarpeta();
+  };
+  document.getElementById("fsChip").onclick=openCarpeta;
+  document.getElementById("fsSave").onclick=function(){fsGuardar();};
+  document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible")fsRevisar();});
+  window.addEventListener("beforeunload",function(e){if(FS.dir&&S.dirty){e.preventDefault();e.returnValue="";}});
+}
+
+/* ---- escenarios compartidos: un archivo por escenario en «escenarios» ---- */
+function fsListarEsc(){
+  return subdir(ESCDIR).then(function(d){
+    return listar(d).then(function(es){
+      return Promise.all(es.filter(function(e){return e.kind==="file"&&/\.json$/i.test(e.name);}).map(function(e){
+        return e.getFile().then(function(f){return f.text();}).then(function(t){
+          var o=JSON.parse(t.replace(/^﻿/,""));if(!planValido(o))return null;o.file=e.name;o.id=String(o.id||e.name);return o;
+        }).catch(function(){return null;});
+      }));
+    });
+  }).then(function(l){return l.filter(Boolean).sort(function(a,b){return (b.ts||0)-(a.ts||0);});});
+}
+function fsGuardarEsc(rec){return subdir(ESCDIR).then(function(d){return escribirJSON(d,slugTxt(rec.name)+"-"+rec.id+".json",rec);});}
+function fsBorrarEsc(rec){return subdir(ESCDIR).then(function(d){return d.removeEntry(rec.file);});}
+
+/* ---- historial y copias en conflicto ---- */
+function fsAbrirVersion(dir,nombre,etiqueta){
+  leerJSON(dir,nombre).then(function(p){
+    if(!planValido(p)){toast("Ese archivo no es un plan válido");return;}
+    push();S.datos=clone(p.datos);S.nombre=etiqueta;sel=null;recalc();render();save();dlg.close();
+    toast("Abierto «"+etiqueta+"» · «Guardar» lo convierte en el plan vigente");
+  },function(e){toast("No se pudo abrir: "+(e&&e.message||e));});
+}
+
+/* ---- diálogo «Carpeta compartida» ---- */
+function openCarpeta(){
+  var html='<h3>Carpeta compartida</h3><div id="fsBox">';
+  if(!fsSoportado()){
+    html+='<div class="holg crit">Este navegador no permite trabajar con carpetas. Abrí el archivo con <b>Microsoft Edge</b> o <b>Google Chrome</b>.</div>'
+      +'<div class="psub">Mientras tanto podés compartir el plan con «Exportar → Escenario (JSON)» e «Importar».</div></div>';
+    document.getElementById("dlgBody").innerHTML=html;openDlg(false);return;
+  }
+  html+='<div class="psub">El plan vigente vive en <b>'+PLAN+'</b>, en una carpeta sincronizada con SharePoint (OneDrive). Todos los que abren la herramienta desde esa carpeta ven y editan el mismo plan.</div>'
+    +'<ol class="pasos"><li>Abrí este archivo con doble clic desde la carpeta sincronizada (Edge o Chrome).</li>'
+    +'<li>La primera vez, elegí esa misma carpeta con «Elegir carpeta» y aceptá el permiso de edición.</li>'
+    +'<li>Hacé tus cambios y presioná <b>Guardar</b> (Ctrl+S). OneDrive lo sube y los demás lo ven en segundos.</li></ol>'
+    +'<div class="f" style="margin-top:12px"><label for="fsUser">Tu nombre (firma cada versión guardada)</label><input type="text" id="fsUser" value="'+esc(usuario())+'" placeholder="Ej.: Ana Pérez"></div>';
+  if(FS.dir){
+    html+='<table class="pk"><tr><td>Carpeta</td><td><b>'+esc(FS.dir.name)+'</b></td></tr>'
+      +'<tr><td>Plan vigente</td><td>'+(FS.plan?'Revisión '+FS.plan.revision+' · '+esc(FS.plan.guardadoPor||"—")+' · '+fechaHora(FS.plan.guardadoEn):'Todavía no hay plan en la carpeta')+'</td></tr>'
+      +'<tr><td>Tu trabajo</td><td>'+(S.dirty?'<span class="fl warn">cambios sin guardar</span> sobre la revisión '+(S.fsRev||"—"):'<span class="fl ok">al día</span>')+'</td></tr></table>'
+      +'<div class="row-actions" style="margin-top:10px"><button class="btn primary" id="fsG">Guardar en la carpeta</button><button class="btn" id="fsL">Recargar el plan vigente</button>'
+      +'<button class="btn" id="fsC">Cambiar carpeta</button><button class="btn" id="fsD">Desconectar</button></div>'
+      +'<div id="fsCop"></div><h4>Historial</h4><div id="fsHist" class="psub">Cargando…</div>';
+  }else{
+    html+=(FS.pend?'<div class="holg">La última carpeta usada fue <b>'+esc(FS.pend.name)+'</b>.</div>':'')
+      +'<div class="row-actions"><button class="btn primary" id="fsC">Elegir carpeta</button>'+(FS.pend?'<button class="btn" id="fsR">Volver a «'+esc(FS.pend.name)+'»</button>':'')+'</div>'
+      +'<div class="hint">Elegí la carpeta concreta de la herramienta (no la raíz de OneDrive ni «Documentos»: el navegador no permite carpetas del sistema). Conviene marcarla en OneDrive como «Mantener siempre en este dispositivo».</div>';
+  }
+  html+='</div>';
+  document.getElementById("dlgBody").innerHTML=html;openDlg(false);
+  var ge=function(id){return document.getElementById(id);};
+  ge("fsUser").onchange=function(){setUsuario(this.value.trim());fsChip();toast("Nombre guardado");};
+  if(ge("fsC"))ge("fsC").onclick=function(){setUsuario(ge("fsUser").value.trim());fsConectar();};
+  if(ge("fsR"))ge("fsR").onclick=function(){setUsuario(ge("fsUser").value.trim());fsReconectar();};
+  if(!FS.dir)return;
+  ge("fsG").onclick=function(){setUsuario(ge("fsUser").value.trim());fsGuardar().then(function(){if(document.getElementById("fsBox"))openCarpeta();});};
+  ge("fsL").onclick=function(){
+    leerJSON(FS.dir,PLAN).then(function(p){
+      if(!planValido(p)){toast("La carpeta no tiene un plan válido");return;}
+      if(S.dirty&&p.revision===S.fsRev){fsCargar(p,"Plan vigente recargado · Ctrl+Z recupera tus cambios");dlg.close();return;}
+      if(S.dirty){fsConflicto(p);return;}
+      fsCargar(p,"Plan vigente recargado");dlg.close();
+    });
+  };
+  ge("fsD").onclick=function(){fsDesconectar();openCarpeta();};
+  subdir(HISTDIR).then(function(h){
+    return listar(h).then(function(es){
+      var f=es.filter(function(e){return e.kind==="file"&&/\.json$/i.test(e.name);}).map(function(e){return e.name;}).sort().reverse().slice(0,15);
+      var box=ge("fsHist");if(!box)return;
+      if(!f.length){box.textContent="Todavía no hay versiones guardadas.";return;}
+      box.innerHTML='<table class="pk">'+f.map(function(n){
+        var m=n.match(/^plan-r(\d+)-(\d{8})-(\d{4})-(.+)\.json$/i);
+        var et=m?('Revisión '+(+m[1])+' · '+m[2].slice(6,8)+'/'+m[2].slice(4,6)+' '+m[3].slice(0,2)+':'+m[3].slice(2)+' · '+m[4].replace(/-/g," ")):n;
+        return '<tr><td>'+esc(et)+'</td><td class="r"><button class="btn sm" data-hist="'+esc(n)+'" data-et="'+esc(m?"Revisión "+(+m[1]):n)+'">Abrir</button></td></tr>';
+      }).join("")+'</table>';
+      box.onclick=function(e){var b=e.target.closest("[data-hist]");if(b)fsAbrirVersion(h,b.dataset.hist,b.dataset.et);};
+    });
+  }).catch(function(){var b=ge("fsHist");if(b)b.textContent="No se pudo leer el historial.";});
+  if(FS.copias.length){
+    ge("fsCop").innerHTML='<h4>Copias en conflicto de OneDrive</h4><div class="psub">Aparecen cuando dos personas guardaron casi al mismo tiempo. Abrí cada una, compará y borrala cuando la hayas resuelto.</div><table class="pk">'
+      +FS.copias.map(function(n){return '<tr><td>'+esc(n)+'</td><td class="r"><button class="btn sm" data-cop="'+esc(n)+'">Abrir</button> <button class="btn sm" data-copdel="'+esc(n)+'">Borrar</button></td></tr>';}).join("")+'</table>';
+    ge("fsCop").onclick=function(e){
+      var a=e.target.closest("[data-cop]"),d=e.target.closest("[data-copdel]");
+      if(a)fsAbrirVersion(FS.dir,a.dataset.cop,a.dataset.cop);
+      if(d)FS.dir.removeEntry(d.dataset.copdel).then(function(){FS.copias=FS.copias.filter(function(x){return x!==d.dataset.copdel;});fsBarra();openCarpeta();});
+    };
+  }
+}
+
 /* ===================== arranque ===================== */
 function boot(){
   ed=document.getElementById("editor");dlg=document.getElementById("dlg");
@@ -3118,7 +3453,7 @@ function boot(){
   document.getElementById("zoom").value=S.cw;
   S.q="";
   recalc();render();
-  wireDrag();wireClicks();wireDlgDrag();
+  wireDrag();wireClicks();wireDlgDrag();wireFs();fsChip();fsRestaurar();
   document.getElementById("dlgClose").onclick=function(){dlg.close();};
   document.getElementById("dlgX").onclick=function(){dlg.close();};
   document.getElementById("title").onchange=function(){S.title=this.value;save();};

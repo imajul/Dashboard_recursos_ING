@@ -7,7 +7,7 @@ simulación de recursos en vivo.
 |---|---|
 | [`docs/PROPUESTA_TECNICA.md`](docs/PROPUESTA_TECNICA.md) | Propuesta técnica completa: arquitectura, modelo de datos, SharePoint, reemplazo de las tablas DAX, simulación, escenarios, viabilidad y diagramas. |
 | [`prototipo/`](prototipo) | Prototipo funcional en HTML/JS: Gantt de proyectos arrastrable (inicio y duración), matriz de ocupación con semáforo, gráfico demanda vs capacidad, edición de recursos y de los parámetros del modelo (tablas de HH y curvas), escenarios, comparación, exportación CSV/JSON y reporte PDF. Abrir `prototipo/index.html`. |
-| [`dist/capacidad-ingenieria.html`](dist/capacidad-ingenieria.html) | **Versión para compartir**: la herramienta completa en un solo archivo. Se manda por mail/Teams y se abre con doble clic, sin cuenta ni instalación. |
+| [`dist/`](dist) | **Versión para usar en equipo**: `capacidad-ingenieria.html` (la herramienta en un solo archivo) y `LEEME.txt` (guía). Se copian a una carpeta sincronizada con SharePoint. |
 | [`backend/`](backend) | Motor de cálculo en Python (`app/motor.py`), API FastAPI, repositorio SQLite/SQL Server y conector SharePoint vía Microsoft Graph. |
 | [`db/schema.sql`](db/schema.sql) | Modelo de datos. |
 | [`data/proyectos.csv`](data/proyectos.csv) | Lista de proyectos exportada de SharePoint (DIM_Proyecto). Es la fuente de los proyectos. |
@@ -32,6 +32,32 @@ cd backend && uvicorn app.main:app --reload
 - **Para todos los usuarios:** reemplazar `data/proyectos.csv` y correr `cd backend && python -m app.datos_ejemplo` (regenera `data/sample_data.json` y `prototipo/data.js`). Para revisar el mapeo antes: `python -m app.importar_csv ../data/proyectos.csv`.
 
 Mapeo: "N/A" = sin dato · fecha dd/mm/aaaa → mes · **Calendario Fijo = Si → no simulable** · el **Tamaño** se deriva de la potencia con las tablas de HH Parque si el CSV no lo trae.
+
+## Uso colaborativo en una carpeta sincronizada (OneDrive / SharePoint)
+
+La herramienta trabaja sobre una carpeta de Windows sincronizada con SharePoint. No necesita servidor
+ni cuentas de Claude o GitHub: alcanza con la cuenta de Microsoft de la empresa y Edge o Chrome.
+
+```
+📁 Capacidad Ingeniería  (sincronizada con SharePoint)
+ ├─ capacidad-ingenieria.html   la herramienta (doble clic) — dist/capacidad-ingenieria.html
+ ├─ LEEME.txt                   guía para los usuarios       — dist/LEEME.txt
+ ├─ plan-capacidad.json         plan vigente (lo crea y actualiza la herramienta)
+ ├─ escenarios\                 simulaciones del equipo, un archivo por escenario
+ └─ historial\                  copia de cada versión guardada (últimas 60)
+```
+
+- **Guardar** (Ctrl+S) escribe `plan-capacidad.json` con revisión, autor y fecha, y deja una copia en `historial`.
+- Cada 20 segundos (y al volver a la ventana) la herramienta revisa la carpeta: si otro guardó y vos no
+  tenés cambios pendientes, carga la versión nueva sola; si tenés cambios, avisa y ofrece guardarlos como
+  escenario, cargar la versión del otro o reemplazarla. Nunca pisa en silencio.
+- Detecta las «copias en conflicto» que crea OneDrive (`plan-capacidad-NOMBREPC.json`) y permite abrirlas y borrarlas.
+- Usa la API de acceso a archivos del navegador (Edge/Chrome); la carpeta elegida se recuerda y, al
+  reabrir, el navegador puede pedir confirmar el permiso con un clic.
+- Sin carpeta conectada sigue funcionando como antes (datos en el navegador, Exportar/Importar JSON).
+
+Para generar o actualizar los archivos de la carpeta: `python scripts/build_standalone.py`
+(antes, si cambió la lista de proyectos: `cd backend && python -m app.datos_ejemplo`).
 
 ## Compartir la herramienta sin cuenta
 
