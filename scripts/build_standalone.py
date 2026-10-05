@@ -51,6 +51,32 @@ USO DIARIO
   - Si no tenés cambios sin guardar, los cambios de los demás se cargan
     solos (la herramienta revisa la carpeta cada 20 segundos).
 
+LA HERRAMIENTA ES LA BASE DE DATOS DE PROYECTOS
+  Todas las altas, bajas y modificaciones de proyectos se hacen acá y se
+  confirman con Guardar.
+  - Botón "Proyectos": tabla con todos los proyectos (código, nombre, tipo,
+    nivel DNN, tecnología, MW, tamaño, POE, ET, línea, inicio, duración,
+    solapamiento, estado, calendario fijo, % avance, incluir). Se edita
+    directo en la celda; "+ Proyecto" agrega y la X elimina. Las filas con
+    "!" tienen datos a revisar (código repetido, sin fecha, DNN sin nivel...).
+  - Clic en un proyecto del Gantt: panel con todos sus datos.
+  - "Importar" un CSV REEMPLAZA toda la lista: queda solo para cargas
+    iniciales. Antes de aplicar muestra qué se agrega, cambia y borra.
+  - "Exportar > Lista de proyectos (CSV)" genera la planilla en el formato
+    de la lista DIM_Proyecto (se puede volver a importar).
+
+HH CARGADAS A MANO
+  Si la base de datos de HH no aplica a un proyecto puntual: clic en el
+  proyecto > "HH del proyecto · por componente". Para cada componente
+  (Parque, ET, Línea; o el total en DNN y O&M) se ve el valor del modelo y
+  se puede escribir el que corresponde. Completar el "Motivo del ajuste".
+  Vacío = vuelve al modelo. El proyecto queda marcado con un lápiz.
+
+REGISTRO DE CAMBIOS
+  Cada Guardar anota qué cambió y quién lo hizo (por ejemplo "PABRA: Inicio
+  ene-27 -> jun-27"). Se ve en el diálogo de la carpeta > Historial, y en el
+  aviso que aparece cuando otro usuario guardó mientras trabajabas.
+
 SIMULAR SIN TOCAR EL PLAN VIGENTE
   Hacer los cambios y, en lugar de Guardar, usar "Escenarios > Guardar
   actual". El escenario queda en la carpeta escenarios\\ para todos y el

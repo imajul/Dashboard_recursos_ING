@@ -4,6 +4,7 @@ Columnas esperadas (el orden no importa; se ignoran las que no se usan):
 
     Proyectos · Nombre · Tipo Cliente · Nivel DNN · Tecnología · Factor Solapa · Potencia ·
     Tensión POE · Est Transformadora · Linea · Fecha Inicio · Estado · Calendario Fijo · % Avance
+    (opcionales, los agrega «Exportar → Lista de proyectos»: Duración meses · Tamaño · Incluir)
 
 Reglas de mapeo:
 - "N/A" o vacío -> sin dato.
@@ -111,12 +112,17 @@ def leer(texto: str) -> tuple[list[dict], list[str]]:
             "est": _est(f.get("Est Transformadora")),
             "linea": _linea(f.get("Linea") or f.get("Línea")),
             "simulable": (_txt(f.get("Calendario Fijo")) or "No").lower() not in ("si", "sí", "yes", "true", "1"),
-            "hhParque": None, "hhEt": None, "hhLinea": None, "hhProy": None,
+            # HH manuales: si vienen cargadas pisan el modelo para ese proyecto
+            "hhParque": _num(f.get("HH Estimadas Parque")), "hhEt": _num(f.get("HH Estimadas ET")),
+            "hhLinea": _num(f.get("HH Estimadas Línea") or f.get("HH Estimadas Linea")),
+            "hhProy": _num(f.get("HH Estimadas Proy")), "notaHH": _txt(f.get("Motivo HH")),
             "factorSolapamiento": _num(f.get("Factor Solapa") or f.get("Factor Solapamiento")) or 1.0,
-            "duracion": None,
+            "duracion": int(_num(f.get("Duración meses")) or 0) or None,
             "tensionPOE": _num(f.get("Tensión POE")),
             "avance": _num(f.get("% Avance")),
         }
+        if (_txt(f.get("Incluir")) or "").lower() in ("no", "false", "0"):
+            p["incluir"] = False
         if tipo not in ("DPI", "DNN", "O&M"):
             avisos.append(f"{codigo}: Tipo Cliente desconocido {tipo!r}")
         if not p["fechaInicio"]:

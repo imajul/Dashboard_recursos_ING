@@ -57,6 +57,13 @@ ni cuentas de Claude o GitHub: alcanza con la cuenta de Microsoft de la empresa 
 - La línea de tiempo arranca en ene-26 (Recursos → Horizonte) y se extiende sola si un proyecto se mueve o
   estira más allá del final (hasta 10 años). Los indicadores cuentan desde el mes actual
   (Recursos → «Indicadores desde»); los meses anteriores se ven sombreados.
+- **La herramienta es la base de datos oficial de proyectos.** Botón «Proyectos»: tabla editable con todos
+  los campos de DIM_Proyecto (más duración, tamaño, incluir) y validaciones. Importar CSV reemplaza la lista
+  (con vista previa de altas, cambios y bajas); Exportar → Lista de proyectos genera el CSV en el mismo formato.
+- **HH manuales por proyecto:** en el panel del proyecto, HH por componente (modelo vs. asignadas) con motivo;
+  vacío = modelo. Se exportan en las columnas «HH Estimadas …».
+- **Registro de cambios:** cada guardado anota qué cambió (altas, bajas, campos con valor anterior y nuevo,
+  recursos, parámetros) y quién; se ve en el historial y en el aviso de conflicto.
 - Sin carpeta conectada sigue funcionando como antes (datos en el navegador, Exportar/Importar JSON).
 
 Para generar o actualizar los archivos de la carpeta: `python scripts/build_standalone.py`

@@ -307,6 +307,19 @@ table.cm tfoot td{font:600 11px/1.2 var(--f-num);color:var(--ink-soft);border-bo
 .mb{height:26px;display:flex;align-items:flex-end;justify-content:center;margin-bottom:2px}
 .mb i{display:block;width:60%;min-height:1px;background:var(--ink-soft);border-radius:2px 2px 0 0}
 .chip{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+/* lista de proyectos */
+dialog.xwide{max-width:min(1360px,96vw)}
+table.lp{font-size:12px}
+table.lp th{position:sticky;top:0;background:var(--paper);z-index:2}
+table.lp td{padding:2px 3px;white-space:nowrap}
+table.lp input,table.lp select{padding:3px 4px;font-size:12px;min-width:0}
+table.lp input[type=number]{width:62px;min-width:0}
+table.lp input[type=month]{width:118px}
+table.lp td.c{text-align:center}
+table.lp tr.mal td{background:var(--crit-bg)}
+table.lp td.warn{color:var(--crit-ink);font-weight:600;cursor:help}
+ul.cambios{margin:4px 0 0;padding-left:18px;font-size:12px;line-height:1.5;color:var(--ink)}
+ul.cambios li span{color:var(--ink-soft)}
 /* carpeta compartida */
 #fsBar{display:none;align-items:center;gap:8px 12px;flex-wrap:wrap;padding:7px 16px;border-bottom:1px solid var(--rule);background:var(--warn-bg);color:var(--warn-ink);font-size:12.5px}
 #fsBar.on{display:flex}
@@ -355,6 +368,7 @@ kbd{font:600 11px var(--f-num);background:var(--band-3);border:1px solid var(--r
   <button id="fsChip" title="Carpeta compartida (OneDrive / SharePoint)">Sin carpeta compartida</button>
   <span class="muestra" title="Proyectos del CSV de SharePoint; parámetros, curvas y dotación son ilustrativos">capacidad de ejemplo</span>
   <div class="tools">
+    <button class="btn" id="lpBtn" title="Lista de proyectos: la base de datos de la herramienta">Proyectos</button>
     <button class="btn" id="addBtn">Agregar proyecto</button>
     <button class="btn" id="undo" disabled>Deshacer</button>
     <div class="sep"></div>
@@ -2079,6 +2093,11 @@ function spanOf(p){
   });
   return {start:mIdx(p.fechaInicio)+(+p.desplazamiento||0),dur:dur,base:base,comps:comps,parts:parts};
 }
+/* HH manuales: pisan la base de datos de HH (tablas de Parámetros) para un componente puntual */
+var CAMPO_HH={"Parque":"hhParque","ET":"hhEt","Línea":"hhLinea","DNN":"hhProy","O&M":"hhProy"};
+function vacioV(v){return v==null||v==="";}
+function hhManual(p){return ["hhParque","hhEt","hhLinea","hhProy"].some(function(k){return !vacioV(p[k]);});}
+function hhModelo(p){return E.componentes(Object.assign({},p,{hhParque:null,hhEt:null,hhLinea:null,hhProy:null}),S.datos.parametros);}
 function durMod(p){return p.duracion!=null&&p.duracion!=="";}
 /* fija la duración; si coincide con la de las curvas vuelve a "automática" */
 function setDur(p,n){var b=spanOf(Object.assign({},p,{duracion:null})).base;n=Math.max(1,Math.min(60,Math.round(n)));p.duracion=(n===b)?null:n;}
@@ -2123,6 +2142,7 @@ function renderRows(){
         +'<span class="nm" title="'+esc(p.proyecto+(p.nombre?" · "+p.nombre:"")+(p.estado?" · "+p.estado:""))+'">'+esc(p.proyecto)+(p.nombre?' <small style="color:var(--ink-soft)">'+esc(p.nombre)+'</small>':'')+'</span>'
         +'<span class="fl hide-s">'+esc(p.tecnologia)+' '+NF0.format(+p.potencia||0)+' MW</span>'
         +'<span class="fl">'+hhK(tot)+'</span>'
+        +(hhManual(p)?'<span class="fl warn" title="HH cargadas a mano'+(p.notaHH?': '+esc(p.notaHH):'')+'">✎</span>':'')
         +(durMod(p)?'<span class="fl warn" title="Duración modificada: '+spanOf(p).base+' meses según curvas">'+p.duracion+' m</span>':'')
         +(p.simulable?'':'<span class="fl lock" title="Proyecto no simulable: fecha fija">fijo</span>')
         +'</div>';
@@ -2343,13 +2363,25 @@ function edProyecto(p){
       +'<div class="f"><label for="edLn">Línea</label><select id="edLn">'+opt(["Línea AT","Línea MT"],p.linea,true)+'</select></div></div>';
   }
   if(tipo==="DNN")html+='<div class="f"><label for="edDnn">Nivel DNN</label><select id="edDnn">'+opt(["DNN Cat1","DNN Cat2"],p.nivelDNN)+'</select></div>';
-  html+='<div class="two"><div class="f"><label for="edSol">Factor solapamiento</label><input type="number" id="edSol" min="0" max="1" step="0.05" value="'+solap+'"></div>'
-    +'<div class="f"><label for="edHH">HH manual '+(tipo==="DPI"?"parque":"proyecto")+'</label><input type="number" id="edHH" min="0" step="100" placeholder="auto" value="'+esc(tipo==="DPI"?(p.hhParque==null?"":p.hhParque):(p.hhProy==null?"":p.hhProy))+'"></div></div>'
+  html+='<div class="two"><div class="f"><label for="edPoe">Tensión POE (kV)</label><input type="number" id="edPoe" min="0" step="1" value="'+esc(p.tensionPOE==null?"":p.tensionPOE)+'"></div>'
+    +'<div class="f"><label for="edAv">% Avance</label><input type="number" id="edAv" min="0" max="100" step="5" value="'+esc(p.avance==null?"":p.avance)+'"></div></div>';
+  html+='<div class="two"><div class="f"><label for="edSol">Factor solapamiento</label><input type="number" id="edSol" min="0" max="1" step="0.05" value="'+solap+'"></div><div></div></div>'
     +'<div class="row-actions"><label class="chk"><input type="checkbox" id="edSim"'+(p.simulable?" checked":"")+'> Simulable <span style="color:var(--ink-soft)">(Calendario Fijo = No)</span></label>'
     +'<label class="chk"><input type="checkbox" id="edInc"'+(p.incluir===false?"":" checked")+'> Incluir en el cálculo</label></div>';
-  html+='<h4>Componentes · Forecast_Componentes</h4><table class="pk"><tr><th>Componente</th><th>Curva</th><th class="r">HH</th><th class="r">Meses</th></tr>';
-  sp.parts.forEach(function(pt){html+='<tr><td>'+esc(pt.c.componente)+'</td><td>'+esc(pt.c.curva)+'</td><td class="calc">'+hh(pt.c.hh)+'</td><td class="calc">'+(pt.n!==pt.n0?'<span title="Curva original: '+pt.n0+' meses">'+pt.n0+' → '+pt.n+'</span>':pt.n)+'</td></tr>';});
-  html+='<tr><td><b>Total</b></td><td>× '+NF2.format(solap)+'</td><td class="calc">'+hh(tot*solap)+'</td><td></td></tr></table>';
+  var mod=hhModelo(p),totMod=0,man=hhManual(p);
+  html+='<h4>HH del proyecto · por componente</h4><table class="pk"><tr><th>Componente</th><th class="r">Modelo</th><th class="r">HH asignadas</th><th class="r">Meses</th><th></th></tr>';
+  sp.parts.forEach(function(pt,i){
+    var k=CAMPO_HH[pt.c.componente],m=mod[i]?mod[i].hh:0,esMan=!vacioV(p[k]);totMod+=m;
+    html+='<tr><td>'+esc(pt.c.componente)+'<br><small style="color:var(--ink-soft)">curva '+esc(pt.c.curva)+'</small></td>'
+      +'<td class="calc">'+hh(m)+'</td>'
+      +'<td><input type="number" min="0" step="100" data-hhm="'+k+'" placeholder="'+Math.round(m)+'" value="'+(esMan?esc(p[k]):"")+'" aria-label="HH asignadas a '+esc(pt.c.componente)+'" style="width:96px'+(esMan?';border-color:var(--warn-ink);font-weight:600':'')+'"></td>'
+      +'<td class="calc">'+(pt.n!==pt.n0?'<span title="Curva original: '+pt.n0+' meses">'+pt.n0+' → '+pt.n+'</span>':pt.n)+'</td>'
+      +'<td class="x">'+(esMan?'<button data-hhr="'+k+'" title="Volver al valor del modelo">↺</button>':'')+'</td></tr>';
+  });
+  html+='<tr><td><b>Total</b></td><td class="calc">'+hh(totMod)+'</td><td class="calc">'+hh(tot)+(solap<1?'<br><small style="color:var(--ink-soft)">× '+NF2.format(solap)+' = '+hh(tot*solap)+'</small>':'')+'</td><td></td><td></td></tr></table>';
+  html+='<div class="hint">Dejá vacío para usar la base de datos de HH (Parámetros). Un valor cargado pisa el modelo solo para este proyecto'+(solap<1?'; el factor de solapamiento se aplica igual sobre ese valor':'')+'.</div>';
+  if(man)html+='<div class="f" style="margin-top:8px"><label for="edNotaHH">Motivo del ajuste de HH</label><input type="text" id="edNotaHH" value="'+esc(p.notaHH||"")+'" placeholder="Ej.: alcance reducido, ingeniería del cliente"></div>'
+    +'<div class="row-actions"><button class="btn sm" id="edHHReset">Volver todo al modelo</button></div>';
   if(durMod(p))html+='<div class="hint">Duración modificada: cada curva se reescala en el tiempo y conserva sus HH totales. Acortar concentra la demanda (más HH por mes); alargar la diluye.</div>';
   if(solap<1)html+='<div class="hint">El factor de solapamiento descuenta '+NFP.format(1-solap)+' de las HH por ejecución simultánea con proyectos similares.</div>';
   html+='<h4>Mover inicio</h4><div class="row-actions">'
@@ -2367,7 +2399,7 @@ function edProyecto(p){
   var set=function(fn){push();fn();recalc();render();save();};
   ge("edName").onchange=function(){var v=this.value.trim();if(v)set(function(){p.proyecto=v;});};
   ge("edNom").onchange=function(){var v=this.value.trim();set(function(){p.nombre=v||null;});};
-  ge("edTipo").onchange=function(){var v=this.value;set(function(){p.tipoCliente=v;if(v==="DNN"&&!p.nivelDNN)p.nivelDNN="DNN Cat1";});};
+  ge("edTipo").onchange=function(){var v=this.value;set(function(){p.tipoCliente=v;if(v==="DNN"&&!p.nivelDNN)p.nivelDNN="DNN Cat1";if(v!=="DNN")p.nivelDNN=null;});};
   ge("edEstado").onchange=function(){var v=this.value;set(function(){p.estado=v;});};
   ge("edTec").onchange=function(){var v=this.value;set(function(){p.tecnologia=v;});};
   ge("edMW").onchange=function(){var v=+this.value;set(function(){p.potencia=v;});};
@@ -2376,8 +2408,18 @@ function edProyecto(p){
   if(ge("edEt"))ge("edEt").onchange=function(){var v=this.value||null;set(function(){p.est=v;});};
   if(ge("edLn"))ge("edLn").onchange=function(){var v=this.value||null;set(function(){p.linea=v;});};
   if(ge("edDnn"))ge("edDnn").onchange=function(){var v=this.value;set(function(){p.nivelDNN=v;});};
+  ge("edPoe").onchange=function(){var v=this.value===""?null:Math.max(0,+this.value);set(function(){p.tensionPOE=v;});};
+  ge("edAv").onchange=function(){var v=this.value===""?null:Math.max(0,Math.min(100,+this.value));set(function(){p.avance=v;});};
   ge("edSol").onchange=function(){var v=Math.max(0,Math.min(1,+this.value||0));set(function(){p.factorSolapamiento=v;});};
-  ge("edHH").onchange=function(){var v=this.value===""?null:+this.value;set(function(){if(tipo==="DPI")p.hhParque=v;else p.hhProy=v;});};
+  ed.querySelectorAll("[data-hhm]").forEach(function(inp){inp.onchange=function(){
+    var k=inp.dataset.hhm,v=inp.value===""?null:parseFloat(String(inp.value).replace(",","."));
+    if(v!=null&&(isNaN(v)||v<0)){toast("Ingresá un número de HH mayor o igual a cero");renderEditor();return;}
+    set(function(){p[k]=v;});
+    if(v!=null){var n=document.getElementById("edNotaHH");if(n&&!n.value)n.focus();}
+  };});
+  ed.querySelectorAll("[data-hhr]").forEach(function(b){b.onclick=function(){var k=b.dataset.hhr;set(function(){p[k]=null;if(!hhManual(p))p.notaHH=null;});};});
+  if(ge("edNotaHH"))ge("edNotaHH").onchange=function(){var v=this.value.trim()||null;set(function(){p.notaHH=v;});};
+  if(ge("edHHReset"))ge("edHHReset").onclick=function(){set(function(){p.hhParque=p.hhEt=p.hhLinea=p.hhProy=null;p.notaHH=null;});toast("HH de "+p.proyecto+" vuelven al modelo");};
   ge("edSim").onchange=function(){var v=this.checked;set(function(){p.simulable=v;});};
   ge("edInc").onchange=function(){var v=this.checked;set(function(){p.incluir=v;});};
   ed.querySelectorAll("[data-mv]").forEach(function(b){b.onclick=function(){moverP(p,+b.dataset.mv);};});
@@ -2870,6 +2912,185 @@ function aplicarParam(){
   },0);
 }
 
+/* ===================== lista de proyectos (base de datos) ===================== */
+/* La herramienta es la fuente oficial de proyectos: esta tabla equivale a la lista DIM_Proyecto. */
+var CAMPOS=[
+  {k:"proyecto",n:"Código",t:"text",w:74},
+  {k:"nombre",n:"Nombre",t:"text",w:140},
+  {k:"tipoCliente",n:"Tipo",t:"sel",op:["DPI","DNN","O&M"],w:70},
+  {k:"nivelDNN",n:"Nivel DNN",t:"sel",op:["","DNN Cat1","DNN Cat2"],w:100},
+  {k:"tecnologia",n:"Tecnología",t:"sel",op:["Solar","Bess","Eólico","Termico"],w:96},
+  {k:"potencia",n:"MW",t:"num"},
+  {k:"tamano",n:"Tamaño",t:"sel",op:["","Chico","Mediano","Grande","Muy Grande"],vacio:"auto",w:112},
+  {k:"tensionPOE",n:"POE kV",t:"num"},
+  {k:"est",n:"Est. transf.",t:"sel",op:["","ET Nueva","Ampliación ET"],w:130},
+  {k:"linea",n:"Línea",t:"sel",op:["","Línea AT","Línea MT"],w:100},
+  {k:"fechaInicio",n:"Inicio",t:"month"},
+  {k:"duracion",n:"Duración",t:"num",vacio:"curvas"},
+  {k:"factorSolapamiento",n:"Solap.",t:"num"},
+  {k:"estado",n:"Estado",t:"sel",op:["No Iniciado","En Proceso","Finalizado"],w:120},
+  {k:"fijo",n:"Cal. fijo",t:"chk"},
+  {k:"avance",n:"% Avance",t:"num"},
+  {k:"incluir",n:"Incluir",t:"chk"}
+];
+/* campos que entran al registro de cambios (además de los de la tabla) */
+var CAMPOS_DIFF=CAMPOS.concat([{k:"hhParque",n:"HH manual parque",vacio:"modelo"},{k:"hhEt",n:"HH manual ET",vacio:"modelo"},{k:"hhLinea",n:"HH manual línea",vacio:"modelo"},{k:"hhProy",n:"HH manual proyecto",vacio:"modelo"},{k:"notaHH",n:"Motivo HH"}]);
+function valorCampo(p,k){
+  if(k==="fijo")return !p.simulable;
+  if(k==="incluir")return p.incluir!==false;
+  var v=p[k];return v==null?"":v;
+}
+function txtCampo(k,v){
+  if(v===""||v==null){var c=CAMPOS_DIFF.filter(function(x){return x.k===k;})[0];return c&&c.vacio?c.vacio:"—";}
+  if(v===true)return "sí";if(v===false)return "no";
+  if(k==="fechaInicio")return mlabel(v);
+  if(typeof v==="number")return NFX.format(v);
+  return String(v);
+}
+function avisosProyecto(p,cod){
+  var a=[];
+  if(!p.proyecto)a.push("Falta el código");
+  else if(cod[p.proyecto]>1)a.push("Código repetido");
+  if(!/^\d{4}-\d{2}$/.test(p.fechaInicio||""))a.push("Falta la fecha de inicio");
+  if(p.tipoCliente==="DNN"&&["DNN Cat1","DNN Cat2"].indexOf(p.nivelDNN)<0)a.push("DNN sin nivel");
+  if(!(+p.potencia>0)&&(p.hhProy==null||p.hhProy==="")&&(p.hhParque==null||p.hhParque===""))a.push("Sin potencia ni HH manuales");
+  if(p.tipoCliente!=="DPI"&&(p.est||p.linea))a.push("ET/Línea no se usan en "+p.tipoCliente);
+  return a;
+}
+function openProyectos(){
+  var top=dlg.open?dlg.scrollTop:0,cod={};
+  S.datos.proyectos.forEach(function(p){cod[p.proyecto]=(cod[p.proyecto]||0)+1;});
+  var conAviso=0,html='<h3>Proyectos</h3><div id="lpBox"><div class="psub">Base de datos de proyectos de la herramienta. Cada cambio recalcula al instante y se deshace con Ctrl+Z; con la carpeta compartida, llega al equipo al presionar <b>Guardar</b>. Duración vacía = la de las curvas; Tamaño vacío = según la potencia.</div>'
+    +'<div class="row-actions" style="margin:10px 0"><input type="text" id="lpQ" placeholder="Filtrar por código, nombre o tecnología" value="'+esc(S.lpQ||"")+'" style="flex:1;min-width:0;max-width:340px;border:1px solid var(--rule);border-radius:6px;padding:5px 8px;background:var(--chip)" aria-label="Filtrar proyectos">'
+    +'<button class="btn sm primary" id="lpAdd">+ Proyecto</button><button class="btn sm" id="lpCsv">Exportar CSV</button></div>'
+    +'<div class="tablewrap" style="max-height:62vh;overflow:auto"><table class="pk lp"><thead><tr><th></th>'+CAMPOS.map(function(c){return '<th>'+c.n+'</th>';}).join("")+'<th class="r">HH</th><th></th></tr></thead><tbody>';
+  var q=(S.lpQ||"").toLowerCase();
+  S.datos.proyectos.forEach(function(p){
+    if(q&&(p.proyecto+" "+(p.nombre||"")+" "+p.tecnologia+" "+p.tipoCliente).toLowerCase().indexOf(q)<0)return;
+    var av=avisosProyecto(p,cod);if(av.length)conAviso++;
+    html+='<tr'+(av.length?' class="mal"':'')+'><td'+(av.length?' class="warn" title="'+esc(av.join(" · "))+'">!':'>')+'</td>';
+    CAMPOS.forEach(function(c){
+      var v=valorCampo(p,c.k),a='data-pc="'+esc(p.id)+'|'+c.k+'" aria-label="'+esc(c.n+" "+p.proyecto)+'"';
+      if(c.t==="chk")html+='<td class="c"><input type="checkbox" '+a+(v?" checked":"")+'></td>';
+      else if(c.t==="sel")html+='<td><select '+a+' style="width:'+(c.w||90)+'px">'+(c.op.indexOf(v)<0&&v!==""?'<option selected>'+esc(v)+'</option>':'')+c.op.map(function(o){return '<option value="'+esc(o)+'"'+(o===v?" selected":"")+'>'+esc(o===""?(c.vacio||"—"):o)+'</option>';}).join("")+'</select></td>';
+      else if(c.t==="month")html+='<td><input type="month" '+a+' value="'+esc(v)+'"></td>';
+      else if(c.t==="num")html+='<td><input type="number" step="any" min="0" '+a+' value="'+esc(v)+'"'+(c.vacio?' placeholder="'+c.vacio+'"':'')+'></td>';
+      else html+='<td><input type="text" '+a+' value="'+esc(v)+'" style="width:'+c.w+'px"></td>';
+    });
+    html+='<td class="calc"'+(hhManual(p)?' title="HH cargadas a mano'+(p.notaHH?': '+esc(p.notaHH):'')+' (se editan en el panel del proyecto)" style="color:var(--warn-ink)"':'')+'>'+hhK(totalP(p))+(hhManual(p)?' ✎':'')+'</td><td class="x"><button data-lpdel="'+esc(p.id)+'" title="Eliminar '+esc(p.proyecto)+'">✕</button></td></tr>';
+  });
+  html+='</tbody></table></div><div class="psub" style="margin-top:6px">'+S.datos.proyectos.length+' proyectos'+(conAviso?' · <b style="color:var(--crit-ink)">'+conAviso+' con datos a revisar</b> (pasá el mouse sobre «!»)':' · sin datos a revisar')+'</div></div>';
+  document.getElementById("dlgBody").innerHTML=html;
+  if(!dlg.open)openDlg(true);
+  dlg.className="xwide";dlg.scrollTop=top;
+  document.getElementById("dlgTitle").textContent="Proyectos";
+  var box=document.getElementById("lpBox");
+  document.getElementById("lpQ").oninput=function(){S.lpQ=this.value;var pos=this.selectionStart;openProyectos();var i=document.getElementById("lpQ");i.focus();i.setSelectionRange(pos,pos);};
+  document.getElementById("lpAdd").onclick=function(){var p=nuevoProyecto();S.lpQ="";recalc();render();save();openProyectos();
+    var el=document.querySelector('#lpBox [data-pc="'+p.id+'|proyecto"]');if(el){el.focus();el.select();el.scrollIntoView({block:"nearest"});}};
+  document.getElementById("lpCsv").onclick=function(){offer(slug()+"-proyectos.csv","﻿"+csvProyectos());};
+  box.onclick=function(e){
+    var d=e.target.closest("[data-lpdel]");if(!d)return;
+    var p=findP(d.dataset.lpdel);if(!p)return;
+    push();S.datos.proyectos=S.datos.proyectos.filter(function(x){return x!==p;});if(sel&&sel.p===String(p.id))sel=null;
+    recalc();render();save();openProyectos();toast(p.proyecto+" eliminado · Ctrl+Z para deshacer");
+  };
+  box.onchange=function(e){
+    var t=e.target,pc=t.dataset.pc;if(!pc)return;
+    var i=pc.lastIndexOf("|"),p=findP(pc.slice(0,i)),k=pc.slice(i+1);if(!p)return;
+    var c=CAMPOS.filter(function(x){return x.k===k;})[0],v=c.t==="chk"?t.checked:t.value;
+    if(k==="proyecto"&&!String(v).trim()){toast("El código no puede quedar vacío");openProyectos();return;}
+    if(k==="fechaInicio"&&!/^\d{4}-\d{2}$/.test(v)){toast("Fecha inválida");openProyectos();return;}
+    push();
+    if(c.t==="num"){
+      var n=v===""?null:parseFloat(String(v).replace(",","."));
+      if(n!=null&&(isNaN(n)||n<0))n=null;
+      if(k==="duracion"){if(n==null)p.duracion=null;else setDur(p,n);}
+      else if(k==="factorSolapamiento")p.factorSolapamiento=n==null?1:Math.min(1,n);
+      else if(k==="avance")p.avance=n==null?null:Math.min(100,n);
+      else p[k]=n;
+    }
+    else if(k==="fijo")p.simulable=!v;
+    else if(k==="incluir")p.incluir=!!v;
+    else if(c.t==="sel")p[k]=v===""?null:v;
+    else p[k]=k==="proyecto"?String(v).trim():(String(v).trim()||null);
+    if(k==="tipoCliente"&&v==="DNN"&&!p.nivelDNN)p.nivelDNN="DNN Cat1";
+    if(k==="tipoCliente"&&v!=="DNN")p.nivelDNN=null;
+    recalc();render();save();
+    setTimeout(function(){
+      var a=document.activeElement,key=a&&a.dataset&&a.dataset.pc;
+      openProyectos();
+      if(key){var el=document.querySelector('#lpBox [data-pc="'+key.replace(/"/g,'\\"')+'"]');if(el){el.focus();if(el.select)el.select();}}
+    },0);
+  };
+}
+function nuevoProyecto(){
+  push();
+  var ini=E.mesStr(Math.max(E.mesIdx(todayYM()),E.mesIdx(S.datos.horizonte.desde))+3);
+  var n=1;while(S.datos.proyectos.some(function(p){return p.proyecto==="NUEVO"+n;}))n++;
+  var p={id:nextId(),proyecto:"NUEVO"+n,nombre:null,tipoCliente:"DPI",tecnologia:"Solar",potencia:100,tamano:null,nivelDNN:null,
+    estado:"No Iniciado",fechaInicio:ini,est:"ET Nueva",linea:"Línea MT",simulable:true,hhParque:null,hhEt:null,hhLinea:null,hhProy:null,notaHH:null,
+    factorSolapamiento:1,duracion:null,tensionPOE:null,avance:null};
+  S.datos.proyectos.push(p);
+  return p;
+}
+/* lista en el formato de la lista SharePoint DIM_Proyecto (se puede volver a importar) */
+function csvProyectos(){
+  var q=function(v){v=v==null?"":String(v);return '"'+v.replace(/"/g,'""')+'"';};
+  var na=function(v){return v==null||v===""?"N/A":v;};
+  var dec=function(v,d){return v==null||v===""?"":Number(v).toFixed(d).replace(".",",");};
+  var head=["Proyectos","Nombre","Tipo Cliente","Nivel DNN","Tecnología","Factor Solapa","Potencia","Tensión POE","Est Transformadora","Linea","Fecha Inicio","Estado","Calendario Fijo","% Avance","Duración meses","Tamaño","Incluir",
+    "HH Estimadas Parque","HH Estimadas ET","HH Estimadas Línea","HH Estimadas Proy","Motivo HH"];
+  var rows=[head.map(q).join(",")];
+  S.datos.proyectos.forEach(function(p){
+    var f=p.fechaInicio?("01/"+p.fechaInicio.slice(5)+"/"+p.fechaInicio.slice(0,4)+" 0:00"):"";
+    rows.push([p.proyecto,p.nombre||"",p.tipoCliente,p.nivelDNN?p.nivelDNN.replace("DNN Cat","Cat "):"N/A",p.tecnologia,dec(p.factorSolapamiento==null?1:p.factorSolapamiento,2),
+      p.potencia==null?"":String(p.potencia).replace(".",","),p.tensionPOE==null?"":p.tensionPOE,na(p.est),na(p.linea),f,p.estado||"",p.simulable?"No":"Si",
+      p.avance==null?"":p.avance,p.duracion==null?"":p.duracion,p.tamano||"",p.incluir===false?"No":"Si",
+      vacioV(p.hhParque)?"":p.hhParque,vacioV(p.hhEt)?"":p.hhEt,vacioV(p.hhLinea)?"":p.hhLinea,vacioV(p.hhProy)?"":p.hhProy,p.notaHH||""].map(q).join(","));
+  });
+  return rows.join("\r\n");
+}
+
+/* ---- registro de cambios: qué cambió entre dos versiones del plan ---- */
+function diffDatos(a,b){
+  var out=[],A={},B={};
+  (a.proyectos||[]).forEach(function(p){A[p.id]=p;});
+  (b.proyectos||[]).forEach(function(p){B[p.id]=p;});
+  (b.proyectos||[]).forEach(function(p){
+    var q=A[p.id];
+    if(!q){out.push({t:"alta",p:p.proyecto});return;}
+    var cs=[];
+    CAMPOS_DIFF.forEach(function(c){
+      var x=valorCampo(q,c.k),y=valorCampo(p,c.k);
+      if(String(x)!==String(y))cs.push({c:c.n,k:c.k,a:x,b:y});
+    });
+    if(cs.length)out.push({t:"cambio",p:p.proyecto,c:cs});
+  });
+  (a.proyectos||[]).forEach(function(q){if(!B[q.id])out.push({t:"baja",p:q.proyecto});});
+  var J=JSON.stringify;
+  if(a.capacidad&&J(a.capacidad)!==J(b.capacidad))out.push({t:"recursos"});
+  if(a.parametros&&J(a.parametros)!==J(b.parametros))out.push({t:"parametros"});
+  if(a.curvas&&J(a.curvas)!==J(b.curvas))out.push({t:"curvas"});
+  if(a.horizonte&&J(a.horizonte)!==J(b.horizonte))out.push({t:"horizonte"});
+  return out;
+}
+function textoCambio(x){
+  if(x.t==="alta")return "Alta de <b>"+esc(x.p)+"</b>";
+  if(x.t==="baja")return "Baja de <b>"+esc(x.p)+"</b>";
+  if(x.t==="recursos")return "Recursos (dotación, altas/bajas, subcontratos o HH por persona)";
+  if(x.t==="parametros")return "Parámetros de HH";
+  if(x.t==="curvas")return "Curvas de distribución";
+  if(x.t==="horizonte")return "Horizonte o mes de inicio de los indicadores";
+  return "<b>"+esc(x.p)+"</b>: "+x.c.map(function(c){return esc(c.c)+' <span>'+esc(txtCampo(c.k,c.a))+' →</span> '+esc(txtCampo(c.k,c.b));}).join(", ");
+}
+function listaCambios(cs,max){
+  if(!cs||!cs.length)return '<div class="psub">Sin cambios registrados.</div>';
+  max=max||cs.length;
+  return '<ul class="cambios">'+cs.slice(0,max).map(function(x){return '<li>'+textoCambio(x)+'</li>';}).join("")
+    +(cs.length>max?'<li><span>y '+(cs.length-max)+' cambio(s) más</span></li>':'')+'</ul>';
+}
+
 /* ===================== escenarios ===================== */
 function scenList(){try{return JSON.parse(localStorage.getItem(KEY+"-sc")||"[]");}catch(e){return [];}}
 function scenSet(a){try{localStorage.setItem(KEY+"-sc",JSON.stringify(a));}catch(e){toast("No se pudo guardar en este navegador");}}
@@ -2959,11 +3180,12 @@ function offer(filename,data){
 function openExport(){
   document.getElementById("dlgBody").innerHTML='<h3>Exportar</h3><div class="row-actions">'
     +'<button class="btn" id="exF">Forecast mensual (CSV)</button><button class="btn" id="exM">Matriz de ocupación (CSV)</button>'
-    +'<button class="btn" id="exJ">Escenario (JSON)</button><button class="btn" id="exT">Copiar matriz</button></div>'
-    +'<div class="hint">El forecast mensual tiene la misma forma que Forecast_Mes_V4 (una fila por proyecto, componente, mes y especialidad). Los CSV usan punto y coma y coma decimal.</div>';
+    +'<button class="btn" id="exJ">Escenario (JSON)</button><button class="btn" id="exP">Lista de proyectos (CSV)</button><button class="btn" id="exT">Copiar matriz</button></div>'
+    +'<div class="hint">La lista de proyectos usa las columnas de DIM_Proyecto (más Duración, Tamaño e Incluir) y se puede volver a importar. El forecast mensual tiene la misma forma que Forecast_Mes_V4 (una fila por proyecto, componente, mes y especialidad). Los CSV usan punto y coma y coma decimal.</div>';
   openDlg(false);
   document.getElementById("exF").onclick=function(){offer(slug()+"-forecast.csv","﻿"+csvForecast());};
   document.getElementById("exM").onclick=function(){offer(slug()+"-ocupacion.csv","﻿"+csvMatriz());};
+  document.getElementById("exP").onclick=function(){offer(slug()+"-proyectos.csv","\ufeff"+csvProyectos());};
   document.getElementById("exJ").onclick=function(){offer(slug()+".json",JSON.stringify({escenario:S.nombre,datos:S.datos},null,1));};
   document.getElementById("exT").onclick=function(){
     var tsv=csvMatriz().split("\n").map(function(l){return l.split(";").join("\t");}).join("\n");
@@ -3003,8 +3225,10 @@ function proyectosDesdeCSV(texto){
       est:est?(/nueva/i.test(est)?"ET Nueva":/ampl/i.test(est)?"Ampliación ET":est):null,
       linea:ln?(/\bAT$/i.test(ln)?"Línea AT":/\bMT$/i.test(ln)?"Línea MT":ln):null,
       simulable:!/^(si|sí|yes|true|1)$/i.test(tx(col(r,"Calendario Fijo"))||"no"),
-      hhParque:null,hhEt:null,hhLinea:null,hhProy:null,factorSolapamiento:nm(col(r,"Factor Solapa","Factor Solapamiento"))||1,
-      duracion:null,tensionPOE:nm(col(r,"Tensión POE")),avance:nm(col(r,"% Avance"))};
+      hhParque:nm(col(r,"HH Estimadas Parque")),hhEt:nm(col(r,"HH Estimadas ET")),hhLinea:nm(col(r,"HH Estimadas Línea","HH Estimadas Linea")),hhProy:nm(col(r,"HH Estimadas Proy")),
+      notaHH:tx(col(r,"Motivo HH")),factorSolapamiento:nm(col(r,"Factor Solapa","Factor Solapamiento"))||1,
+      duracion:nm(col(r,"Duración meses","Duracion meses")),tensionPOE:nm(col(r,"Tensión POE")),avance:nm(col(r,"% Avance"))};
+    if(/^(no|false|0)$/i.test(tx(col(r,"Incluir"))||""))p.incluir=false;
     if(["DPI","DNN","O&M"].indexOf(tipo)<0)av.push(cod+": Tipo Cliente desconocido ("+tipo+")");
     if(!p.fechaInicio)av.push(cod+": sin Fecha Inicio");
     if(tipo==="DNN"&&["DNN Cat1","DNN Cat2"].indexOf(p.nivelDNN)<0)av.push(cod+": DNN sin Nivel DNN válido");
@@ -3018,18 +3242,28 @@ function importar(file){
   var r=new FileReader();
   if(/\.csv$/i.test(file.name)){
     r.onload=function(){
-      try{
-        var res=proyectosDesdeCSV(r.result);
-        if(!res.proyectos.length)throw 0;
-        push();S.datos.proyectos=res.proyectos;sel=null;recalc();render();save();
-        var tot=0;res.proyectos.forEach(function(p){tot+=totalP(p);});
-        document.getElementById("dlgBody").innerHTML='<h3>Proyectos importados</h3><div class="psub" style="margin-bottom:10px">'+res.proyectos.length+' proyectos de «'+esc(file.name)+'» reemplazan la lista anterior ('+hh(tot)+' HH estimadas). Parámetros, curvas y recursos no cambian. Ctrl+Z deshace la importación.</div>'
-          +(res.avisos.length?'<div class="holg crit">'+res.avisos.map(esc).join("<br>")+'</div>':'<div class="holg">Sin avisos.</div>')
-          +'<div class="tablewrap"><table class="pk"><tr><th>Proyecto</th><th>Tipo</th><th>Tecnología</th><th class="r">MW</th><th>Tamaño</th><th>Inicio</th><th class="r">Solap.</th><th class="r">HH</th></tr>'
-          +res.proyectos.map(function(p){return '<tr><td><b>'+esc(p.proyecto)+'</b> '+esc(p.nombre||"")+(p.simulable?'':' <span class="fl lock">fijo</span>')+'</td><td>'+esc(p.tipoCliente)+'</td><td>'+esc(p.tecnologia)+'</td><td class="calc">'+NF0.format(p.potencia||0)+'</td><td>'+E.tamano(p,S.datos.parametros)+'</td><td>'+mlabel(p.fechaInicio)+'</td><td class="calc">'+NF2.format(p.factorSolapamiento)+'</td><td class="calc">'+hh(totalP(p))+'</td></tr>';}).join("")
-          +'</table></div>';
-        openDlg(true);
-      }catch(e){toast("No se pudo leer el CSV: revisá que tenga las columnas de DIM_Proyecto");}
+      var res;
+      try{res=proyectosDesdeCSV(r.result);if(!res.proyectos.length)throw 0;}
+      catch(e){toast("No se pudo leer el CSV: revisá que tenga las columnas de DIM_Proyecto");return;}
+      /* los proyectos que ya existen (mismo código) conservan su id interno */
+      var porCod={};S.datos.proyectos.forEach(function(p){porCod[p.proyecto]=p;});
+      var sig=nextId();
+      res.proyectos.forEach(function(p){var q=porCod[p.proyecto];p.id=q?q.id:sig++;});
+      var cambios=diffDatos({proyectos:S.datos.proyectos},{proyectos:res.proyectos});
+      var tot=0;res.proyectos.forEach(function(p){tot+=totalP(p);});
+      document.getElementById("dlgBody").innerHTML='<h3>Importar lista de proyectos</h3>'
+        +'<div class="holg crit">Esto <b>reemplaza</b> la lista actual de '+S.datos.proyectos.length+' proyectos por los '+res.proyectos.length+' de «'+esc(file.name)+'» ('+hh(tot)+' HH estimadas). '
+        +'Los ajustes hechos en la herramienta a esos proyectos (fechas, duraciones, HH manuales) se pierden. Parámetros, curvas y recursos no cambian.</div>'
+        +(res.avisos.length?'<div class="holg">'+res.avisos.map(esc).join("<br>")+'</div>':'')
+        +'<h4>Qué cambia</h4>'+(cambios.length?listaCambios(cambios,40):'<div class="psub">La lista del CSV es igual a la actual.</div>')
+        +'<div class="row-actions" style="margin-top:12px"><button class="btn primary" id="impOk">Reemplazar la lista de proyectos</button><button class="btn" id="impNo">Cancelar</button></div>'
+        +'<div class="hint">Después de reemplazar, Ctrl+Z la deshace. Con la carpeta compartida conectada, el cambio llega al equipo recién al presionar Guardar.</div>';
+      openDlg(true);
+      document.getElementById("impNo").onclick=function(){dlg.close();};
+      document.getElementById("impOk").onclick=function(){
+        push();S.datos.proyectos=res.proyectos;sel=null;recalc();render();save();dlg.close();
+        toast(res.proyectos.length+" proyectos importados · Ctrl+Z para deshacer");
+      };
     };
     r.readAsText(file,"utf-8");
     return;
@@ -3178,7 +3412,7 @@ function zoom(v){S.cw=Math.max(26,Math.min(90,v));document.getElementById("zoom"
    OneDrive la replica en SharePoint, así todo el equipo trabaja sobre el mismo plan.
    Cada guardado incrementa la revisión; si otro guardó antes, se avisa en lugar de pisar. */
 var PLAN="plan-capacidad.json",HISTDIR="historial",ESCDIR="escenarios",HISTMAX=60,FS_INTERVALO=20000;
-var FS={dir:null,pend:null,plan:null,ultimo:null,aviso:0,timer:null,ocupado:false,copias:[],sinPlan:false};
+var FS={dir:null,pend:null,plan:null,ultimo:null,base:null,aviso:0,timer:null,ocupado:false,copias:[],sinPlan:false};
 function fsSoportado(){return typeof window.showDirectoryPicker==="function";}
 function usuario(){try{return localStorage.getItem(KEY+"-usuario")||"";}catch(e){return "";}}
 function setUsuario(v){try{localStorage.setItem(KEY+"-usuario",v);}catch(e){}}
@@ -3262,7 +3496,7 @@ function fsAlConectar(){
     if(!planValido(plan)){toast(PLAN+" no tiene el formato esperado");return;}
     FS.ultimo=plan;FS.plan=fsMeta(plan);
     var mismaBase=S.fsCarpeta===FS.dir.name&&S.fsRev===plan.revision;
-    if(mismaBase){fsBarra();fsChip();if(S.dirty)toast("Tenés cambios sin guardar sobre la revisión "+plan.revision);return;}
+    if(mismaBase){FS.base=plan;fsBarra();fsChip();if(S.dirty)toast("Tenés cambios sin guardar sobre la revisión "+plan.revision);return;}
     if(!S.dirty){fsCargar(plan,"Plan vigente cargado · revisión "+plan.revision+(plan.guardadoPor?" de "+plan.guardadoPor:""));return;}
     fsConflicto(plan);
   });
@@ -3272,7 +3506,7 @@ function fsCargar(plan,msg){
   push();
   S.datos=clone(plan.datos);S.base=clone(plan.datos);S.baseNombre="Plan vigente";S.nombre="Plan vigente";
   S.fsRev=plan.revision||0;S.fsCarpeta=FS.dir?FS.dir.name:"";S.dirty=false;
-  FS.ultimo=plan;FS.plan=fsMeta(plan);FS.aviso=0;FS.sinPlan=false;
+  FS.ultimo=plan;FS.base=plan;FS.plan=fsMeta(plan);FS.aviso=0;FS.sinPlan=false;
   sel=(selPrev&&selPrev.p&&!findP(selPrev.p))?null:selPrev;
   recalc();render();save();fsChip();fsBarra();
   if(msg)toast(msg);
@@ -3289,17 +3523,18 @@ function fsGuardar(forzar){
     var revAct=act?(act.revision||0):0;
     if(act&&!forzar&&(revAct!==S.fsRev||S.fsCarpeta!==FS.dir.name)){FS.ocupado=false;fsConflicto(act);return;}
     var ahora=new Date(),rev=revAct+1;
+    var previo=act||FS.ultimo,cambios=previo&&previo.datos?diffDatos(previo.datos,S.datos):[{t:"alta",p:"Plan creado con "+S.datos.proyectos.length+" proyectos"}];
     var plan={formato:"capacidad-ingenieria/plan",version:1,revision:rev,guardadoPor:u,guardadoEn:ahora.toISOString(),
-      titulo:S.title||"",datos:S.datos};
+      titulo:S.title||"",cambios:cambios,datos:S.datos};
     return escribirJSON(FS.dir,PLAN,plan).then(function(){
       return subdir(HISTDIR).then(function(h){
         return escribirJSON(h,"plan-r"+String(rev).padStart(4,"0")+"-"+stamp(ahora)+"-"+slugTxt(u)+".json",plan).then(function(){return podar(h);});
       }).catch(function(){});
     }).then(function(){
       S.fsRev=rev;S.fsCarpeta=FS.dir.name;S.dirty=false;S.base=clone(S.datos);S.baseNombre="Plan vigente";S.nombre="Plan vigente";
-      FS.ultimo=plan;FS.plan=fsMeta(plan);FS.aviso=0;FS.sinPlan=false;
+      FS.ultimo=plan;FS.base=plan;FS.plan=fsMeta(plan);FS.aviso=0;FS.sinPlan=false;
       recalc();render();save();fsChip();fsBarra();
-      toast("Plan guardado en «"+FS.dir.name+"» · revisión "+rev);
+      toast("Plan guardado en «"+FS.dir.name+"» · revisión "+rev+" · "+(cambios.length===1?"1 cambio":cambios.length+" cambios"));
     });
   }).catch(function(e){toast("No se pudo guardar en la carpeta: "+(e&&e.message||e));})
     .then(function(){FS.ocupado=false;});
@@ -3318,7 +3553,9 @@ function fsConflicto(plan){
   var fila=function(n,k){return '<tr><td>'+n+'</td><td class="calc"><span class="fl '+sem(k.maxOcupacion.valor)+'">'+oc(k.maxOcupacion.valor)+'</span></td><td class="calc">'+hh(k.hhExcedidas)+'</td><td>'+(k.primerMesCritico?mlabel(k.primerMesCritico.mes):"ninguno")+'</td></tr>';};
   document.getElementById("dlgBody").innerHTML='<h3>El plan cambió en la carpeta</h3>'
     +'<div class="holg crit"><b>'+quien+'</b> guardó la revisión '+plan.revision+' el '+fechaHora(plan.guardadoEn)+'. Tus cambios parten de la revisión '+(S.fsRev||"—")+' y todavía no están guardados.</div>'
-    +'<table class="pk"><tr><th>Versión</th><th class="r">Máx. ocup.</th><th class="r">HH excedidas</th><th>1.er crítico</th></tr>'+fila("La de "+quien,suyo)+fila("La tuya",mio)+'</table>'
+    +(plan.cambios?'<h4>Qué cambió '+quien+' en la revisión '+plan.revision+'</h4>'+listaCambios(plan.cambios,12):'')
+    +'<h4>Tus cambios sin guardar</h4>'+listaCambios(FS.base&&FS.base.datos?diffDatos(FS.base.datos,S.datos):[],12)
+    +'<table class="pk" style="margin-top:10px"><tr><th>Versión</th><th class="r">Máx. ocup.</th><th class="r">HH excedidas</th><th>1.er crítico</th></tr>'+fila("La de "+quien,suyo)+fila("La tuya",mio)+'</table>'
     +'<div class="row-actions" style="margin-top:12px;flex-direction:column;align-items:stretch">'
     +'<button class="btn primary" id="cfEsc">Guardar mis cambios como escenario y cargar la versión de '+quien+'</button>'
     +'<button class="btn" id="cfCargar">Cargar la versión de '+quien+' (descarto mis cambios; Ctrl+Z los recupera)</button>'
@@ -3432,7 +3669,7 @@ function openCarpeta(){
       +'<tr><td>Tu trabajo</td><td>'+(S.dirty?'<span class="fl warn">cambios sin guardar</span> sobre la revisión '+(S.fsRev||"—"):'<span class="fl ok">al día</span>')+'</td></tr></table>'
       +'<div class="row-actions" style="margin-top:10px"><button class="btn primary" id="fsG">Guardar en la carpeta</button><button class="btn" id="fsL">Recargar el plan vigente</button>'
       +'<button class="btn" id="fsC">Cambiar carpeta</button><button class="btn" id="fsD">Desconectar</button></div>'
-      +'<div id="fsCop"></div><h4>Historial</h4><div id="fsHist" class="psub">Cargando…</div>';
+      +'<div id="fsCop"></div><h4>Historial y registro de cambios</h4><div id="fsHist" class="psub">Cargando…</div>';
   }else{
     html+=(FS.pend?'<div class="holg">La última carpeta usada fue <b>'+esc(FS.pend.name)+'</b>.</div>':'')
       +'<div class="row-actions"><button class="btn primary" id="fsC">Elegir carpeta</button>'+(FS.pend?'<button class="btn" id="fsR">Volver a «'+esc(FS.pend.name)+'»</button>':'')+'</div>'
@@ -3460,11 +3697,13 @@ function openCarpeta(){
       var f=es.filter(function(e){return e.kind==="file"&&/\.json$/i.test(e.name);}).map(function(e){return e.name;}).sort().reverse().slice(0,15);
       var box=ge("fsHist");if(!box)return;
       if(!f.length){box.textContent="Todavía no hay versiones guardadas.";return;}
-      box.innerHTML='<table class="pk">'+f.map(function(n){
-        var m=n.match(/^plan-r(\d+)-(\d{8})-(\d{4})-(.+)\.json$/i);
-        var et=m?('Revisión '+(+m[1])+' · '+m[2].slice(6,8)+'/'+m[2].slice(4,6)+' '+m[3].slice(0,2)+':'+m[3].slice(2)+' · '+m[4].replace(/-/g," ")):n;
-        return '<tr><td>'+esc(et)+'</td><td class="r"><button class="btn sm" data-hist="'+esc(n)+'" data-et="'+esc(m?"Revisión "+(+m[1]):n)+'">Abrir</button></td></tr>';
-      }).join("")+'</table>';
+      return Promise.all(f.map(function(n){return leerJSON(h,n).catch(function(){return null;});})).then(function(planes){
+        box.innerHTML='<table class="pk">'+f.map(function(n,i){
+          var pl=planes[i]||{},m=n.match(/^plan-r(\d+)-(\d{8})-(\d{4})-(.+)\.json$/i);
+          var et=pl.revision?('Revisión '+pl.revision+' · '+fechaHora(pl.guardadoEn)+' · '+(pl.guardadoPor||"—")):(m?('Revisión '+(+m[1])+' · '+m[4].replace(/-/g," ")):n);
+          return '<tr><td><b>'+esc(et)+'</b>'+(pl.cambios?listaCambios(pl.cambios,6):'')+'</td><td class="r" style="vertical-align:top"><button class="btn sm" data-hist="'+esc(n)+'" data-et="'+esc(m?"Revisión "+(+m[1]):n)+'">Abrir</button></td></tr>';
+        }).join("")+'</table>';
+      });
       box.onclick=function(e){var b=e.target.closest("[data-hist]");if(b)fsAbrirVersion(h,b.dataset.hist,b.dataset.et);};
     });
   }).catch(function(){var b=ge("fsHist");if(b)b.textContent="No se pudo leer el historial.";});
@@ -3493,13 +3732,10 @@ function boot(){
   document.getElementById("title").onchange=function(){S.title=this.value;save();};
   document.getElementById("undo").onclick=undo;
   document.getElementById("addBtn").onclick=function(){
-    push();
-    var ini=E.mesStr(Math.max(E.mesIdx(todayYM()),E.mesIdx(S.datos.horizonte.desde))+3);
-    var p={id:nextId(),proyecto:"Nuevo proyecto",tipoCliente:"DPI",tecnologia:"Solar",potencia:100,nivelDNN:null,
-      nombre:null,estado:"No Iniciado",fechaInicio:ini,tamano:null,est:"ET Nueva",linea:"Línea MT",simulable:true,hhParque:null,hhEt:null,hhLinea:null,hhProy:null,factorSolapamiento:1,duracion:null};
-    S.datos.proyectos.push(p);sel={p:String(p.id)};recalc();render();save();
+    var p=nuevoProyecto();sel={p:String(p.id)};recalc();render();save();
     var n=document.getElementById("edName");if(n){n.focus();n.select();}
   };
+  document.getElementById("lpBtn").onclick=openProyectos;
   document.getElementById("resBtn").onclick=openRecursos;
   document.getElementById("parBtn").onclick=openParametros;
   document.getElementById("minBtn").onclick=openNivelar;
