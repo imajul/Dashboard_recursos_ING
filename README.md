@@ -54,6 +54,8 @@ ni cuentas de Claude o GitHub: alcanza con la cuenta de Microsoft de la empresa 
 - Detecta las «copias en conflicto» que crea OneDrive (`plan-capacidad-NOMBREPC.json`) y permite abrirlas y borrarlas.
 - Usa la API de acceso a archivos del navegador (Edge/Chrome); la carpeta elegida se recuerda y, al
   reabrir, el navegador puede pedir confirmar el permiso con un clic.
+- La línea de tiempo arranca en ene-26 (Recursos → Horizonte). Los indicadores cuentan desde el mes actual
+  (Recursos → «Indicadores desde»); los meses anteriores se ven sombreados.
 - Sin carpeta conectada sigue funcionando como antes (datos en el navegador, Exportar/Importar JSON).
 
 Para generar o actualizar los archivos de la carpeta: `python scripts/build_standalone.py`

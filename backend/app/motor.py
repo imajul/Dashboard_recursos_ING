@@ -250,6 +250,10 @@ def calcular(datos: dict, escenario: dict | None = None) -> dict:
     m0 = mes_idx(datos["horizonte"]["desde"])
     n = datos["horizonte"]["meses"]
     meses = list(range(m0, m0 + n))
+    # Los indicadores miran hacia adelante: desde kpiDesde (p. ej. el mes actual).
+    # Los meses anteriores se muestran en la matriz pero no cuentan como exceso.
+    kpi0 = mes_idx(datos["horizonte"]["kpiDesde"]) if datos["horizonte"].get("kpiDesde") else m0
+    meses_kpi = [m for m in meses if m >= kpi0]
 
     dem = {m: {e: 0.0 for e in esps} for m in meses}
     dem_tipo = {m: {t: 0.0 for t in TIPOS_CLIENTE} for m in meses}
@@ -274,7 +278,7 @@ def calcular(datos: dict, escenario: dict | None = None) -> dict:
     for e in esps:
         cuellos[e] = {"mesesCriticos": 0, "hhExcedidas": 0.0, "maxOcupacion": 0.0,
                       "mesPico": None, "maxExceso": 0.0, "primerMesCritico": None}
-    for m in meses:
+    for m in meses_kpi:
         criticas = []
         for e in esps:
             o, exc = ocup[m][e], max(0.0, dem[m][e] - capm[m][e])
@@ -308,6 +312,7 @@ def calcular(datos: dict, escenario: dict | None = None) -> dict:
 
     return {
         "meses": [mes_str(m) for m in meses],
+        "kpiDesde": mes_str(max(kpi0, m0)),
         "especialidades": esps,
         "demanda": [[dem[m][e] for e in esps] for m in meses],
         "capacidad": [[capm[m][e] for e in esps] for m in meses],
@@ -317,7 +322,7 @@ def calcular(datos: dict, escenario: dict | None = None) -> dict:
             "maxOcupacion": max_ocup,
             "primerMesCritico": primer_critico,
             "hhExcedidas": hh_exc,
-            "hhForecastHorizonte": sum(sum(r.values()) for r in dem.values()),
+            "hhForecastHorizonte": sum(sum(dem[m].values()) for m in meses_kpi),
             "hhForecastTotal": total,
         },
         "cuellos": cuellos,

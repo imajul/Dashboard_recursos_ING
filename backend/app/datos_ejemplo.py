@@ -112,9 +112,9 @@ def proyectos() -> list[dict]:
 
 def dataset() -> dict:
     return {
-        "meta": {"origen": "data/proyectos.csv", "version": "proyectos-csv-2026-10",
+        "meta": {"origen": "data/proyectos.csv", "version": "proyectos-csv-2026-10-h2026-01",
                  "nota": "Proyectos del CSV de SharePoint; parámetros, curvas y capacidad ilustrativos"},
-        "horizonte": {"desde": "2026-10", "meses": 24},
+        "horizonte": {"desde": "2026-01", "meses": 33},  # kpiDesde: None = mes actual
         "especialidades": ESPECIALIDADES,
         "parametros": PARAMETROS,
         "capacidad": CAPACIDAD,

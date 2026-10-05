@@ -40,6 +40,15 @@ def get_cn():
         cn.close()
 
 
+def _datos(cn) -> dict:
+    """Dataset del motor; si no se fijó desde qué mes cuentan los indicadores, usa el mes actual."""
+    from datetime import date
+
+    d = repositorio.leer_dataset(cn)
+    d["horizonte"].setdefault("kpiDesde", f"{date.today():%Y-%m}")
+    return d
+
+
 def usuario_actual() -> str:
     # En producción: validar el JWT de Entra ID (MSAL en el front) y devolver el UPN.
     return "dev@local"
@@ -70,12 +79,12 @@ class Simulacion(BaseModel):
 @app.get("/api/datos")
 def datos(cn=Depends(get_cn)):
     """Dataset completo (proyectos, curvas, parámetros, capacidad) para el front."""
-    return repositorio.leer_dataset(cn)
+    return _datos(cn)
 
 
 @app.get("/api/proyectos")
 def proyectos(cn=Depends(get_cn)):
-    d = repositorio.leer_dataset(cn)
+    d = _datos(cn)
     return [p | {"componentes": motor.componentes(p, d["parametros"])} for p in d["proyectos"]]
 
 
@@ -83,19 +92,19 @@ def proyectos(cn=Depends(get_cn)):
 @app.post("/api/simular")
 def simular(body: Simulacion, cn=Depends(get_cn)):
     """Calcula KPIs, matriz y pareto para un conjunto de cambios sin guardarlo."""
-    return _json_seguro(motor.calcular(repositorio.leer_dataset(cn), body.cambios))
+    return _json_seguro(motor.calcular(_datos(cn), body.cambios))
 
 
 @app.get("/api/detalle")
 def detalle(mes: str, especialidad: str, escenario_id: int | None = None, cn=Depends(get_cn)):
     cambios = _cambios(cn, escenario_id)
-    return motor.detalle(repositorio.leer_dataset(cn), cambios, mes, especialidad)
+    return motor.detalle(_datos(cn), cambios, mes, especialidad)
 
 
 @app.get("/api/proyectos/{proyecto_id}/mejor-inicio")
 def mejor_inicio(proyecto_id: int, escenario_id: int | None = None, desde: int = -3, hasta: int = 12,
                  cn=Depends(get_cn)):
-    d = repositorio.leer_dataset(cn)
+    d = _datos(cn)
     if not any(p["id"] == proyecto_id for p in d["proyectos"]):
         raise HTTPException(404, "Proyecto inexistente")
     return _json_seguro(motor.mejor_inicio(d, _cambios(cn, escenario_id), proyecto_id, desde, hasta))
@@ -125,13 +134,13 @@ def modificar_escenario(esc_id: int, body: Escenario, cn=Depends(get_cn), user=D
 
 @app.get("/api/escenarios/{esc_id}/resultado")
 def resultado(esc_id: int, cn=Depends(get_cn)):
-    return _json_seguro(motor.calcular(repositorio.leer_dataset(cn), _cambios(cn, esc_id)))
+    return _json_seguro(motor.calcular(_datos(cn), _cambios(cn, esc_id)))
 
 
 @app.get("/api/comparar")
 def comparar(ids: str, cn=Depends(get_cn)):
     """ids=0,3,5 (0 = base). Devuelve los KPIs de cada escenario lado a lado."""
-    d = repositorio.leer_dataset(cn)
+    d = _datos(cn)
     out = []
     for i in (int(x) for x in ids.split(",") if x.strip()):
         r = motor.calcular(d, _cambios(cn, i or None))
@@ -152,7 +161,7 @@ class Parametros(BaseModel):
 
 @app.get("/api/parametros")
 def leer_parametros(cn=Depends(get_cn)):
-    d = repositorio.leer_dataset(cn)
+    d = _datos(cn)
     return {"parametros": d["parametros"], "curvas": d["curvas"]}
 
 
@@ -165,7 +174,7 @@ def modificar_parametros(body: Parametros, cn=Depends(get_cn), user=Depends(usua
         raise HTTPException(422, errores)
     repositorio.guardar_parametros(cn, p, user)
     _recalcular(cn, None)
-    return repositorio.leer_dataset(cn)["parametros"]
+    return _datos(cn)["parametros"]
 
 
 @app.put("/api/curvas/{tipo_curva}")
@@ -175,7 +184,7 @@ def modificar_curva(tipo_curva: str, curva: dict[str, list[float]], normalizar: 
 
     Rechaza curvas cuya suma se aleje más de 2 % de 1, salvo ``normalizar=true``.
     """
-    d = repositorio.leer_dataset(cn)
+    d = _datos(cn)
     desconocidas = set(curva) - set(d["especialidades"])
     if desconocidas:
         raise HTTPException(422, f"Especialidades desconocidas: {sorted(desconocidas)}")
@@ -217,7 +226,7 @@ def _cambios(cn, esc_id: int | None) -> dict:
 
 
 def _recalcular(cn, esc_id: int | None) -> None:
-    d = repositorio.leer_dataset(cn)
+    d = _datos(cn)
     cambios = _cambios(cn, esc_id)
     proyectos, _ = motor.aplicar_escenario(d, cambios)
     filas = motor.forecast(proyectos, d["curvas"], d["parametros"])

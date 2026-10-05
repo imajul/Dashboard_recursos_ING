@@ -176,6 +176,8 @@
     const filas = forecast(proyectos, datos.curvas, datos.parametros);
     const m0 = mesIdx(datos.horizonte.desde), n = datos.horizonte.meses;
     const meses = Array.from({ length: n }, (_, i) => m0 + i);
+    // Los indicadores miran hacia adelante: desde kpiDesde (p. ej. el mes actual).
+    const kpi0 = datos.horizonte.kpiDesde ? mesIdx(datos.horizonte.kpiDesde) : m0;
     const pos = new Map(meses.map((m, i) => [m, i]));
     const ei = new Map(esps.map((e, i) => [e, i]));
 
@@ -203,6 +205,7 @@
     for (const e of esps) cuellos[e] = { mesesCriticos: 0, hhExcedidas: 0, maxOcupacion: 0,
       mesPico: null, maxExceso: 0, primerMesCritico: null };
     meses.forEach((m, i) => {
+      if (m < kpi0) return;
       const criticas = [];
       esps.forEach((e, j) => {
         const o = ocup[i][j], exc = Math.max(0, dem[i][j] - capm[i][j]);
@@ -238,12 +241,12 @@
     for (const t of TIPOS_CLIENTE) mixTipoCliente[t] = porTipo[t] || 0;
 
     return {
-      meses: meses.map(mesStr), especialidades: esps,
+      meses: meses.map(mesStr), kpiDesde: mesStr(Math.max(kpi0, m0)), especialidades: esps,
       demanda: dem, capacidad: capm, ocupacion: ocup,
       demandaPorTipo: demTipo, demandaPorTipoEsp: demTipoEsp,
       kpis: {
         maxOcupacion: maxOcup, primerMesCritico: primerCritico, hhExcedidas: hhExc,
-        hhForecastHorizonte: dem.reduce((a, r) => a + r.reduce((x, y) => x + y, 0), 0),
+        hhForecastHorizonte: dem.reduce((a, r, i) => a + (meses[i] >= kpi0 ? r.reduce((x, y) => x + y, 0) : 0), 0),
         hhForecastTotal: total,
       },
       cuellos, pareto, mixTipoCliente, mixComponente: porComp,
@@ -284,7 +287,7 @@
     return { mejor, pruebas };
   }
 
-  /* Personas mínimas a sumar por especialidad para que ningún mes supere el
+  /* Personas mínimas a sumar por especialidad para que ningún mes (desde kpiDesde) supere el
      umbral (búsqueda incremental; el resultado respeta eventos y subcontratos). */
   function dotacionMinima(datos, escenario, umbral = 1) {
     const esc = JSON.parse(JSON.stringify(escenario || {}));
@@ -297,7 +300,8 @@
       for (; extra <= 50; extra++) {
         esc.capacidad.dotacion = Object.assign({}, dot, { [e]: dot[e] + extra });
         const r = calcular(datos, esc);
-        if (r.ocupacion.every((fila) => fila[j] <= umbral)) break;
+        const i0 = Math.max(0, mesIdx(r.kpiDesde) - mesIdx(r.meses[0]));
+        if (r.ocupacion.every((fila, i) => i < i0 || fila[j] <= umbral)) break;
       }
       res[e] = extra;
     }

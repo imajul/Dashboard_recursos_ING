@@ -85,6 +85,21 @@ class ReglasDeNegocio(unittest.TestCase):
         self.assertTrue(all(o <= 1 for fila in r["ocupacion"][:i] for o in fila))
         self.assertAlmostEqual(r["pareto"][-1]["pctAcum"], 1.0)
 
+    def test_indicadores_desde_mes_actual(self):
+        """Los meses anteriores a kpiDesde se muestran pero no cuentan como exceso ni como mes crítico."""
+        todo = motor.calcular(self.d)
+        d = dataset()
+        d["horizonte"]["kpiDesde"] = "2026-10"
+        r = motor.calcular(d)
+        self.assertEqual(r["meses"][0], "2026-01")
+        self.assertEqual(r["kpiDesde"], "2026-10")
+        self.assertEqual(r["ocupacion"], todo["ocupacion"])          # la matriz no cambia
+        i0 = r["meses"].index("2026-10")
+        exc = sum(max(0.0, dm - c) for fd, fc in zip(r["demanda"][i0:], r["capacidad"][i0:]) for dm, c in zip(fd, fc))
+        self.assertAlmostEqual(r["kpis"]["hhExcedidas"], exc)
+        self.assertGreaterEqual(r["kpis"]["primerMesCritico"]["mes"], "2026-10")
+        self.assertLessEqual(r["kpis"]["hhExcedidas"], todo["kpis"]["hhExcedidas"])
+
     def test_escenario_sumar_electricos_baja_exceso(self):
         base = motor.calcular(self.d)["cuellos"]["Eléctricos"]["hhExcedidas"]
         esc = {"capacidad": {"dotacion": {"Eléctricos": 9}}}
@@ -153,7 +168,7 @@ class ReglasDeNegocio(unittest.TestCase):
 class ParidadJavaScript(unittest.TestCase):
     """El prototipo calcula en el navegador con engine.js: debe dar lo mismo que Python."""
 
-    def _js(self, escenario):
+    def _js(self, escenario, ruta_datos=None):
         script = (
             "const E=require(process.argv[1]);const d=require(process.argv[2]);"
             "const r=E.calcular(d,JSON.parse(process.argv[3]));"
@@ -161,7 +176,7 @@ class ParidadJavaScript(unittest.TestCase):
         )
         out = subprocess.run(
             ["node", "-e", script, str(RAIZ / "prototipo" / "engine.js"),
-             str(RAIZ / "data" / "sample_data.json"), json.dumps(escenario)],
+             str(ruta_datos or RAIZ / "data" / "sample_data.json"), json.dumps(escenario)],
             check=True, capture_output=True, text=True,
         )
         return json.loads(out.stdout)
@@ -179,6 +194,20 @@ class ParidadJavaScript(unittest.TestCase):
             for x, y in zip(a, b):
                 self.assertAlmostEqual(x, y, places=9)
         self.assertEqual([p["proyecto"] for p in py["pareto"]], [p["proyecto"] for p in js["pareto"]])
+        for e in py["cuellos"]:
+            self.assertEqual(py["cuellos"][e]["personasAdicionales"], js["cuellos"][e]["personasAdicionales"])
+
+    def test_paridad_kpi_desde(self):
+        import tempfile
+        d = json.loads((RAIZ / "data" / "sample_data.json").read_text(encoding="utf-8"))
+        d["horizonte"]["kpiDesde"] = "2026-10"
+        esc = {"capacidad": {"dotacion": DOTACION_TEST}}
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as f:
+            json.dump(d, f, ensure_ascii=False)
+        js = self._js(esc, f.name)
+        py = motor.calcular(d, esc)
+        self.assertAlmostEqual(py["kpis"]["hhExcedidas"], js["kpis"]["hhExcedidas"], places=6)
+        self.assertEqual(py["kpis"]["primerMesCritico"], js["kpis"]["primerMesCritico"])
         for e in py["cuellos"]:
             self.assertEqual(py["cuellos"][e]["personasAdicionales"], js["cuellos"][e]["personasAdicionales"])
 

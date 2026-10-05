@@ -45,8 +45,10 @@ class Api(unittest.TestCase):
         from app import motor
         from tests.test_motor import dataset
         d = self.c.get("/api/datos").json()
+        local = dataset()
+        local["horizonte"]["kpiDesde"] = d["horizonte"]["kpiDesde"]  # la API usa el mes actual
         self.assertAlmostEqual(motor.calcular(d)["kpis"]["hhExcedidas"],
-                               motor.calcular(dataset())["kpis"]["hhExcedidas"], places=6)
+                               motor.calcular(local)["kpis"]["hhExcedidas"], places=6)
 
     def test_duracion_en_escenario(self):
         base = self.c.post("/api/simular", json={"cambios": {}}).json()["kpis"]
