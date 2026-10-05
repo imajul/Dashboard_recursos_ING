@@ -1593,7 +1593,7 @@ function openProyectos(){
   var conAviso=0,html='<h3>Proyectos</h3><div id="lpBox"><div class="psub">Base de datos de proyectos de la herramienta. Cada cambio recalcula al instante y se deshace con Ctrl+Z; con la carpeta compartida, llega al equipo al presionar <b>Guardar</b>. Duración vacía = la de las curvas; Tamaño vacío = según la potencia.</div>'
     +'<div class="row-actions" style="margin:10px 0"><input type="text" id="lpQ" placeholder="Filtrar por código, nombre o tecnología" value="'+esc(S.lpQ||"")+'" style="flex:1;min-width:0;max-width:340px;border:1px solid var(--rule);border-radius:6px;padding:5px 8px;background:var(--chip)" aria-label="Filtrar proyectos">'
     +'<button class="btn sm primary" id="lpAdd">+ Proyecto</button><button class="btn sm" id="lpCsv">Exportar CSV</button></div>'
-    +'<div class="tablewrap" style="max-height:62vh;overflow:auto"><table class="pk lp"><thead><tr><th></th>'+CAMPOS.map(function(c){return '<th>'+c.n+'</th>';}).join("")+'<th class="r">HH</th><th></th></tr></thead><tbody>';
+    +'<div class="tablewrap" style="max-height:62vh;overflow:auto"><table class="pk lp"><thead><tr><th></th>'+CAMPOS.map(function(c){return '<th>'+c.n+'</th>';}).join("")+'<th class="r" title="HH del proyecto antes del solapamiento. Vacío = modelo (en gris)">HH asignadas</th><th>Motivo HH</th><th class="r" title="Después del factor de solapamiento">HH netas</th><th></th></tr></thead><tbody>';
   var q=(S.lpQ||"").toLowerCase();
   S.datos.proyectos.forEach(function(p){
     if(q&&(p.proyecto+" "+(p.nombre||"")+" "+p.tecnologia+" "+p.tipoCliente).toLowerCase().indexOf(q)<0)return;
@@ -1607,7 +1607,13 @@ function openProyectos(){
       else if(c.t==="num")html+='<td><input type="number" step="any" min="0" '+a+' value="'+esc(c.pct&&v!==""?Math.round(v*100):v)+'"'+(c.vacio?' placeholder="'+c.vacio+'"':'')+'></td>';
       else html+='<td><input type="text" '+a+' value="'+esc(v)+'" style="width:'+c.w+'px"></td>';
     });
-    html+='<td class="calc"'+(hhManual(p)?' title="HH cargadas a mano'+(p.notaHH?': '+esc(p.notaHH):'')+' (se editan en el panel del proyecto)" style="color:var(--warn-ink)"':'')+'>'+hhK(totalP(p))+(hhManual(p)?' ✎':'')+'</td><td class="x"><button data-lpdel="'+esc(p.id)+'" title="Eliminar '+esc(p.proyecto)+'">✕</button></td></tr>';
+    var man=hhManual(p),totMod=0,totAsig=0;
+    hhModelo(p).forEach(function(c){totMod+=c.hh;});
+    E.componentes(p,S.datos.parametros).forEach(function(c){totAsig+=c.hh;});
+    html+='<td><input type="number" min="0" step="100" data-pc="'+esc(p.id)+'|hhTotal" aria-label="HH asignadas '+esc(p.proyecto)+'" placeholder="'+Math.round(totMod)+'" value="'+(man?Math.round(totAsig):"")+'"'
+      +' title="'+(man?'Cargadas a mano (modelo: '+hh(totMod)+' HH). Vaciá la celda para volver al modelo.':'Modelo: '+hh(totMod)+' HH. Escribí otro valor para pisarlo.')+'" style="width:96px'+(man?';border-color:var(--warn-ink);font-weight:600':'')+'"></td>'
+      +'<td><input type="text" data-pc="'+esc(p.id)+'|notaHH" aria-label="Motivo del ajuste de HH de '+esc(p.proyecto)+'" value="'+esc(p.notaHH||"")+'" placeholder="'+(man?"¿por qué?":"")+'" style="width:150px"></td>'
+      +'<td class="calc">'+hhK(totalP(p))+'</td><td class="x"><button data-lpdel="'+esc(p.id)+'" title="Eliminar '+esc(p.proyecto)+'">✕</button></td></tr>';
   });
   html+='</tbody></table></div><div class="psub" style="margin-top:6px">'+S.datos.proyectos.length+' proyectos'+(conAviso?' · <b style="color:var(--crit-ink)">'+conAviso+' con datos a revisar</b> (pasá el mouse sobre «!»)':' · sin datos a revisar')+'</div></div>';
   document.getElementById("dlgBody").innerHTML=html;
@@ -1628,6 +1634,22 @@ function openProyectos(){
   box.onchange=function(e){
     var t=e.target,pc=t.dataset.pc;if(!pc)return;
     var i=pc.lastIndexOf("|"),p=findP(pc.slice(0,i)),k=pc.slice(i+1);if(!p)return;
+    if(k==="hhTotal"||k==="notaHH"){
+      if(k==="hhTotal"){
+        var n0=t.value===""?null:parseFloat(String(t.value).replace(",","."));
+        if(n0!=null&&(isNaN(n0)||n0<0)){toast("Ingresá un número de HH mayor o igual a cero");openProyectos();return;}
+        push();asignarHHTotal(p,n0);
+        if(n0!=null)toast(p.proyecto+": "+hh(n0)+" HH asignadas"+(p.notaHH?"":" · completá el motivo"));
+      }else{push();p.notaHH=t.value.trim()||null;}
+      recalc();render();save();
+      setTimeout(function(){
+        var a=document.activeElement,key=a&&a.dataset&&a.dataset.pc;
+        openProyectos();
+        if(k==="hhTotal"&&n0!=null&&!p.notaHH){var m=document.querySelector('#lpBox [data-pc="'+p.id+'|notaHH"]');if(m){m.focus();return;}}
+        if(key){var el=document.querySelector('#lpBox [data-pc="'+key.replace(/"/g,'\\"')+'"]');if(el){el.focus();if(el.select)el.select();}}
+      },0);
+      return;
+    }
     var c=CAMPOS.filter(function(x){return x.k===k;})[0],v=c.t==="chk"?t.checked:t.value;
     if(k==="proyecto"&&!String(v).trim()){toast("El código no puede quedar vacío");openProyectos();return;}
     if(k==="fechaInicio"&&!/^\d{4}-\d{2}$/.test(v)){toast("Fecha inválida");openProyectos();return;}
@@ -1653,6 +1675,21 @@ function openProyectos(){
       if(key){var el=document.querySelector('#lpBox [data-pc="'+key.replace(/"/g,'\\"')+'"]');if(el){el.focus();if(el.select)el.select();}}
     },0);
   };
+}
+/* HH totales cargadas a mano: DNN/O&M van directo; en DPI se reparten entre Parque, ET y Línea
+   en la proporción actual (manual o del modelo). null = todo vuelve al modelo. */
+function asignarHHTotal(p,total){
+  if(total==null){p.hhParque=p.hhEt=p.hhLinea=p.hhProy=null;p.notaHH=null;return;}
+  if(p.tipoCliente!=="DPI"){p.hhProy=Math.round(total);return;}
+  var comps=E.componentes(p,S.datos.parametros),suma=0;
+  comps.forEach(function(c){suma+=c.hh;});
+  if(suma<=0){comps=hhModelo(p);suma=0;comps.forEach(function(c){suma+=c.hh;});}
+  var asignado=0;
+  comps.forEach(function(c,i){
+    var k=CAMPO_HH[c.componente];
+    var v=i===comps.length-1?Math.round(total)-asignado:Math.round(suma>0?total*c.hh/suma:total/comps.length);
+    p[k]=v;asignado+=v;
+  });
 }
 function nuevoProyecto(){
   push();

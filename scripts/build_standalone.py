@@ -86,6 +86,10 @@ HH CARGADAS A MANO
   (Parque, ET, Línea; o el total en DNN y O&M) se ve el valor del modelo y
   se puede escribir el que corresponde. Completar el "Motivo del ajuste".
   Vacío = vuelve al modelo. El proyecto queda marcado con un lápiz.
+  También desde la tabla "Proyectos": columna "HH asignadas" (en gris el
+  valor del modelo) y "Motivo HH". En DPI el total se reparte entre Parque,
+  ET y Línea en la misma proporción; "HH netas" muestra el valor después del
+  factor de solapamiento.
 
 REGISTRO DE CAMBIOS
   Cada Guardar anota qué cambió y quién lo hizo (por ejemplo "PABRA: Inicio
