@@ -450,7 +450,15 @@ function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return
 function px(n){return n+"px";}
 function hh(n){return NF0.format(Math.round(n));}
 function hhK(n){if(n<0.5)return "";if(n>=9950)return (n/1000).toFixed(0)+"k";if(n>=1000)return (n/1000).toFixed(1).replace(".",",")+"k";return String(Math.round(n));}
-function oc(v){return v===Infinity?"∞":NF2.format(v);}
+/* ocupación (y otras proporciones) como porcentaje entero: 1,26 → 126 % */
+function pctEnt(v){
+  if(v===Infinity)return "∞";
+  var r=Math.round(v*100);
+  if(v<1&&r>=100)r=99;          /* 99,6 % sigue siendo amarillo: no mostrar 100 % */
+  if(v>1&&r<=100)r=101;         /* 100,4 % ya es exceso */
+  return NF0.format(r)+"%";
+}
+function oc(v){return pctEnt(v);}
 function sem(v){return v>=1?"crit":v>=0.8?"warn":"ok";}
 function semTxt(v){return v>=1?"rojo":v>=0.8?"amarillo":"verde";}
 function mlabel(ym){if(!ym)return "—";var p=ym.split("-");return MES[+p[1]-1]+"-"+p[0].slice(2);}
@@ -617,7 +625,7 @@ function renderCap(){
   html+='<div class="lrow secrow"><div class="hhead">Ocupación por especialidad <small>HH forecast ÷ capacidad · '+NF0.format(hp)+' HH/persona·mes</small></div><div class="band" style="width:'+px(w)+'"></div></div>';
   R.especialidades.forEach(function(e,j){
     var cu=R.cuellos[e],pers=cap.dotacion[e]||0,isSel=sel&&sel.e===e&&!sel.m,nom=modoNomina(cap);
-    var tag=cu.mesesCriticos?'<span class="fl crit" title="Meses con ocupación &gt; 1">'+cu.mesesCriticos+' m &gt;1</span>':'<span class="fl ok">sin exceso</span>';
+    var tag=cu.mesesCriticos?'<span class="fl crit" title="Meses con ocupación mayor a 100%">'+cu.mesesCriticos+' m &gt;100%</span>':'<span class="fl ok">sin exceso</span>';
     html+='<div class="lrow"><div class="lcell"><div class="tname'+(isSel?" sel":"")+'" data-e="'+esc(e)+'" style="padding-left:12px">'
       +'<span class="nm"><b>'+esc(e)+'</b></span>'+tag
       +(nom?'<button class="fl" data-staff="'+esc(e)+'" title="Personas en la nómina en '+mlabel(R.kpiDesde)+' (clic para ver la lista)" style="border:1px solid var(--rule);cursor:pointer">'+fmtPers(personasHoy(e))+' pers.</button>'
@@ -715,8 +723,8 @@ function renderKPIs(){
   else if(!pc&&pcb)pcD='<span class="delta early">sin crítico</span>';
   else if(pc&&!pcb)pcD='<span class="delta late">nuevo</span>';
   var html=''
-   +kpi("Máxima ocupación",oc(mo.valor),dchip(mo.valor,kb.maxOcupacion.valor,true,function(v){return NF2.format(v);}),mo.especialidad?esc(mo.especialidad)+" · "+mlabel(mo.mes):"—",mo.valor>=1)
-   +kpi("Primer mes crítico",pc?mlabel(pc.mes):"ninguno",pcD,pc?esc(pc.especialidades.join(", ")):"Ningún mes supera 1,00 desde "+mlabel(R.kpiDesde),!!pc)
+   +kpi("Máxima ocupación",oc(mo.valor),dchip(mo.valor,kb.maxOcupacion.valor,true,function(v){return Math.round(v*100)+" pp";}),mo.especialidad?esc(mo.especialidad)+" · "+mlabel(mo.mes):"—",mo.valor>=1)
+   +kpi("Primer mes crítico",pc?mlabel(pc.mes):"ninguno",pcD,pc?esc(pc.especialidades.join(", ")):"Ningún mes supera el 100% desde "+mlabel(R.kpiDesde),!!pc)
    +kpi("HH excedidas",hh(k.hhExcedidas),dchip(k.hhExcedidas,kb.hhExcedidas,true,hh),"Demanda por encima de la capacidad",k.hhExcedidas>0.5)
    +kpi("HH forecast",hh(k.hhForecastHorizonte),dchip(k.hhForecastHorizonte,kb.hhForecastHorizonte,true,hh),"Desde "+mlabel(R.kpiDesde)+" a "+mlabel(R.meses[R.meses.length-1]),false)
    +'<div class="kpi"><span class="k">DPI · DNN · O&amp;M</span><span class="v" style="font:600 12.5px/1.3 var(--f-num)">'
@@ -737,7 +745,7 @@ function renderFooter(){
     if(!cnt[t.k])return;
     html+='<button class="fchip'+(S.filtro===t.k?" on":"")+'" data-f="'+t.k+'" title="'+t.d+'"><i style="background:'+t.c+'"></i>'+t.n+' <b>'+cnt[t.k]+'</b></button>';
   });
-  html+='<span class="sep"></span><span class="sem">Semáforo <i class="fl ok">&lt; 0,80</i><i class="fl warn">&lt; 1,00</i><i class="fl crit">≥ 1,00</i></span>'
+  html+='<span class="sep"></span><span class="sem">Semáforo <i class="fl ok">&lt; 80%</i><i class="fl warn">&lt; 100%</i><i class="fl crit">≥ 100%</i></span>'
     +'<span class="sep"></span><span class="leg">Base de comparación: <b style="color:var(--ink)">'+esc(S.baseNombre)+'</b></span>'
     +'<span class="leg">Barra gris fina: ET · barra oscura: Línea · bordes de la barra: duración</span>';
   f.innerHTML=html;
@@ -813,7 +821,7 @@ function edProyecto(p){
   if(tipo==="DNN")html+='<div class="f"><label for="edDnn">Nivel DNN</label><select id="edDnn">'+opt(["DNN Cat1","DNN Cat2"],p.nivelDNN)+'</select></div>';
   html+='<div class="two"><div class="f"><label for="edPoe">Tensión POE (kV)</label><input type="number" id="edPoe" min="0" step="1" value="'+esc(p.tensionPOE==null?"":p.tensionPOE)+'"></div>'
     +'<div class="f"><label for="edAv">% Avance</label><input type="number" id="edAv" min="0" max="100" step="5" value="'+esc(p.avance==null?"":p.avance)+'"></div></div>';
-  html+='<div class="two"><div class="f"><label for="edSol">Factor solapamiento</label><input type="number" id="edSol" min="0" max="1" step="0.05" value="'+solap+'"></div><div></div></div>'
+  html+='<div class="two"><div class="f"><label for="edSol">Factor solapamiento (%)</label><input type="number" id="edSol" min="0" max="100" step="5" value="'+Math.round(solap*100)+'"></div><div></div></div>'
     +'<div class="row-actions"><label class="chk"><input type="checkbox" id="edSim"'+(p.simulable?" checked":"")+'> Simulable <span style="color:var(--ink-soft)">(Calendario Fijo = No)</span></label>'
     +'<label class="chk"><input type="checkbox" id="edInc"'+(p.incluir===false?"":" checked")+'> Incluir en el cálculo</label></div>';
   var mod=hhModelo(p),totMod=0,man=hhManual(p);
@@ -826,7 +834,7 @@ function edProyecto(p){
       +'<td class="calc">'+(pt.n!==pt.n0?'<span title="Curva original: '+pt.n0+' meses">'+pt.n0+' → '+pt.n+'</span>':pt.n)+'</td>'
       +'<td class="x">'+(esMan?'<button data-hhr="'+k+'" title="Volver al valor del modelo">↺</button>':'')+'</td></tr>';
   });
-  html+='<tr><td><b>Total</b></td><td class="calc">'+hh(totMod)+'</td><td class="calc">'+hh(tot)+(solap<1?'<br><small style="color:var(--ink-soft)">× '+NF2.format(solap)+' = '+hh(tot*solap)+'</small>':'')+'</td><td></td><td></td></tr></table>';
+  html+='<tr><td><b>Total</b></td><td class="calc">'+hh(totMod)+'</td><td class="calc">'+hh(tot)+(solap<1?'<br><small style="color:var(--ink-soft)">× '+pctEnt(solap)+' = '+hh(tot*solap)+'</small>':'')+'</td><td></td><td></td></tr></table>';
   html+='<div class="hint">Dejá vacío para usar la base de datos de HH (Parámetros). Un valor cargado pisa el modelo solo para este proyecto'+(solap<1?'; el factor de solapamiento se aplica igual sobre ese valor':'')+'.</div>';
   if(man)html+='<div class="f" style="margin-top:8px"><label for="edNotaHH">Motivo del ajuste de HH</label><input type="text" id="edNotaHH" value="'+esc(p.notaHH||"")+'" placeholder="Ej.: alcance reducido, ingeniería del cliente"></div>'
     +'<div class="row-actions"><button class="btn sm" id="edHHReset">Volver todo al modelo</button></div>';
@@ -858,7 +866,7 @@ function edProyecto(p){
   if(ge("edDnn"))ge("edDnn").onchange=function(){var v=this.value;set(function(){p.nivelDNN=v;});};
   ge("edPoe").onchange=function(){var v=this.value===""?null:Math.max(0,+this.value);set(function(){p.tensionPOE=v;});};
   ge("edAv").onchange=function(){var v=this.value===""?null:Math.max(0,Math.min(100,+this.value));set(function(){p.avance=v;});};
-  ge("edSol").onchange=function(){var v=Math.max(0,Math.min(1,+this.value||0));set(function(){p.factorSolapamiento=v;});};
+  ge("edSol").onchange=function(){var v=Math.max(0,Math.min(100,+this.value||0))/100;set(function(){p.factorSolapamiento=v;});};
   ed.querySelectorAll("[data-hhm]").forEach(function(inp){inp.onchange=function(){
     var k=inp.dataset.hhm,v=inp.value===""?null:parseFloat(String(inp.value).replace(",","."));
     if(v!=null&&(isNaN(v)||v<0)){toast("Ingresá un número de HH mayor o igual a cero");renderEditor();return;}
@@ -1160,7 +1168,7 @@ function openRecursos(){
   var html='<h3>Recursos del área</h3><div id="rsBox"><div class="psub">Capacidad = personas × HH por persona × eficiencia + subcontrato. Los cambios se aplican al instante (Ctrl+Z deshace).</div>'
     +'<div class="pgrid" style="margin-top:10px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px 12px">'
     +'<div class="f"><label for="rsHH">HH por persona por mes</label>'+num("rsHH",cap.hhMesPersona,'min="1" step="4" data-rp="hhMesPersona"')+'</div>'
-    +'<div class="f"><label for="rsEf">Eficiencia (0–1)</label>'+num("rsEf",cap.eficiencia,'min="0.1" max="1" step="0.05" data-rp="eficiencia"')+'</div>'
+    +'<div class="f"><label for="rsEf">Eficiencia (%)</label>'+num("rsEf",Math.round(cap.eficiencia*100),'min="10" max="100" step="5" data-rp="eficiencia"')+'</div>'
     +'<div class="f"><label for="rsDesde">Horizonte desde</label><input type="month" id="rsDesde" data-rp="desde" value="'+h.desde+'"></div>'
     +'<div class="f"><label for="rsMeses">Meses (mínimo)</label>'+num("rsMeses",h.meses,'min="6" max="120" step="1" data-rp="meses"')+'</div>'
     +'<div class="f"><label for="rsKpi">Indicadores desde</label><input type="month" id="rsKpi" data-rp="kpiDesde" value="'+esc(h.kpiDesde||"")+'" title="Vacío = mes actual"></div></div>'
@@ -1228,7 +1236,7 @@ function wireRecursos(){
     if(t.dataset.rp){
       var k=t.dataset.rp;push();
       if(k==="hhMesPersona")cap.hhMesPersona=Math.max(1,+v||cap.hhMesPersona);
-      else if(k==="eficiencia")cap.eficiencia=Math.max(0.1,Math.min(1,+v||cap.eficiencia));
+      else if(k==="eficiencia")cap.eficiencia=Math.max(0.1,Math.min(1,(+v||cap.eficiencia*100)/100));
       else if(k==="desde"){if(/^\d{4}-\d{2}$/.test(v))h.desde=v;}
       else if(k==="meses")h.meses=Math.max(6,Math.min(120,Math.round(+v||h.meses)));
       else if(k==="kpiDesde")h.kpiDesde=/^\d{4}-\d{2}$/.test(v)?v:null;
@@ -1292,14 +1300,14 @@ function staffDesdeTexto(t){
 }
 function openNivelar(){
   var sug=E.dotacionMinima(datosVista(S.datos),{},1),cap=S.datos.capacidad,any=false;
-  var html='<h3>Nivelar capacidad</h3><div class="sub" style="color:var(--ink-soft);font-size:12px;margin-bottom:10px">Personas a sumar en cada especialidad, durante todo el horizonte, para que ningún mes supere 1,00 desde '+mlabel(R.kpiDesde)+'. Tiene en cuenta altas, bajas y subcontratos cargados.</div>'
+  var html='<h3>Nivelar capacidad</h3><div class="sub" style="color:var(--ink-soft);font-size:12px;margin-bottom:10px">Personas a sumar en cada especialidad, durante todo el horizonte, para que ningún mes supere el 100% desde '+mlabel(R.kpiDesde)+'. Tiene en cuenta altas, bajas y subcontratos cargados.</div>'
     +'<table class="pk"><tr><th>Especialidad</th><th class="r">Hoy</th><th class="r">A sumar</th><th class="r">Pico actual</th></tr>';
   R.especialidades.forEach(function(e){
     if(sug[e])any=true;
     html+='<tr><td>'+esc(e)+'</td><td class="calc">'+fmtPers(modoNomina(cap)?personasHoy(e):(cap.dotacion[e]||0))+'</td><td class="calc">'+(sug[e]?"+"+sug[e]:"—")+'</td><td class="calc"><span class="fl '+sem(R.cuellos[e].maxOcupacion)+'">'+oc(R.cuellos[e].maxOcupacion)+'</span></td></tr>';
   });
   html+='</table><div class="hint">Alternativa más barata: mover proyectos simulables con «Mejor inicio» o reforzar solo los meses críticos desde el editor de cada especialidad.</div>'
-    +'<div class="row-actions" style="justify-content:flex-end;margin-top:10px">'+(any?'<button class="btn primary" id="nvOk">'+(modoNomina(cap)?'Agregar vacantes a la nómina':'Aplicar a la dotación')+'</button>':'<span class="fl ok">Ya no hay meses por encima de 1,00</span>')+'</div>';
+    +'<div class="row-actions" style="justify-content:flex-end;margin-top:10px">'+(any?'<button class="btn primary" id="nvOk">'+(modoNomina(cap)?'Agregar vacantes a la nómina':'Aplicar a la dotación')+'</button>':'<span class="fl ok">Ya no hay meses por encima del 100%</span>')+'</div>';
   document.getElementById("dlgBody").innerHTML=html;openDlg(false);
   var b=document.getElementById("nvOk");
   if(b)b.onclick=function(){
@@ -1409,7 +1417,7 @@ function tabCurvas(){
   var ok=Math.abs(tot-1)<=0.005;
   var html='<div class="row-actions" style="align-items:center;margin-top:0"><label for="pcurSel" style="font-size:12px;color:var(--ink-soft)">Curva</label>'
     +'<select id="pcurSel" style="border:1px solid var(--rule);border-radius:6px;padding:5px 8px;background:var(--chip)">'+names.map(function(c){return '<option'+(c===PCUR?" selected":"")+'>'+esc(c)+'</option>';}).join("")+'</select>'
-    +'<span class="fl">'+n+' meses</span><span class="fl '+(ok?"ok":"crit")+'" title="Suma de todos los factores">total '+NFX.format(pct(tot))+' %</span>'
+    +'<span class="fl">'+n+' meses</span><span class="fl '+(ok?"ok":"crit")+'" title="Suma de todos los factores">total '+NF0.format(pct(tot))+' %</span>'
     +'<span class="psub">'+(usos.length?'Usada por '+usos.length+' proyecto(s): '+usos.slice(0,4).map(function(p){return esc(p.proyecto);}).join(", ")+(usos.length>4?"…":""):"Ningún proyecto la usa")+'</span></div>'
     +(function(){var z=esps.filter(function(e){return !(cur[e]||[]).some(function(f){return f>0;});});
       return z.length?'<div class="holg" style="margin-top:8px">'+z.map(esc).join(", ")+': 0 % en esta curva, así que no recibe demanda de los proyectos que la usan. Para asignarle una porción, cargá sus porcentajes por mes y bajá los de las demás especialidades (o usá «Normalizar a 100 %»).</div>':'';})()
@@ -1421,11 +1429,11 @@ function tabCurvas(){
     var f=cur[e]||[],se=0;
     html+='<tr><td>'+esc(e)+'</td>';
     for(var k=0;k<n;k++){var v=f[k]||0;se+=v;html+='<td>'+numIn('data-cf="'+esc(e)+'|'+k+'" aria-label="'+esc(e)+' mes '+(k+1)+' (%)"',pct(v))+'</td>';}
-    html+='<td class="calc">'+NFX.format(pct(se))+' %</td></tr>';
+    html+='<td class="calc">'+NF0.format(pct(se))+' %</td></tr>';
   });
   html+='</tbody><tfoot><tr><td>Total mes</td>';
-  col.forEach(function(v){html+='<td><div class="mb" title="'+NFX.format(pct(v))+' %"><i style="height:'+(v/mx*100)+'%"></i></div>'+NFX.format(pct(v))+'</td>';});
-  html+='<td>'+NFX.format(pct(tot))+' %</td></tr></tfoot></table></div>'
+  col.forEach(function(v){html+='<td><div class="mb" title="'+NF0.format(pct(v))+' %"><i style="height:'+(v/mx*100)+'%"></i></div>'+NF0.format(pct(v))+'</td>';});
+  html+='<td>'+NF0.format(pct(tot))+' %</td></tr></tfoot></table></div>'
     +'<div class="row-actions"><button class="btn sm" data-cact="add">+ mes al final</button><button class="btn sm" data-cact="del"'+(n<2?" disabled":"")+'>Quitar último mes</button>'
     +'<button class="btn sm primary" data-cact="norm"'+(ok||tot<=0?" disabled":"")+' title="Escala todos los factores para que sumen 100 %">Normalizar a 100 %</button></div>';
   return html;
@@ -1512,7 +1520,7 @@ var CAMPOS=[
   {k:"linea",n:"Línea",t:"sel",op:["","Línea AT","Línea MT"],w:100},
   {k:"fechaInicio",n:"Inicio",t:"month"},
   {k:"duracion",n:"Duración",t:"num",vacio:"curvas"},
-  {k:"factorSolapamiento",n:"Solap.",t:"num"},
+  {k:"factorSolapamiento",n:"Solap. %",t:"num",pct:true},
   {k:"estado",n:"Estado",t:"sel",op:["No Iniciado","En Proceso","Finalizado"],w:120},
   {k:"fijo",n:"Cal. fijo",t:"chk"},
   {k:"avance",n:"% Avance",t:"num"},
@@ -1529,6 +1537,8 @@ function txtCampo(k,v){
   if(v===""||v==null){var c=CAMPOS_DIFF.filter(function(x){return x.k===k;})[0];return c&&c.vacio?c.vacio:"—";}
   if(v===true)return "sí";if(v===false)return "no";
   if(k==="fechaInicio")return mlabel(v);
+  if(k==="factorSolapamiento")return pctEnt(+v);
+  if(k==="avance")return NFX.format(v)+"%";
   if(typeof v==="number")return NFX.format(v);
   return String(v);
 }
@@ -1559,7 +1569,7 @@ function openProyectos(){
       if(c.t==="chk")html+='<td class="c"><input type="checkbox" '+a+(v?" checked":"")+'></td>';
       else if(c.t==="sel")html+='<td><select '+a+' style="width:'+(c.w||90)+'px">'+(c.op.indexOf(v)<0&&v!==""?'<option selected>'+esc(v)+'</option>':'')+c.op.map(function(o){return '<option value="'+esc(o)+'"'+(o===v?" selected":"")+'>'+esc(o===""?(c.vacio||"—"):o)+'</option>';}).join("")+'</select></td>';
       else if(c.t==="month")html+='<td><input type="month" '+a+' value="'+esc(v)+'"></td>';
-      else if(c.t==="num")html+='<td><input type="number" step="any" min="0" '+a+' value="'+esc(v)+'"'+(c.vacio?' placeholder="'+c.vacio+'"':'')+'></td>';
+      else if(c.t==="num")html+='<td><input type="number" step="any" min="0" '+a+' value="'+esc(c.pct&&v!==""?Math.round(v*100):v)+'"'+(c.vacio?' placeholder="'+c.vacio+'"':'')+'></td>';
       else html+='<td><input type="text" '+a+' value="'+esc(v)+'" style="width:'+c.w+'px"></td>';
     });
     html+='<td class="calc"'+(hhManual(p)?' title="HH cargadas a mano'+(p.notaHH?': '+esc(p.notaHH):'')+' (se editan en el panel del proyecto)" style="color:var(--warn-ink)"':'')+'>'+hhK(totalP(p))+(hhManual(p)?' ✎':'')+'</td><td class="x"><button data-lpdel="'+esc(p.id)+'" title="Eliminar '+esc(p.proyecto)+'">✕</button></td></tr>';
@@ -1591,7 +1601,7 @@ function openProyectos(){
       var n=v===""?null:parseFloat(String(v).replace(",","."));
       if(n!=null&&(isNaN(n)||n<0))n=null;
       if(k==="duracion"){if(n==null)p.duracion=null;else setDur(p,n);}
-      else if(k==="factorSolapamiento")p.factorSolapamiento=n==null?1:Math.min(1,n);
+      else if(k==="factorSolapamiento")p.factorSolapamiento=n==null?1:Math.min(100,n)/100;
       else if(k==="avance")p.avance=n==null?null:Math.min(100,n);
       else p[k]=n;
     }
@@ -1956,7 +1966,7 @@ function openPDF(){
       doc.setFillColor(157,195,230);doc.rect(W/2+48,y3-3,90*r.hh/pm,3.4,"F");
       doc.text(pdfTxt(hh(r.hh)+" HH - acum "+NFP.format(r.pctAcum)),W/2+142,y3);y3+=5.5;
     });
-    doc.setFontSize(7);doc.setTextColor(91,107,98);doc.text("Datos de ejemplo. Semaforo: verde < 0,80 - amarillo < 1,00 - rojo >= 1,00.",M,290);
+    doc.setFontSize(7);doc.setTextColor(91,107,98);doc.text("Semaforo de ocupacion: verde < 80% - amarillo < 100% - rojo >= 100%.",M,290);
     offer(slug()+"-reporte.pdf",doc.output("arraybuffer"));
   }).catch(function(){toast("No se pudo cargar el generador de PDF (sin conexión)");});
 }
