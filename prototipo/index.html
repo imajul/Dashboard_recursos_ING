@@ -437,7 +437,14 @@ var TIPOS=[
 ];
 var TIPO={};TIPOS.forEach(function(t){TIPO[t.k]=t;});
 var TECNOS=["Solar","Bess","Eólico","Termico"];
-var ABREV={"Civiles":"Civ.","Coordinadores":"Coord.","Eléctricos":"Eléc.","Electrónicos":"Electrón.","Mecánicos":"Mec."};
+var ABREV={"Civiles":"Civ.","Coordinadores":"Coord.","Eléctricos":"Eléc.","Electrónicos":"Electrón.","Mecánicos":"Mec.","Estudios":"Estud."};
+/* singular de cada especialidad (para nombres a completar y vacantes) */
+var SINGULAR={"Civiles":"Civil","Coordinadores":"Coordinador","Eléctricos":"Eléctrico","Electrónicos":"Electrónico","Mecánicos":"Mecánico","Estudios":"Estudios"};
+function singular(e){
+  if(SINGULAR[e])return SINGULAR[e];
+  if(/[lrndz]es$/i.test(e))return e.slice(0,-2);   /* Civiles → Civil, Coordinadores → Coordinador */
+  return e.replace(/s$/,"");
+}
 var TAMANOS=["Chico","Mediano","Grande","Muy Grande"];
 var ESTADOS=["No Iniciado","En Proceso","Finalizado"];
 var NF0=new Intl.NumberFormat("es-AR",{maximumFractionDigits:0});
@@ -469,13 +476,34 @@ function nuevoWS(){
 }
 function versionDatos(){return (window.SAMPLE_DATA.meta&&window.SAMPLE_DATA.meta.version)||"1";}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+/* Planes y escenarios guardados antes de agregar una especialidad (p. ej. «Estudios»)
+   la reciben con la dotación de referencia y 0 % en todas las curvas. */
+function migrarDatos(d){
+  if(!d||!d.especialidades)return d;
+  var ref=window.SAMPLE_DATA,cap=d.capacidad||{};
+  ref.especialidades.forEach(function(e){
+    if(d.especialidades.indexOf(e)>=0)return;
+    d.especialidades.push(e);
+    cap.dotacion=cap.dotacion||{};
+    if(cap.dotacion[e]==null)cap.dotacion[e]=ref.capacidad.dotacion[e]||0;
+    if(cap.staff&&cap.staff.length&&!cap.staff.some(function(x){return x.especialidad===e;})){
+      for(var k=1;k<=(ref.capacidad.dotacion[e]||0);k++)cap.staff.push({id:"s"+Math.random().toString(36).slice(2,9),nombre:singular(e)+" "+k+" (completar)",especialidad:e,dedicacion:1,desde:null,hasta:null,nota:null});
+    }
+    Object.keys(d.curvas||{}).forEach(function(c){
+      var cur=d.curvas[c];if(cur[e])return;
+      var n=E.largoCurva(d.curvas,c),r=ref.curvas[c]&&ref.curvas[c][e];
+      cur[e]=r&&r.length===n?r.slice():new Array(n).fill(0);
+    });
+  });
+  return d;
+}
 function load(){
   var raw=null;try{raw=localStorage.getItem(KEY);}catch(e){}
   if(raw){try{
     var o=JSON.parse(raw);
     /* si cambió el dataset publicado (p. ej. nueva lista de proyectos) se arranca de cero;
        los escenarios guardados siguen disponibles en «Escenarios» */
-    if(o&&o.datos&&o.datos.proyectos&&o.version===versionDatos())return o;
+    if(o&&o.datos&&o.datos.proyectos&&o.version===versionDatos()){migrarDatos(o.datos);migrarDatos(o.base);return o;}
     if(o&&o.datos)setTimeout(function(){toast("Se cargó la lista de proyectos actualizada");},600);
   }catch(e){}}
   return nuevoWS();
@@ -1229,7 +1257,7 @@ function wireRecursos(){
   var g=document.getElementById("stGen");
   if(g)g.onclick=function(){
     push();
-    R.especialidades.forEach(function(e){var n=cap.dotacion[e]||0;for(var k=1;k<=n;k++)cap.staff.push({id:idStaff(),nombre:e.replace(/s$/,"")+" "+k+" (completar)",especialidad:e,dedicacion:1,desde:null,hasta:null,nota:null});});
+    R.especialidades.forEach(function(e){var n=cap.dotacion[e]||0;for(var k=1;k<=n;k++)cap.staff.push({id:idStaff(),nombre:singular(e)+" "+k+" (completar)",especialidad:e,dedicacion:1,desde:null,hasta:null,nota:null});});
     recalc();render();save();openRecursos();toast("Lista creada con "+cap.staff.length+" personas: completá los nombres");
   };
 }
@@ -1273,7 +1301,7 @@ function openNivelar(){
   if(b)b.onclick=function(){
     push();
     if(modoNomina(cap)){
-      Object.keys(sug).forEach(function(e){for(var k=1;k<=sug[e];k++)cap.staff.push({id:idStaff(),nombre:"Vacante "+e+" "+k,especialidad:e,dedicacion:1,desde:R.kpiDesde,hasta:null,nota:"Sugerida por Nivelar"});});
+      Object.keys(sug).forEach(function(e){for(var k=1;k<=sug[e];k++)cap.staff.push({id:idStaff(),nombre:"Vacante "+singular(e)+" "+k,especialidad:e,dedicacion:1,desde:R.kpiDesde,hasta:null,nota:"Sugerida por Nivelar"});});
       toast("Vacantes agregadas a la nómina desde "+mlabel(R.kpiDesde));
     }else{Object.keys(sug).forEach(function(e){cap.dotacion[e]=(cap.dotacion[e]||0)+sug[e];});toast("Dotación nivelada");}
     recalc();render();save();dlg.close();
@@ -1379,6 +1407,8 @@ function tabCurvas(){
     +'<select id="pcurSel" style="border:1px solid var(--rule);border-radius:6px;padding:5px 8px;background:var(--chip)">'+names.map(function(c){return '<option'+(c===PCUR?" selected":"")+'>'+esc(c)+'</option>';}).join("")+'</select>'
     +'<span class="fl">'+n+' meses</span><span class="fl '+(ok?"ok":"crit")+'" title="Suma de todos los factores">total '+NFX.format(pct(tot))+' %</span>'
     +'<span class="psub">'+(usos.length?'Usada por '+usos.length+' proyecto(s): '+usos.slice(0,4).map(function(p){return esc(p.proyecto);}).join(", ")+(usos.length>4?"…":""):"Ningún proyecto la usa")+'</span></div>'
+    +(function(){var z=esps.filter(function(e){return !(cur[e]||[]).some(function(f){return f>0;});});
+      return z.length?'<div class="holg" style="margin-top:8px">'+z.map(esc).join(", ")+': 0 % en esta curva, así que no recibe demanda de los proyectos que la usan. Para asignarle una porción, cargá sus porcentajes por mes y bajá los de las demás especialidades (o usá «Normalizar a 100 %»).</div>':'';})()
     +'<div class="psub" style="margin:8px 0">Porcentaje de las HH del componente que cae en cada mes y especialidad. El total debería dar 100 %; si no, la demanda se infla o se achica en la misma proporción.</div>'
     +'<div class="tablewrap"><table class="pk cm"><thead><tr><th>Especialidad</th>';
   for(k=0;k<n;k++)html+='<th>M'+(k+1)+'</th>';
@@ -1696,8 +1726,8 @@ function openScen(){
       var b=e.target.closest("button");if(!b)return;
       var rec=list.filter(function(r){return String(r.id)===(b.dataset.load||b.dataset.base||b.dataset.del);})[0];
       if(!rec)return;
-      if(b.dataset.load){push();S.datos=clone(rec.datos);S.nombre=rec.name;sel=null;recalc();render();save();dlg.close();toast("Escenario abierto · «Guardar» lo convierte en el plan vigente");}
-      if(b.dataset.base){S.base=clone(rec.datos);S.baseNombre=rec.name;recalc();render();save();toast("Base de comparación: "+rec.name);}
+      if(b.dataset.load){push();S.datos=migrarDatos(clone(rec.datos));S.nombre=rec.name;sel=null;recalc();render();save();dlg.close();toast("Escenario abierto · «Guardar» lo convierte en el plan vigente");}
+      if(b.dataset.base){S.base=migrarDatos(clone(rec.datos));S.baseNombre=rec.name;recalc();render();save();toast("Base de comparación: "+rec.name);}
       if(b.dataset.del)scenBorrarA(rec).then(openScen,function(){toast("No se pudo borrar");});
     };
   },function(e){var el=document.getElementById("scList");if(el)el.textContent="No se pudieron leer los escenarios: "+(e&&e.message||e);});
@@ -1706,7 +1736,7 @@ function openComparar(){
   scenListA().then(function(l){compararTabla(l);},function(){compararTabla([]);});
 }
 function compararTabla(lista){
-  var filas=[{name:S.nombre+" (abierto)",datos:S.datos},{name:S.baseNombre+" (base)",datos:S.base}].concat(lista.map(function(r){return {name:r.name+(r.autor?" · "+r.autor:""),datos:r.datos};}));
+  var filas=[{name:S.nombre+" (abierto)",datos:S.datos},{name:S.baseNombre+" (base)",datos:S.base}].concat(lista.map(function(r){return {name:r.name+(r.autor?" · "+r.autor:""),datos:migrarDatos(clone(r.datos))};}));
   var html='<h3>Comparar escenarios</h3><div style="color:var(--ink-soft);font-size:12px;margin-bottom:10px">Mismo motor, mismas curvas: cambia solo lo que difiere entre escenarios.'+(S.filtro?' Filtro activo: solo '+S.filtro+'.':'')+'</div>'
     +'<div class="tablewrap"><table class="pk"><tr><th>Escenario</th><th class="r">Máx. ocup.</th><th>Dónde</th><th>1.er crítico</th><th class="r">HH excedidas</th><th class="r">HH forecast</th><th class="r">Personas</th>'
     +R.especialidades.map(function(e){return '<th class="r" title="Ocupación pico de '+esc(e)+'">'+esc(ABREV[e]||e)+'</th>';}).join("")+'</tr>';
@@ -1838,7 +1868,7 @@ function importar(file){
     try{
       var o=JSON.parse(r.result),d=o.datos||o;
       if(!d.proyectos||!d.curvas||!d.capacidad)throw 0;
-      push();S.datos=d;S.nombre=o.escenario||file.name.replace(/\.json$/i,"");sel=null;recalc();render();save();
+      push();S.datos=migrarDatos(d);S.nombre=o.escenario||file.name.replace(/\.json$/i,"");sel=null;recalc();render();save();
       toast("Escenario «"+S.nombre+"» importado");
     }catch(e){toast("Ese archivo no es un escenario válido");}
   };
@@ -2070,7 +2100,7 @@ function fsAlConectar(){
 function fsCargar(plan,msg){
   var selPrev=sel;
   push();
-  S.datos=clone(plan.datos);S.base=clone(plan.datos);S.baseNombre="Plan vigente";S.nombre="Plan vigente";
+  S.datos=migrarDatos(clone(plan.datos));S.base=clone(S.datos);S.baseNombre="Plan vigente";S.nombre="Plan vigente";
   S.fsRev=plan.revision||0;S.fsCarpeta=FS.dir?FS.dir.name:"";S.dirty=false;
   FS.ultimo=plan;FS.base=plan;FS.plan=fsMeta(plan);FS.aviso=0;FS.sinPlan=false;
   sel=(selPrev&&selPrev.p&&!findP(selPrev.p))?null:selPrev;
@@ -2211,7 +2241,7 @@ function fsBorrarEsc(rec){return subdir(ESCDIR).then(function(d){return d.remove
 function fsAbrirVersion(dir,nombre,etiqueta){
   leerJSON(dir,nombre).then(function(p){
     if(!planValido(p)){toast("Ese archivo no es un plan válido");return;}
-    push();S.datos=clone(p.datos);S.nombre=etiqueta;sel=null;recalc();render();save();dlg.close();
+    push();S.datos=migrarDatos(clone(p.datos));S.nombre=etiqueta;sel=null;recalc();render();save();dlg.close();
     toast("Abierto «"+etiqueta+"» · «Guardar» lo convierte en el plan vigente");
   },function(e){toast("No se pudo abrir: "+(e&&e.message||e));});
 }

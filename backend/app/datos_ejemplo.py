@@ -14,25 +14,26 @@ import json
 import math
 from pathlib import Path
 
-ESPECIALIDADES = ["Civiles", "Coordinadores", "Eléctricos", "Electrónicos", "Mecánicos"]
+ESPECIALIDADES = ["Civiles", "Coordinadores", "Eléctricos", "Electrónicos", "Mecánicos", "Estudios"]
 
 # Duración (meses) y reparto de HH por especialidad de cada curva.
 CURVAS_DEF = {
-    #               meses  Civ   Coord Elec  Electr Mec
-    "Solar":         (12, [0.25, 0.15, 0.40, 0.10, 0.10]),
-    "Bess":          (9,  [0.15, 0.15, 0.40, 0.20, 0.10]),
-    "Eólico":        (15, [0.30, 0.15, 0.30, 0.05, 0.20]),
-    "Termico":       (15, [0.20, 0.15, 0.25, 0.10, 0.30]),
-    "ET Nueva":      (10, [0.20, 0.10, 0.55, 0.10, 0.05]),
-    "Ampliación ET": (6,  [0.15, 0.10, 0.60, 0.10, 0.05]),
-    "Línea MT":      (6,  [0.35, 0.10, 0.50, 0.00, 0.05]),
-    "Línea AT":      (9,  [0.40, 0.10, 0.45, 0.00, 0.05]),
-    "DNN Cat1":      (3,  [0.15, 0.30, 0.35, 0.05, 0.15]),
-    "DNN Cat2":      (9,  [0.20, 0.25, 0.35, 0.05, 0.15]),
-    "O&M":           (12, [0.10, 0.20, 0.40, 0.15, 0.15]),
+    # Estudios arranca en 0: su porción de cada curva se define en Parámetros → Curvas.
+    #               meses  Civ   Coord Elec  Electr Mec   Estud
+    "Solar":         (12, [0.25, 0.15, 0.40, 0.10, 0.10, 0.00]),
+    "Bess":          (9,  [0.15, 0.15, 0.40, 0.20, 0.10, 0.00]),
+    "Eólico":        (15, [0.30, 0.15, 0.30, 0.05, 0.20, 0.00]),
+    "Termico":       (15, [0.20, 0.15, 0.25, 0.10, 0.30, 0.00]),
+    "ET Nueva":      (10, [0.20, 0.10, 0.55, 0.10, 0.05, 0.00]),
+    "Ampliación ET": (6,  [0.15, 0.10, 0.60, 0.10, 0.05, 0.00]),
+    "Línea MT":      (6,  [0.35, 0.10, 0.50, 0.00, 0.05, 0.00]),
+    "Línea AT":      (9,  [0.40, 0.10, 0.45, 0.00, 0.05, 0.00]),
+    "DNN Cat1":      (3,  [0.15, 0.30, 0.35, 0.05, 0.15, 0.00]),
+    "DNN Cat2":      (9,  [0.20, 0.25, 0.35, 0.05, 0.15, 0.00]),
+    "O&M":           (12, [0.10, 0.20, 0.40, 0.15, 0.15, 0.00]),
 }
 # Momento del pico de cada especialidad dentro de la curva (fracción de la duración).
-CENTRO_ESP = [0.30, 0.50, 0.60, 0.72, 0.55]
+CENTRO_ESP = [0.30, 0.50, 0.60, 0.72, 0.55, 0.20]
 
 
 def _forma(n: int, centro: float, plana: bool) -> list[float]:
@@ -91,7 +92,7 @@ PARAMETROS = {
 CAPACIDAD = {
     "hhMesPersona": 140,
     "eficiencia": 0.85,
-    "dotacion": {"Civiles": 8, "Coordinadores": 6, "Eléctricos": 14, "Electrónicos": 4, "Mecánicos": 5},
+    "dotacion": {"Civiles": 8, "Coordinadores": 6, "Eléctricos": 14, "Electrónicos": 4, "Mecánicos": 5, "Estudios": 2},
     "subcontratoHH": {},
     # Altas/bajas ya conocidas (delta de personas desde/hasta un mes).
     "eventos": [

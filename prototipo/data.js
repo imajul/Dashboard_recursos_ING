@@ -14,7 +14,8 @@ window.SAMPLE_DATA = {
   "Coordinadores",
   "Eléctricos",
   "Electrónicos",
-  "Mecánicos"
+  "Mecánicos",
+  "Estudios"
  ],
  "parametros": {
   "parque": {
@@ -207,7 +208,8 @@ window.SAMPLE_DATA = {
    "Coordinadores": 6,
    "Eléctricos": 14,
    "Electrónicos": 4,
-   "Mecánicos": 5
+   "Mecánicos": 5,
+   "Estudios": 2
   },
   "subcontratoHH": {},
   "eventos": [
@@ -291,6 +293,20 @@ window.SAMPLE_DATA = {
     0.0076,
     0.0046,
     0.003
+   ],
+   "Estudios": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
    ]
   },
   "Bess": {
@@ -348,6 +364,17 @@ window.SAMPLE_DATA = {
     0.0145,
     0.0079,
     0.0043
+   ],
+   "Estudios": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
    ]
   },
   "Eólico": {
@@ -435,6 +462,23 @@ window.SAMPLE_DATA = {
     0.0094,
     0.0064,
     0.0047
+   ],
+   "Estudios": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
    ]
   },
   "Termico": {
@@ -522,6 +566,23 @@ window.SAMPLE_DATA = {
     0.0142,
     0.0096,
     0.0071
+   ],
+   "Estudios": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
    ]
   },
   "ET Nueva": {
@@ -584,6 +645,18 @@ window.SAMPLE_DATA = {
     0.0057,
     0.0032,
     0.0019
+   ],
+   "Estudios": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
    ]
   },
   "Ampliación ET": {
@@ -626,6 +699,14 @@ window.SAMPLE_DATA = {
     0.0162,
     0.0095,
     0.0037
+   ],
+   "Estudios": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
    ]
   },
   "Línea MT": {
@@ -668,6 +749,14 @@ window.SAMPLE_DATA = {
     0.0162,
     0.0095,
     0.0037
+   ],
+   "Estudios": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
    ]
   },
   "Línea AT": {
@@ -725,6 +814,17 @@ window.SAMPLE_DATA = {
     0.0073,
     0.0039,
     0.0021
+   ],
+   "Estudios": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
    ]
   },
   "DNN Cat1": {
@@ -752,6 +852,11 @@ window.SAMPLE_DATA = {
     0.0202,
     0.0946,
     0.0352
+   ],
+   "Estudios": [
+    0.0,
+    0.0,
+    0.0
    ]
   },
   "DNN Cat2": {
@@ -809,6 +914,17 @@ window.SAMPLE_DATA = {
     0.0218,
     0.0118,
     0.0064
+   ],
+   "Estudios": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
    ]
   },
   "O&M": {
@@ -881,6 +997,20 @@ window.SAMPLE_DATA = {
     0.0125,
     0.0125,
     0.0125
+   ],
+   "Estudios": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
    ]
   }
  },
@@ -903,6 +1033,7 @@ window.SAMPLE_DATA = {
    "hhEt": null,
    "hhLinea": null,
    "hhProy": null,
+   "notaHH": null,
    "factorSolapamiento": 1.0,
    "duracion": null,
    "tensionPOE": 132.0,
@@ -926,6 +1057,7 @@ window.SAMPLE_DATA = {
    "hhEt": null,
    "hhLinea": null,
    "hhProy": null,
+   "notaHH": null,
    "factorSolapamiento": 1.0,
    "duracion": null,
    "tensionPOE": 33.0,
@@ -949,6 +1081,7 @@ window.SAMPLE_DATA = {
    "hhEt": null,
    "hhLinea": null,
    "hhProy": null,
+   "notaHH": null,
    "factorSolapamiento": 1.0,
    "duracion": null,
    "tensionPOE": 33.0,
@@ -972,6 +1105,7 @@ window.SAMPLE_DATA = {
    "hhEt": null,
    "hhLinea": null,
    "hhProy": null,
+   "notaHH": null,
    "factorSolapamiento": 0.43,
    "duracion": null,
    "tensionPOE": 33.0,
@@ -995,6 +1129,7 @@ window.SAMPLE_DATA = {
    "hhEt": null,
    "hhLinea": null,
    "hhProy": null,
+   "notaHH": null,
    "factorSolapamiento": 0.43,
    "duracion": null,
    "tensionPOE": 33.0,
@@ -1018,6 +1153,7 @@ window.SAMPLE_DATA = {
    "hhEt": null,
    "hhLinea": null,
    "hhProy": null,
+   "notaHH": null,
    "factorSolapamiento": 0.43,
    "duracion": null,
    "tensionPOE": 33.0,
@@ -1041,6 +1177,7 @@ window.SAMPLE_DATA = {
    "hhEt": null,
    "hhLinea": null,
    "hhProy": null,
+   "notaHH": null,
    "factorSolapamiento": 0.43,
    "duracion": null,
    "tensionPOE": 132.0,
@@ -1064,6 +1201,7 @@ window.SAMPLE_DATA = {
    "hhEt": null,
    "hhLinea": null,
    "hhProy": null,
+   "notaHH": null,
    "factorSolapamiento": 0.43,
    "duracion": null,
    "tensionPOE": 33.0,
@@ -1087,6 +1225,7 @@ window.SAMPLE_DATA = {
    "hhEt": null,
    "hhLinea": null,
    "hhProy": null,
+   "notaHH": null,
    "factorSolapamiento": 0.43,
    "duracion": null,
    "tensionPOE": 33.0,
@@ -1110,6 +1249,7 @@ window.SAMPLE_DATA = {
    "hhEt": null,
    "hhLinea": null,
    "hhProy": null,
+   "notaHH": null,
    "factorSolapamiento": 0.43,
    "duracion": null,
    "tensionPOE": 33.0,
@@ -1133,6 +1273,7 @@ window.SAMPLE_DATA = {
    "hhEt": null,
    "hhLinea": null,
    "hhProy": null,
+   "notaHH": null,
    "factorSolapamiento": 1.0,
    "duracion": null,
    "tensionPOE": 33.0,
@@ -1156,6 +1297,7 @@ window.SAMPLE_DATA = {
    "hhEt": null,
    "hhLinea": null,
    "hhProy": null,
+   "notaHH": null,
    "factorSolapamiento": 1.0,
    "duracion": null,
    "tensionPOE": 33.0,
@@ -1179,6 +1321,7 @@ window.SAMPLE_DATA = {
    "hhEt": null,
    "hhLinea": null,
    "hhProy": null,
+   "notaHH": null,
    "factorSolapamiento": 1.0,
    "duracion": null,
    "tensionPOE": 33.0,
@@ -1202,6 +1345,7 @@ window.SAMPLE_DATA = {
    "hhEt": null,
    "hhLinea": null,
    "hhProy": null,
+   "notaHH": null,
    "factorSolapamiento": 1.0,
    "duracion": null,
    "tensionPOE": 33.0,
@@ -1225,6 +1369,7 @@ window.SAMPLE_DATA = {
    "hhEt": null,
    "hhLinea": null,
    "hhProy": null,
+   "notaHH": null,
    "factorSolapamiento": 1.0,
    "duracion": null,
    "tensionPOE": 33.0,
@@ -1248,6 +1393,7 @@ window.SAMPLE_DATA = {
    "hhEt": null,
    "hhLinea": null,
    "hhProy": null,
+   "notaHH": null,
    "factorSolapamiento": 1.0,
    "duracion": null,
    "tensionPOE": 33.0,
