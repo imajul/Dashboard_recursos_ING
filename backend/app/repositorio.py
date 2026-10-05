@@ -52,9 +52,9 @@ def upsert_proyecto(cn: sqlite3.Connection, p: dict, sp_item_id: str | None = No
     cn.execute(
         """INSERT INTO dim_proyecto (id, sp_item_id, proyecto, tipo_cliente, tecnologia, potencia_mw, tamano, nivel_dnn,
                estado, fecha_inicio, est_transformadora, linea, simulable, hh_parque_manual, hh_et_manual,
-               hh_linea_manual, hh_proy_manual, factor_solapamiento, duracion_meses, sp_modified)
+               hh_linea_manual, hh_proy_manual, factor_solapamiento, duracion_meses, plan_manual, sp_modified)
            VALUES (:id,:sp,:proyecto,:tipoCliente,:tecnologia,:potencia,:tamano,:nivelDNN,:estado,:fechaInicio,:est,
-                   :linea,:simulable,:hhParque,:hhEt,:hhLinea,:hhProy,:factorSolapamiento,:duracion,:spm)
+                   :linea,:simulable,:hhParque,:hhEt,:hhLinea,:hhProy,:factorSolapamiento,:duracion,:plan,:spm)
            ON CONFLICT(id) DO UPDATE SET
                proyecto=excluded.proyecto, tipo_cliente=excluded.tipo_cliente, tecnologia=excluded.tecnologia,
                potencia_mw=excluded.potencia_mw, tamano=excluded.tamano, nivel_dnn=excluded.nivel_dnn,
@@ -62,11 +62,12 @@ def upsert_proyecto(cn: sqlite3.Connection, p: dict, sp_item_id: str | None = No
                est_transformadora=excluded.est_transformadora, linea=excluded.linea, simulable=excluded.simulable,
                hh_parque_manual=excluded.hh_parque_manual, hh_et_manual=excluded.hh_et_manual,
                hh_linea_manual=excluded.hh_linea_manual, hh_proy_manual=excluded.hh_proy_manual,
-               factor_solapamiento=excluded.factor_solapamiento, duracion_meses=excluded.duracion_meses,
+               factor_solapamiento=excluded.factor_solapamiento, duracion_meses=excluded.duracion_meses, plan_manual=excluded.plan_manual,
                sp_modified=excluded.sp_modified,
                sincronizado_ts=datetime('now')""",
         {**p, "sp": sp_item_id or p.get("spItemId"), "spm": sp_modified,
          "simulable": 1 if p.get("simulable") else 0, "duracion": p.get("duracion"),
+         "plan": json.dumps(p["planManual"], ensure_ascii=False) if p.get("planManual") else None,
          "factorSolapamiento": 1.0 if p.get("factorSolapamiento") in (None, "") else p["factorSolapamiento"]},
     )
 
@@ -97,6 +98,7 @@ def leer_dataset(cn: sqlite3.Connection) -> dict:
         "simulable": bool(r["simulable"]), "hhParque": r["hh_parque_manual"], "hhEt": r["hh_et_manual"],
         "hhLinea": r["hh_linea_manual"], "hhProy": r["hh_proy_manual"], "factorSolapamiento": r["factor_solapamiento"],
         "duracion": r["duracion_meses"],
+        **({"planManual": json.loads(r["plan_manual"])} if r["plan_manual"] else {}),
     } for r in cn.execute("SELECT * FROM dim_proyecto ORDER BY id")]
     return {
         "horizonte": {"desde": g["horizonte_desde"], "meses": g["horizonte_meses"]},

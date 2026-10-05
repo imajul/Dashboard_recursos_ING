@@ -85,6 +85,26 @@ SENSIBILIDADES (PROYECTOS DNN)
   y se mueven junto con el bloque original. También desde la tabla
   "Proyectos", columna "Sensib. DNN".
 
+PROYECTOS CON TECNOLOGIA "OTRO"
+  Para proyectos que no encajan en Solar/Bess/Eolico/Termico: elegir
+  Tecnologia = "Otro" (en el panel o en la tabla "Proyectos"). No usa las
+  tablas de HH ni las curvas ni el factor de solapamiento: se carga a mano un
+  plan de recursos, una grilla especialidad x mes ("Editar plan de recursos").
+  - Unidad: personas equivalentes (0,5 = media persona; 1 persona = HH por
+    persona y mes x eficiencia de Recursos) o directamente HH.
+  - Al pasar un proyecto a "Otro" el plan arranca con lo que calculaba el
+    modelo; despues se edita a gusto.
+  - "Meses" alarga o acorta la grilla; el boton de fila (flecha) la rellena
+    con su primer valor y la X la limpia.
+  - "Generar desde un total de HH": total, % por especialidad y forma
+    (pareja, campana, creciente, decreciente).
+  - Cambiar la duracion en el Gantt reescala el plan conservando las HH;
+    "Fijar el plan en N meses" lo deja asi en la grilla.
+  - En la tabla "Proyectos", "HH asignadas" escala todo el plan.
+  - Exportar > "Planes de recursos Otro (CSV)": una fila por proyecto, mes y
+    especialidad. La lista de proyectos lleva el plan en la columna
+    "Plan Manual", asi que se puede volver a importar.
+
 REGISTRO DE CAMBIOS
   Cada Guardar anota qué cambió y quién lo hizo (por ejemplo "PABRA: Inicio
   ene-27 -> jun-27"). Se ve en el diálogo de la carpeta > Historial, y en el

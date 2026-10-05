@@ -46,7 +46,37 @@
   }
 
   // ≙ Forecast_Componentes
+  // ---- tecnología «Otro»: plan de recursos manual (especialidad × mes) ----
+  const HH_PERSONA_DEFECTO = 140 * 0.85;
+  const esOtro = (p) => p.tecnologia === 'Otro';
+  function planHH(p, params) {
+    const plan = p.planManual || {};
+    const n = Math.trunc(Number(plan.meses) || 0);
+    const f = (plan.unidad || 'personas') === 'personas' ? Number(params.hhPersonaMes) || HH_PERSONA_DEFECTO : 1;
+    const out = {};
+    for (const [esp, vals] of Object.entries(plan.valores || {})) {
+      const v = (vals || []).slice(0, n).map((x) => (Number(x) || 0) * f);
+      while (v.length < n) v.push(0);
+      out[esp] = v;
+    }
+    return out;
+  }
+  function curvasDe(p, curvas, params) {
+    if (!esOtro(p)) return curvas;
+    const hh = planHH(p, params);
+    let total = 0;
+    for (const v of Object.values(hh)) for (const x of v) total += x;
+    const c = {};
+    if (total > 0) for (const [e, v] of Object.entries(hh)) c[e] = v.map((x) => x / total);
+    return { Manual: c };
+  }
+
   function componentes(p, params) {
+    if (esOtro(p)) {
+      let total = 0;
+      for (const v of Object.values(planHH(p, params))) for (const x of v) total += x;
+      return [{ componente: 'Otro', curva: 'Manual', hh: total }];
+    }
     if (p.tipoCliente === 'DNN') {
       const hh = !vacio(p.hhProy) ? p.hhProy : hhParqueBase(p, params) * (params.factorDNN[p.nivelDNN] || 0);
       return [{ componente: 'DNN', curva: p.nivelDNN, hh: Number(hh) }];
@@ -104,6 +134,7 @@
     Math.max(0, ...Object.values(curvas[nombre] || {}).map((v) => v.length));
 
   function duracionBase(p, curvas, params) {
+    curvas = curvasDe(p, curvas, params);
     return Math.max(0, ...componentes(p, params).map((c) => largoCurva(curvas, c.curva)));
   }
 
@@ -134,6 +165,7 @@
 
   // [[desplazamiento, duración]] del bloque original y de cada sensibilidad DNN.
   function bloques(p, curvas, params) {
+    curvas = curvasDe(p, curvas, params);
     const comps = componentes(p, params);
     const nBase = Math.max(0, ...comps.map((c) => largoCurva(curvas, c.curva)));
     const dur = Math.max(0, ...comps.map((c) => largoComponente(largoCurva(curvas, c.curva), nBase, p.duracion)));
@@ -146,13 +178,14 @@
     for (const p of proyectos) {
       if (p.incluir === false) continue;
       const inicio = mesIdx(p.fechaInicio) + (Number(p.desplazamiento) || 0);
-      const solap = vacio(p.factorSolapamiento) ? 1 : Number(p.factorSolapamiento);
+      const solap = vacio(p.factorSolapamiento) || esOtro(p) ? 1 : Number(p.factorSolapamiento); // «Otro»: sin solapamiento
+      const cv = curvasDe(p, curvas, params);
       const comps = componentes(p, params);
-      const nBase = Math.max(0, ...comps.map((c) => largoCurva(curvas, c.curva)));
+      const nBase = Math.max(0, ...comps.map((c) => largoCurva(cv, c.curva)));
       const desp = bloques(p, curvas, params).map((x) => x[0]);
       for (const c of comps) {
-        const curva = curvas[c.curva] || {};
-        const nC = largoCurva(curvas, c.curva);
+        const curva = cv[c.curva] || {};
+        const nC = largoCurva(cv, c.curva);
         const nNuevo = largoComponente(nC, nBase, p.duracion);
         for (const esp of Object.keys(curva)) {
           let factores = curva[esp];
@@ -208,7 +241,8 @@
   function calcular(datos, escenario) {
     const { proyectos, cap } = aplicarEscenario(datos, escenario);
     const esps = datos.especialidades;
-    const filas = forecast(proyectos, datos.curvas, datos.parametros);
+    const params = Object.assign({}, datos.parametros, { hhPersonaMes: cap.hhMesPersona * cap.eficiencia });
+    const filas = forecast(proyectos, datos.curvas, params);
     const m0 = mesIdx(datos.horizonte.desde);
     let n = datos.horizonte.meses;
     // Si algún proyecto termina después del horizonte configurado, se extiende hasta su último mes.
@@ -352,6 +386,6 @@
   }
 
   return { TIPOS_CLIENTE, TAMANOS, tamano, mesIdx, mesStr, interpolar, componentes, aplicarEscenario, forecast,
-    personasBase, personaActiva, sensibilidades, bloques, MESES_SENSIBILIDAD, largoCurva, duracionBase, reescalar, largoComponente,
+    esOtro, planHH, curvasDe, HH_PERSONA_DEFECTO, personasBase, personaActiva, sensibilidades, bloques, MESES_SENSIBILIDAD, largoCurva, duracionBase, reescalar, largoComponente,
     capacidadMes, calcular, detalle, mejorInicio, dotacionMinima };
 });

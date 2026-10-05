@@ -65,6 +65,10 @@ ni cuentas de Claude o GitHub: alcanza con la cuenta de Microsoft de la empresa 
   `capacidad.dotacion`). Pegar desde Excel, vacantes desde «Nivelar», cambios en el registro.
 - **HH manuales por proyecto:** en el panel del proyecto, HH por componente (modelo vs. asignadas) con motivo;
   vacío = modelo. Se exportan en las columnas «HH Estimadas …».
+- **Tecnología «Otro»:** proyectos fuera de las tecnologías predefinidas llevan su propio plan de recursos
+  (`planManual`: especialidad × mes, en personas equivalentes o HH) en lugar de tablas de HH y curvas; sin
+  factor de solapamiento. Editor con generador desde un total de HH, escalado desde la tabla, reescalado al
+  cambiar la duración y exportación del plan. El motor (Python y JS) lo trata como una curva «Manual».
 - **Registro de cambios:** cada guardado anota qué cambió (altas, bajas, campos con valor anterior y nuevo,
   recursos, parámetros) y quién; se ve en el historial y en el aviso de conflicto.
 - Sin carpeta conectada sigue funcionando como antes (datos en el navegador, Exportar/Importar JSON).

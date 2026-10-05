@@ -168,6 +168,8 @@ button.area .gcnt{font:600 10.5px/1 var(--f-num);color:var(--ink-soft);margin-to
 .seg.resizing{cursor:ew-resize;opacity:.85;z-index:15}
 .seg.sel{box-shadow:inset 0 0 0 1px rgba(0,0,0,.10),0 0 0 2px var(--today);z-index:12}
 .seg.dim{opacity:.16;filter:grayscale(.6)}
+.seg.otro{box-shadow:inset 0 0 0 1px rgba(0,0,0,.10),inset 0 -3px 0 rgba(0,0,0,.30)}
+.fl.otro{background:var(--ink);color:var(--paper,#fff)}
 .seg.sens{cursor:pointer;background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.55) 0 4px,transparent 4px 8px)!important;
   box-shadow:inset 0 0 0 1px rgba(0,0,0,.25);outline:1px dashed var(--ink-soft);outline-offset:-1px}
 .seg.sens .stag{position:absolute;left:3px;top:-1px;font:700 8.5px/1 var(--f-num);color:var(--t-ink);opacity:.8;pointer-events:none}
@@ -442,6 +444,8 @@ var TIPOS=[
 ];
 var TIPO={};TIPOS.forEach(function(t){TIPO[t.k]=t;});
 var TECNOS=["Solar","Bess","Eólico","Termico"];
+/* «Otro»: tecnología sin tablas de HH ni curvas; lleva su propio plan de recursos (especialidad × mes) */
+var TECNOS_P=TECNOS.concat(["Otro"]);
 var ABREV={"Civiles":"Civ.","Coordinadores":"Coord.","Eléctricos":"Eléc.","Electrónicos":"Electrón.","Mecánicos":"Mec.","Estudios":"Estud."};
 /* singular de cada especialidad (para nombres a completar y vacantes) */
 var SINGULAR={"Civiles":"Civil","Coordinadores":"Coordinador","Eléctricos":"Eléctrico","Electrónicos":"Electrónico","Mecánicos":"Mecánico","Estudios":"Estudios"};
@@ -541,11 +545,16 @@ function datosVista(d){
 function recalc(){R=E.calcular(datosVista(S.datos));RB=E.calcular(datosVista(S.base));}
 function mIdx(ym){return E.mesIdx(ym)-E.mesIdx(S.datos.horizonte.desde);}
 /* span de un proyecto: inicio y duración en meses (componente más largo) */
+/* parámetros para el motor + HH por persona·mes (convierte el plan manual de «Otro» a HH) */
+function hpMes(){var c=S.datos.capacidad;return c.hhMesPersona*c.eficiencia;}
+function PV(){return Object.assign({},S.datos.parametros,{hhPersonaMes:hpMes()});}
+function esOtro(p){return E.esOtro(p);}
 function spanOf(p){
-  var comps=E.componentes(p,S.datos.parametros),base=0,dur=0,parts=[];
-  comps.forEach(function(c){base=Math.max(base,E.largoCurva(S.datos.curvas,c.curva));});
+  var pv=PV(),cv=E.curvasDe(p,S.datos.curvas,pv),comps=E.componentes(p,pv),base=0,dur=0,parts=[];
+  comps.forEach(function(c){base=Math.max(base,E.largoCurva(cv,c.curva));});
+  if(esOtro(p)&&!base)base=Math.max(1,+((p.planManual||{}).meses)||1); /* plan vacío: igual ocupa sus meses */
   comps.forEach(function(c){
-    var nc=E.largoCurva(S.datos.curvas,c.curva),n=E.largoComponente(nc,base,p.duracion);
+    var nc=E.largoCurva(cv,c.curva)||base,n=E.largoComponente(nc,base,p.duracion);
     parts.push({c:c,n:n,n0:nc});dur=Math.max(dur,n);
   });
   return {start:mIdx(p.fechaInicio)+(+p.desplazamiento||0),dur:dur,base:base,comps:comps,parts:parts};
@@ -554,18 +563,18 @@ function spanOf(p){
 var CAMPO_HH={"Parque":"hhParque","ET":"hhEt","Línea":"hhLinea","DNN":"hhProy","O&M":"hhProy"};
 function vacioV(v){return v==null||v==="";}
 function hhManual(p){return ["hhParque","hhEt","hhLinea","hhProy"].some(function(k){return !vacioV(p[k]);});}
-function hhModelo(p){return E.componentes(Object.assign({},p,{hhParque:null,hhEt:null,hhLinea:null,hhProy:null}),S.datos.parametros);}
+function hhModelo(p){return E.componentes(Object.assign({},p,{hhParque:null,hhEt:null,hhLinea:null,hhProy:null}),PV());}
 function durMod(p){return p.duracion!=null&&p.duracion!=="";}
 /* fija la duración; si coincide con la de las curvas vuelve a "automática" */
 function setDur(p,n){var b=spanOf(Object.assign({},p,{duracion:null})).base;n=Math.max(1,Math.min(60,Math.round(n)));p.duracion=(n===b)?null:n;}
 /* HH mensuales de un proyecto (todas las especialidades) */
 function hhMensual(p){
-  var f=E.forecast([Object.assign({incluir:true},p)],S.datos.curvas,S.datos.parametros),m0=E.mesIdx(S.datos.horizonte.desde),out={};
+  var f=E.forecast([Object.assign({incluir:true},p)],S.datos.curvas,PV()),m0=E.mesIdx(S.datos.horizonte.desde),out={};
   f.forEach(function(r){var i=r.mes-m0;out[i]=(out[i]||0)+r.hh;});
   return out;
 }
 function nSens(p){return E.sensibilidades(p);}
-function totalP(p){var t=0;E.componentes(p,S.datos.parametros).forEach(function(c){t+=c.hh;});return t*(1+nSens(p))*(p.factorSolapamiento==null||p.factorSolapamiento===""?1:+p.factorSolapamiento);}
+function totalP(p){var t=0;E.componentes(p,PV()).forEach(function(c){t+=c.hh;});return t*(1+nSens(p))*(esOtro(p)||p.factorSolapamiento==null||p.factorSolapamiento===""?1:+p.factorSolapamiento);}
 
 /* ===================== render: cabecera ===================== */
 function renderHead(){
@@ -598,11 +607,12 @@ function renderRows(){
       names+='<div class="tname'+(isSel?" sel":"")+(excl?" excl":"")+(hit?"":" off")+'" data-p="'+esc(p.id)+'">'
         +'<input type="checkbox" data-inc="'+esc(p.id)+'"'+(excl?"":" checked")+' title="Incluir en el cálculo" aria-label="Incluir '+esc(p.proyecto)+'">'
         +'<span class="nm" title="'+esc(p.proyecto+(p.nombre?" · "+p.nombre:"")+(p.estado?" · "+p.estado:""))+'">'+esc(p.proyecto)+(p.nombre?' <small style="color:var(--ink-soft)">'+esc(p.nombre)+'</small>':'')+'</span>'
-        +((nSens(p)||hhManual(p)||durMod(p))?'':'<span class="fl hide-s">'+esc(p.tecnologia)+' '+NF0.format(+p.potencia||0)+' MW</span>')
+        +(esOtro(p)?'<span class="fl otro" title="Tecnología «Otro»: plan de recursos cargado a mano">plan</span>':'')
+        +((esOtro(p)||nSens(p)||hhManual(p)||durMod(p))?'':'<span class="fl hide-s">'+esc(p.tecnologia)+' '+NF0.format(+p.potencia||0)+' MW</span>')
         +'<span class="fl">'+hhK(tot)+'</span>'
-        +(hhManual(p)?'<span class="fl warn" title="HH cargadas a mano'+(p.notaHH?': '+esc(p.notaHH):'')+'">✎</span>':'')
+        +(hhManual(p)&&!esOtro(p)?'<span class="fl warn" title="HH cargadas a mano'+(p.notaHH?': '+esc(p.notaHH):'')+'">✎</span>':'')
         +(nSens(p)?'<span class="fl warn" title="'+nSens(p)+' sensibilidad(es): bloque repetido 3 meses después del anterior">+'+nSens(p)+' sens.</span>':'')
-        +(durMod(p)?'<span class="fl warn" title="Duración modificada: '+spanOf(p).base+' meses según curvas">'+p.duracion+' m</span>':'')
+        +(durMod(p)?'<span class="fl warn" title="Duración modificada: '+spanOf(p).base+' meses según '+(esOtro(p)?'el plan':'curvas')+'">'+p.duracion+' m</span>':'')
         +(p.simulable?'':'<span class="fl lock" title="Proyecto no simulable: fecha fija">fijo</span>')
         +'</div>';
       tls+=barHTML(p,w,hit);
@@ -617,7 +627,7 @@ function renderRows(){
 }
 function barHTML(p,w,hit){
   var sp=spanOf(p),cw=S.cw,m=hhMensual(p),t=TIPO[p.tipoCliente]||TIPOS[0];
-  var cls="seg"+(p.simulable?" mov":"")+(sel&&sel.p===String(p.id)?" sel":"")+(p.incluir===false?" excl":"")
+  var cls="seg"+(esOtro(p)?" otro":"")+(p.simulable?" mov":"")+(sel&&sel.p===String(p.id)?" sel":"")+(p.incluir===false?" excl":"")
     +(S.filtro&&S.filtro!==p.tipoCliente?" dim":"");
   var cells="";
   for(var k=0;k<sp.dur;k++){cells+='<div class="c">'+(cw>=38?hhK(m[sp.start+k]||0):"")+'</div>';}
@@ -629,7 +639,7 @@ function barHTML(p,w,hit){
   var hd=p.simulable?'<div class="h l" data-h="l" title="Arrastrá para cambiar el inicio y la duración"></div><div class="h r" data-h="r" title="Arrastrá para cambiar la duración"></div>':'';
   /* sensibilidades DNN: mismo bloque repetido, 3 meses después del anterior */
   var sens="";
-  E.bloques(p,S.datos.curvas,S.datos.parametros).slice(1).forEach(function(bl,i){
+  E.bloques(p,S.datos.curvas,PV()).slice(1).forEach(function(bl,i){
     var st=sp.start+bl[0],c2="";
     for(var k=0;k<bl[1];k++)c2+='<div class="c">'+(cw>=38?hhK(m[st+k]||0):"")+'</div>';
     sens+='<div class="'+cls.replace(" mov","").replace(" sel","")+' sens" data-seg="'+esc(p.id)+'" data-sens="'+(i+1)+'" style="left:'+px(st*cw)+';width:'+px(bl[1]*cw)
@@ -827,7 +837,7 @@ function edResumen(){
   if(R.pareto.length>10)html+='<div class="hint">'+(R.pareto.length-10)+' proyectos más fuera del top 10. Los 10 primeros suman '+NFP.format(R.pareto[9].pctAcum)+' de la demanda.</div>';
   html+='<h4>Demanda por componente</h4><table class="pk"><tr><th>Componente</th><th class="r">HH</th><th class="r">%</th></tr>';
   var tot=R.kpis.hhForecastTotal||1;
-  ["Parque","ET","Línea","DNN","O&M"].forEach(function(c){var v=R.mixComponente[c]||0;if(v)html+='<tr><td>'+c+'</td><td class="calc">'+hh(v)+'</td><td class="calc">'+NFP.format(v/tot)+'</td></tr>';});
+  ["Parque","ET","Línea","DNN","O&M","Otro"].forEach(function(c){var v=R.mixComponente[c]||0;if(v)html+='<tr><td>'+c+'</td><td class="calc">'+hh(v)+'</td><td class="calc">'+NFP.format(v/tot)+'</td></tr>';});
   html+='</table>';
   ed.innerHTML=html;
 }
@@ -840,7 +850,8 @@ function sel_(o){
 function edProyecto(p){
   var sp=spanOf(p),tipo=p.tipoCliente,tot=0;
   sp.comps.forEach(function(c){tot+=c.hh;});
-  var solap=(p.factorSolapamiento==null||p.factorSolapamiento==="")?1:+p.factorSolapamiento;
+  var solap=(p.factorSolapamiento==null||p.factorSolapamiento==="")?1:+p.factorSolapamiento,otro=esOtro(p);
+  if(otro)solap=1;
   var opt=function(list,v,blank){if(v&&list.indexOf(v)<0)list=list.concat([v]);return (blank?'<option value="">—</option>':'')+list.map(function(x){return '<option'+(String(x)===String(v)?" selected":"")+'>'+esc(x)+'</option>';}).join("");};
   var html='<h3>'+esc(p.proyecto)+(p.nombre?' · '+esc(p.nombre):'')+'</h3><div class="sub">'+esc(TIPO[tipo]?TIPO[tipo].d:tipo)+(p.estado?' · '+esc(p.estado):'')+(p.tensionPOE?' · POE '+NF0.format(p.tensionPOE)+' kV':'')+' · '+mlabel(p.fechaInicio)+' → '+mlabel(R&&E.mesStr(E.mesIdx(p.fechaInicio)+sp.dur-1))+' · '+sp.dur+' meses</div>';
   if(!p.simulable)html+='<div class="holg">Calendario fijo (no simulable): inicio y duración no se mueven. Desmarcá «Calendario Fijo» (marcá Simulable) para arrastrarlo o buscarle el mejor inicio y duración.</div>';
@@ -848,22 +859,25 @@ function edProyecto(p){
     +'<div class="f"><label for="edNom">Nombre</label><input type="text" id="edNom" value="'+esc(p.nombre||"")+'"></div></div>'
     +'<div class="two"><div class="f"><label for="edTipo">Tipo cliente</label><select id="edTipo">'+opt(["DPI","DNN","O&M"],tipo)+'</select></div>'
     +'<div class="f"><label for="edEstado">Estado</label><select id="edEstado">'+opt(ESTADOS,p.estado)+'</select></div></div>'
-    +'<div class="two"><div class="f"><label for="edTec">Tecnología</label><select id="edTec">'+opt(TECNOS,p.tecnologia)+'</select></div>'
-    +'<div class="f"><label for="edMW">Potencia (MW)</label><input type="number" id="edMW" min="0" step="10" value="'+esc(p.potencia)+'"></div></div>'
-    +'<div class="two"><div class="f"><label for="edTam">Tamaño</label><select id="edTam"><option value=""'+(p.tamano?"":" selected")+'>Auto por potencia ('+E.tamano(Object.assign({},p,{tamano:null}),S.datos.parametros)+')</option>'+TAMANOS.map(function(x){return '<option'+(x===p.tamano?" selected":"")+'>'+x+'</option>';}).join("")+'</select></div>'
+    +'<div class="two"><div class="f"><label for="edTec">Tecnología</label><select id="edTec">'+opt(TECNOS_P,p.tecnologia)+'</select></div>'
+    +'<div class="f"><label for="edMW">Potencia (MW'+(otro?', informativa':'')+')</label><input type="number" id="edMW" min="0" step="10" value="'+esc(p.potencia)+'"></div></div>'
+    +'<div class="two">'+(otro?'<div class="f"><label>Tamaño</label><div class="holg" style="margin:0;padding:6px 8px">no aplica</div></div>'
+      :'<div class="f"><label for="edTam">Tamaño</label><select id="edTam"><option value=""'+(p.tamano?"":" selected")+'>Auto por potencia ('+E.tamano(Object.assign({},p,{tamano:null}),S.datos.parametros)+')</option>'+TAMANOS.map(function(x){return '<option'+(x===p.tamano?" selected":"")+'>'+x+'</option>';}).join("")+'</select></div>')
     +'<div class="f"><label for="edIni">Fecha inicio</label><input type="month" id="edIni" value="'+esc(p.fechaInicio)+'"></div></div>'
     +'<div class="two"><div class="f"><label for="edDur">Duración (meses)</label><input type="number" id="edDur" min="1" max="60" step="1" value="'+sp.dur+'"></div>'
-    +'<div class="f"><label>Fin</label><div class="holg" style="margin:0;padding:6px 8px">'+mlabel(E.mesStr(E.mesIdx(p.fechaInicio)+sp.dur-1))+(durMod(p)?' · curvas: '+sp.base+' m <button class="btn sm" id="edDurReset" style="padding:0 6px" title="Volver a la duración de las curvas">auto</button>':' · según curvas')+'</div></div></div>';
-  if(tipo==="DPI"){
+    +'<div class="f"><label>Fin</label><div class="holg" style="margin:0;padding:6px 8px">'+mlabel(E.mesStr(E.mesIdx(p.fechaInicio)+sp.dur-1))+(durMod(p)?' · '+(otro?'plan':'curvas')+': '+sp.base+' m <button class="btn sm" id="edDurReset" style="padding:0 6px" title="Volver a la duración '+(otro?'del plan':'de las curvas')+'">auto</button>':(otro?' · según el plan':' · según curvas'))+'</div></div></div>';
+  if(tipo==="DPI"&&!otro){
     html+='<div class="two"><div class="f"><label for="edEt">Est. transformadora</label><select id="edEt">'+opt(["ET Nueva","Ampliación ET"],p.est,true)+'</select></div>'
       +'<div class="f"><label for="edLn">Línea</label><select id="edLn">'+opt(["Línea AT","Línea MT"],p.linea,true)+'</select></div></div>';
   }
   if(tipo==="DNN")html+='<div class="f"><label for="edDnn">Nivel DNN</label><select id="edDnn">'+opt(["DNN Cat1","DNN Cat2"],p.nivelDNN)+'</select></div>';
   html+='<div class="two"><div class="f"><label for="edPoe">Tensión POE (kV)</label><input type="number" id="edPoe" min="0" step="1" value="'+esc(p.tensionPOE==null?"":p.tensionPOE)+'"></div>'
     +'<div class="f"><label for="edAv">% Avance</label><input type="number" id="edAv" min="0" max="100" step="5" value="'+esc(p.avance==null?"":p.avance)+'"></div></div>';
-  html+='<div class="two"><div class="f"><label for="edSol">Factor solapamiento (%)</label><input type="number" id="edSol" min="0" max="100" step="5" value="'+Math.round(solap*100)+'"></div><div></div></div>'
-    +'<div class="row-actions"><label class="chk"><input type="checkbox" id="edSim"'+(p.simulable?" checked":"")+'> Simulable <span style="color:var(--ink-soft)">(Calendario Fijo = No)</span></label>'
+  if(!otro)html+='<div class="two"><div class="f"><label for="edSol">Factor solapamiento (%)</label><input type="number" id="edSol" min="0" max="100" step="5" value="'+Math.round(solap*100)+'"></div><div></div></div>';
+  html+='<div class="row-actions"><label class="chk"><input type="checkbox" id="edSim"'+(p.simulable?" checked":"")+'> Simulable <span style="color:var(--ink-soft)">(Calendario Fijo = No)</span></label>'
     +'<label class="chk"><input type="checkbox" id="edInc"'+(p.incluir===false?"":" checked")+'> Incluir en el cálculo</label></div>';
+  if(otro)html+=resumenPlan(p);
+  else{
   var mod=hhModelo(p),totMod=0,man=hhManual(p);
   html+='<h4>HH del proyecto · por componente</h4><table class="pk"><tr><th>Componente</th><th class="r">Modelo</th><th class="r">HH asignadas</th><th class="r">Meses</th><th></th></tr>';
   sp.parts.forEach(function(pt,i){
@@ -878,7 +892,8 @@ function edProyecto(p){
   html+='<div class="hint">Dejá vacío para usar la base de datos de HH (Parámetros). Un valor cargado pisa el modelo solo para este proyecto'+(solap<1?'; el factor de solapamiento se aplica igual sobre ese valor':'')+'.</div>';
   if(man)html+='<div class="f" style="margin-top:8px"><label for="edNotaHH">Motivo del ajuste de HH</label><input type="text" id="edNotaHH" value="'+esc(p.notaHH||"")+'" placeholder="Ej.: alcance reducido, ingeniería del cliente"></div>'
     +'<div class="row-actions"><button class="btn sm" id="edHHReset">Volver todo al modelo</button></div>';
-  if(durMod(p))html+='<div class="hint">Duración modificada: cada curva se reescala en el tiempo y conserva sus HH totales. Acortar concentra la demanda (más HH por mes); alargar la diluye.</div>';
+  }
+  if(durMod(p))html+=otro?'<div class="hint">Duración modificada: el plan se reescala en el tiempo y conserva sus HH totales (abrí el plan para fijarlo así).</div>':'<div class="hint">Duración modificada: cada curva se reescala en el tiempo y conserva sus HH totales. Acortar concentra la demanda (más HH por mes); alargar la diluye.</div>';
   if(solap<1)html+='<div class="hint">El factor de solapamiento descuenta '+NFP.format(1-solap)+' de las HH por ejecución simultánea con proyectos similares.</div>';
   html+='<h4>Mover inicio</h4><div class="row-actions">'
     +'<button class="btn sm" data-mv="-3"'+(p.simulable?"":" disabled")+'>−3 m</button><button class="btn sm" data-mv="-1"'+(p.simulable?"":" disabled")+'>−1 m</button>'
@@ -889,7 +904,7 @@ function edProyecto(p){
     +'<button class="btn sm" data-du="1"'+(p.simulable?"":" disabled")+'>+1 m</button><button class="btn sm" data-du="3"'+(p.simulable?"":" disabled")+'>+3 m</button>'
     +'<button class="btn sm primary" id="bestDurBtn"'+(p.simulable?"":" disabled")+' title="Prueba duraciones de 50 % a 200 % y elige la que menos HH excede">Mejor duración</button></div><div id="bestDurBox"></div>';
   if(tipo==="DNN"){
-    var bls=E.bloques(p,S.datos.curvas,S.datos.parametros),i0=E.mesIdx(p.fechaInicio),hb=tot*solap;
+    var bls=E.bloques(p,S.datos.curvas,PV()),i0=E.mesIdx(p.fechaInicio),hb=tot*solap;
     html+='<h4>Sensibilidades</h4><div class="psub" style="margin-bottom:6px">Cada sensibilidad repite el bloque de trabajo (mismas HH, curva y duración) y arranca '+E.MESES_SENSIBILIDAD+' meses después de que termina el bloque anterior.</div>'
       +'<table class="pk"><tr><th>Bloque</th><th>Período</th><th class="r">HH</th></tr>'
       +bls.map(function(bl,i){return '<tr><td>'+(i?'Sensibilidad '+i:'Original')+'</td><td>'+mlabel(E.mesStr(i0+bl[0]))+' → '+mlabel(E.mesStr(i0+bl[0]+bl[1]-1))+'</td><td class="calc">'+hh(hb)+'</td></tr>';}).join("")
@@ -905,16 +920,16 @@ function edProyecto(p){
   ge("edNom").onchange=function(){var v=this.value.trim();set(function(){p.nombre=v||null;});};
   ge("edTipo").onchange=function(){var v=this.value;set(function(){p.tipoCliente=v;if(v==="DNN"&&!p.nivelDNN)p.nivelDNN="DNN Cat1";if(v!=="DNN")p.nivelDNN=null;});};
   ge("edEstado").onchange=function(){var v=this.value;set(function(){p.estado=v;});};
-  ge("edTec").onchange=function(){var v=this.value;set(function(){p.tecnologia=v;});};
+  ge("edTec").onchange=function(){var v=this.value,nuevo=v==="Otro"&&!otro;set(function(){if(v==="Otro")aOtro(p);else p.tecnologia=v;});if(nuevo){toast("«Otro»: el plan arranca con lo que calculaba el modelo; editalo a gusto");openPlan(p);}};
   ge("edMW").onchange=function(){var v=+this.value;set(function(){p.potencia=v;});};
-  ge("edTam").onchange=function(){var v=this.value||null;set(function(){p.tamano=v;});};
+  if(ge("edTam"))ge("edTam").onchange=function(){var v=this.value||null;set(function(){p.tamano=v;});};
   ge("edIni").onchange=function(){var v=this.value;if(/^\d{4}-\d{2}$/.test(v))set(function(){p.fechaInicio=v;});};
   if(ge("edEt"))ge("edEt").onchange=function(){var v=this.value||null;set(function(){p.est=v;});};
   if(ge("edLn"))ge("edLn").onchange=function(){var v=this.value||null;set(function(){p.linea=v;});};
   if(ge("edDnn"))ge("edDnn").onchange=function(){var v=this.value;set(function(){p.nivelDNN=v;});};
   ge("edPoe").onchange=function(){var v=this.value===""?null:Math.max(0,+this.value);set(function(){p.tensionPOE=v;});};
   ge("edAv").onchange=function(){var v=this.value===""?null:Math.max(0,Math.min(100,+this.value));set(function(){p.avance=v;});};
-  ge("edSol").onchange=function(){var v=Math.max(0,Math.min(100,+this.value||0))/100;set(function(){p.factorSolapamiento=v;});};
+  if(ge("edSol"))ge("edSol").onchange=function(){var v=Math.max(0,Math.min(100,+this.value||0))/100;set(function(){p.factorSolapamiento=v;});};
   ed.querySelectorAll("[data-hhm]").forEach(function(inp){inp.onchange=function(){
     var k=inp.dataset.hhm,v=inp.value===""?null:parseFloat(String(inp.value).replace(",","."));
     if(v!=null&&(isNaN(v)||v<0)){toast("Ingresá un número de HH mayor o igual a cero");renderEditor();return;}
@@ -922,6 +937,7 @@ function edProyecto(p){
     if(v!=null){var n=document.getElementById("edNotaHH");if(n&&!n.value)n.focus();}
   };});
   ed.querySelectorAll("[data-hhr]").forEach(function(b){b.onclick=function(){var k=b.dataset.hhr;set(function(){p[k]=null;if(!hhManual(p))p.notaHH=null;});};});
+  if(ge("edPlan"))ge("edPlan").onclick=function(){openPlan(p);};
   if(ge("edNotaHH"))ge("edNotaHH").onchange=function(){var v=this.value.trim()||null;set(function(){p.notaHH=v;});};
   if(ge("edHHReset"))ge("edHHReset").onclick=function(){set(function(){p.hhParque=p.hhEt=p.hhLinea=p.hhProy=null;p.notaHH=null;});toast("HH de "+p.proyecto+" vuelven al modelo");};
   ge("edSim").onchange=function(){var v=this.checked;set(function(){p.simulable=v;});};
@@ -933,13 +949,175 @@ function edProyecto(p){
   ge("bestDurBtn").onclick=function(){mejorDuracion(p);};
   if(ge("sensAdd"))ge("sensAdd").onclick=function(){
     set(function(){p.sensibilidades=nSens(p)+1;});
-    var bl=E.bloques(p,S.datos.curvas,S.datos.parametros),u=bl[bl.length-1],i0=E.mesIdx(p.fechaInicio);
+    var bl=E.bloques(p,S.datos.curvas,PV()),u=bl[bl.length-1],i0=E.mesIdx(p.fechaInicio);
     toast("Sensibilidad "+nSens(p)+" de "+p.proyecto+": "+mlabel(E.mesStr(i0+u[0]))+" → "+mlabel(E.mesStr(i0+u[0]+u[1]-1)));
   };
   if(ge("sensDel"))ge("sensDel").onclick=function(){set(function(){p.sensibilidades=Math.max(0,nSens(p)-1)||null;});};
   ge("bestBtn").onclick=function(){mejorInicio(p);};
   ge("dupBtn").onclick=function(){set(function(){var q=clone(p);q.id=nextId();q.proyecto=p.proyecto+" (copia)";S.datos.proyectos.push(q);sel={p:String(q.id)};});toast("Proyecto duplicado");};
   ge("delBtn").onclick=function(){set(function(){S.datos.proyectos=S.datos.proyectos.filter(function(q){return q!==p;});sel=null;});toast("Proyecto eliminado · Ctrl+Z para deshacer");};
+}
+/* ===================== tecnología «Otro»: plan de recursos manual ===================== */
+/* planManual={unidad:"personas"|"hh",meses:n,valores:{especialidad:[n valores]}}
+   personas = personas equivalentes (1 persona = HH/persona·mes × eficiencia de Recursos). */
+function planDe(p){
+  var pl=p.planManual;
+  if(!pl||typeof pl!=="object")pl=p.planManual={unidad:"personas",meses:6,valores:{}};
+  if(!pl.valores)pl.valores={};
+  pl.meses=Math.max(1,Math.min(60,Math.round(+pl.meses||1)));
+  if(pl.unidad!=="hh")pl.unidad="personas";
+  return pl;
+}
+function factorPlan(pl){return pl.unidad==="hh"?1:hpMes();}
+function totalPlan(p){var t=0,h=E.planHH(p,PV());Object.keys(h).forEach(function(e){h[e].forEach(function(x){t+=x;});});return t;}
+function r2(v){return Math.round(v*100)/100;}
+/* pasa un proyecto a «Otro»: el plan arranca con lo que calculaba el modelo (personas equivalentes) */
+function aOtro(p){
+  var dur=spanOf(p).dur||6,ini=mIdx(p.fechaInicio)+(+p.desplazamiento||0),val={},hp=hpMes(),m0=E.mesIdx(S.datos.horizonte.desde);
+  E.forecast([Object.assign({},p,{incluir:true,sensibilidades:null})],S.datos.curvas,PV()).forEach(function(r){
+    var k=r.mes-m0-ini;if(k<0||k>=dur)return;
+    (val[r.especialidad]=val[r.especialidad]||new Array(dur).fill(0))[k]+=r.hh/hp;
+  });
+  Object.keys(val).forEach(function(e){val[e]=val[e].map(r2);});
+  p.tecnologia="Otro";
+  if(!p.planManual||!p.planManual.meses)p.planManual={unidad:"personas",meses:dur,valores:val};
+  p.duracion=null;p.factorSolapamiento=1;p.hhParque=p.hhEt=p.hhLinea=p.hhProy=null;
+}
+/* escala todo el plan para que sume «total» HH */
+function escalarPlan(p,total){
+  var t=totalPlan(p),pl=planDe(p);if(!(t>0))return;
+  var k=total/t;
+  Object.keys(pl.valores).forEach(function(e){pl.valores[e]=pl.valores[e].map(function(v){return pl.unidad==="hh"?Math.round((+v||0)*k):r2((+v||0)*k);});});
+}
+function resumenPlan(p){
+  var pl=planDe(p),h=E.planHH(p,PV()),hp=hpMes(),f=factorPlan(pl),tot=0,html='<h4>Plan de recursos · cargado a mano</h4>';
+  var filas=S.datos.especialidades.filter(function(e){return (h[e]||[]).some(function(x){return x>0;});});
+  filas.forEach(function(e){h[e].forEach(function(x){tot+=x;});});
+  if(!filas.length)html+='<div class="holg crit">El plan está vacío: este proyecto no suma HH. Cargá cuántas personas (o HH) de cada especialidad necesita por mes.</div>';
+  else{
+    html+='<table class="pk"><tr><th>Especialidad</th><th class="r" title="Promedio de los meses con carga">Personas prom.</th><th class="r">Pico</th><th class="r">HH</th></tr>';
+    filas.forEach(function(e){
+      var v=h[e],con=v.filter(function(x){return x>0;}),s=v.reduce(function(a,b){return a+b;},0);
+      html+='<tr><td>'+esc(e)+'</td><td class="calc">'+fmtPers(s/con.length/hp)+'</td><td class="calc">'+fmtPers(Math.max.apply(null,v)/hp)+'</td><td class="calc">'+hh(s)+'</td></tr>';
+    });
+    html+='<tr><td><b>Total</b></td><td></td><td></td><td class="calc">'+hh(tot)+'</td></tr></table>';
+  }
+  html+='<div class="hint">'+pl.meses+' meses · unidad: '+(pl.unidad==="hh"?'HH':'personas equivalentes (1 persona = '+NF0.format(hp)+' HH/mes)')+'. Sin factor de solapamiento: las HH del plan son las que se cargan.</div>'
+    +'<div class="row-actions"><button class="btn sm primary" id="edPlan">Editar plan de recursos</button></div>'
+    +'<div class="f" style="margin-top:8px"><label for="edNotaHH">Supuestos del plan</label><input type="text" id="edNotaHH" value="'+esc(p.notaHH||"")+'" placeholder="Ej.: alcance, tecnología, referencias usadas"></div>';
+  return html;
+}
+var FORMAS={pareja:"Pareja",campana:"Campana",creciente:"Creciente",decreciente:"Decreciente"};
+function formaPlan(forma,n){
+  var w=[];for(var i=0;i<n;i++)w.push(forma==="campana"?Math.sin(Math.PI*(i+0.5)/n):forma==="creciente"?i+1:forma==="decreciente"?n-i:1);
+  var s=w.reduce(function(a,b){return a+b;},0);return w.map(function(x){return x/s;});
+}
+var planGen=null; /* último «Generar desde total» (por proyecto) */
+function openPlan(p){
+  var top=dlg.open?dlg.scrollTop:0,pl=planDe(p),n=pl.meses,f=factorPlan(pl),hp=hpMes(),pers=pl.unidad!=="hh";
+  var ini=E.mesIdx(p.fechaInicio),esps=S.datos.especialidades,totMes=new Array(n).fill(0),tot=0;
+  var html='<h3>Plan de recursos · '+esc(p.proyecto)+'</h3><div id="plBox"><div class="psub">Tecnología «Otro»: no usa las tablas de HH ni las curvas. Cargá '+(pers?'cuántas <b>personas equivalentes</b> de cada especialidad trabajan en el proyecto cada mes (0,5 = media persona; 1 persona = '+NF0.format(hp)+' HH/mes según Recursos)':'las <b>HH</b> de cada especialidad por mes')+'. Cada cambio recalcula al instante y se deshace con Ctrl+Z.</div>'
+    +'<div class="row-actions" style="margin:10px 0;align-items:center"><span class="seg2" role="group" aria-label="Unidad">'
+    +'<button class="btn sm'+(pers?' primary':'')+'" data-plu="personas" aria-pressed="'+pers+'">Personas</button><button class="btn sm'+(pers?'':' primary')+'" data-plu="hh" aria-pressed="'+(!pers)+'">HH</button></span>'
+    +'<label style="display:flex;align-items:center;gap:6px">Meses <input type="number" id="plN" min="1" max="60" step="1" value="'+n+'" style="width:64px"></label>'
+    +'<span class="psub">'+mlabel(p.fechaInicio)+' → '+mlabel(E.mesStr(ini+n-1))+'</span>'
+    +'<button class="btn sm" id="plClr" style="margin-left:auto;color:var(--danger)">Limpiar todo</button></div>';
+  if(durMod(p))html+='<div class="holg">En el Gantt el proyecto dura <b>'+p.duracion+' meses</b>: el plan se reescala en el tiempo conservando sus HH. <button class="btn sm" id="plFix">Fijar el plan en '+p.duracion+' meses</button></div>';
+  html+='<div class="tablewrap" style="max-height:52vh;overflow:auto"><table class="pk lp pl"><thead><tr><th>Especialidad</th>';
+  for(var i=0;i<n;i++)html+='<th class="r">'+mlabel(E.mesStr(ini+i))+'</th>';
+  html+='<th class="r">HH</th><th></th></tr></thead><tbody>';
+  esps.forEach(function(e){
+    var v=pl.valores[e]||[],s=0;
+    html+='<tr><td>'+esc(e)+'</td>';
+    for(var i=0;i<n;i++){
+      var x=+v[i]||0;s+=x*f;totMes[i]+=x*f;
+      html+='<td><input type="number" min="0" step="'+(pers?'0.1':'10')+'" data-pl="'+esc(e)+'|'+i+'" value="'+(x?x:'')+'" placeholder="0" aria-label="'+esc(e)+' '+mlabel(E.mesStr(ini+i))+'" style="width:'+(pers?58:70)+'px"></td>';
+    }
+    tot+=s;
+    html+='<td class="calc">'+(s?hh(s):'·')+'</td><td class="x" style="white-space:nowrap"><button data-plfill="'+esc(e)+'" title="Rellenar la fila con su primer valor cargado">⇥</button><button data-plclr="'+esc(e)+'" title="Limpiar la fila">✕</button></td></tr>';
+  });
+  html+='</tbody><tfoot><tr><td><b>HH del mes</b></td>'+totMes.map(function(x){return '<td class="calc">'+(x?hh(x):'·')+'</td>';}).join("")+'<td class="calc"><b>'+hh(tot)+'</b></td><td></td></tr>'
+    +'<tr><td>Personas</td>'+totMes.map(function(x){return '<td class="calc">'+(x?fmtPers(x/hp):'·')+'</td>';}).join("")+'<td></td><td></td></tr></tfoot></table></div>';
+  /* generador */
+  var g=planGen&&planGen.id===p.id?planGen:null;
+  if(!g){
+    g={id:p.id,total:Math.round(tot)||0,forma:"campana",pct:{}};
+    var h=E.planHH(p,PV());
+    esps.forEach(function(e){var s=(h[e]||[]).reduce(function(a,b){return a+b;},0);g.pct[e]=tot>0?Math.round(s/tot*100):0;});
+  }
+  planGen=g;
+  var sp=esps.reduce(function(a,e){return a+(+g.pct[e]||0);},0);
+  html+='<details id="plGenBox"'+(g.abierto?' open':'')+' style="margin-top:12px"><summary style="cursor:pointer;font-weight:600">Generar desde un total de HH…</summary>'
+    +'<div class="psub" style="margin:6px 0">Reparte un total de HH entre especialidades (%) y en el tiempo según una forma. Reemplaza el plan actual.</div>'
+    +'<div class="row-actions" style="align-items:center"><label style="display:flex;align-items:center;gap:6px">Total HH <input type="number" min="0" step="100" id="plGT" value="'+(g.total||'')+'" style="width:96px"></label>'
+    +'<label style="display:flex;align-items:center;gap:6px">Forma <select id="plGF">'+Object.keys(FORMAS).map(function(k){return '<option value="'+k+'"'+(k===g.forma?' selected':'')+'>'+FORMAS[k]+'</option>';}).join("")+'</select></label></div>'
+    +'<div class="row-actions" style="flex-wrap:wrap">'+esps.map(function(e){return '<label style="display:flex;align-items:center;gap:4px">'+esc(e)+' <input type="number" min="0" max="100" step="5" data-plgp="'+esc(e)+'" value="'+(g.pct[e]||'')+'" placeholder="0" style="width:56px">%</label>';}).join("")+'</div>'
+    +'<div class="row-actions" style="align-items:center"><span class="psub" id="plGS" style="'+(sp===100?'':'color:var(--crit-ink);font-weight:600')+'">Suma: '+sp+'%'+(sp===100?'':' (debe dar 100%)')+'</span>'
+    +'<button class="btn sm primary" id="plGen"'+(sp===100&&g.total>0?'':' disabled')+'>Generar plan</button></div></details>';
+  html+='</div>';
+  document.getElementById("dlgBody").innerHTML=html;
+  if(!dlg.open)openDlg(true);
+  dlg.className="xwide";dlg.scrollTop=top;
+  document.getElementById("dlgTitle").textContent="Plan de recursos · "+p.proyecto;
+  var box=document.getElementById("plBox");
+  var aplicar=function(fn,msg){push();fn();recalc();render();save();
+    setTimeout(function(){var a=document.activeElement,key=a&&a.dataset&&(a.dataset.pl||a.id);
+      if(dlg.open)openPlan(p);
+      if(key){var el=a.dataset&&a.dataset.pl?document.querySelector('#plBox [data-pl="'+key.replace(/"/g,'\\"')+'"]'):document.getElementById(key);if(el){el.focus();if(el.select)el.select();}}
+    },0);if(msg)toast(msg);};
+  box.onchange=function(e){
+    var t=e.target;
+    if(t.dataset.pl){
+      var k=t.dataset.pl.lastIndexOf("|"),es=t.dataset.pl.slice(0,k),i=+t.dataset.pl.slice(k+1);
+      var v=t.value===""?0:parseFloat(String(t.value).replace(",","."));
+      if(isNaN(v)||v<0){toast("Ingresá un número mayor o igual a cero");openPlan(p);return;}
+      aplicar(function(){var row=pl.valores[es]||(pl.valores[es]=[]);while(row.length<n)row.push(0);row[i]=pers?r2(v):Math.round(v);});
+    }else if(t.id==="plN"){
+      var m=Math.round(+t.value);if(!(m>=1&&m<=60)){toast("Entre 1 y 60 meses");openPlan(p);return;}
+      var perd=0;Object.keys(pl.valores).forEach(function(es){pl.valores[es].slice(m).forEach(function(x){perd+=(+x||0)*f;});});
+      aplicar(function(){pl.meses=m;p.duracion=null;Object.keys(pl.valores).forEach(function(es){var r=pl.valores[es].slice(0,m);while(r.length<m)r.push(0);pl.valores[es]=r;});},
+        perd>0?"Se descartaron "+hh(perd)+" HH de los meses quitados":null);
+    }else if(t.id==="plGT"){g.total=Math.max(0,+t.value||0);openPlan(p);}
+    else if(t.id==="plGF"){g.forma=t.value;}
+    else if(t.dataset.plgp){g.pct[t.dataset.plgp]=Math.max(0,Math.min(100,Math.round(+t.value||0)));var a=t.dataset.plgp;openPlan(p);var el=document.querySelector('#plBox [data-plgp="'+a.replace(/"/g,'\\"')+'"]');if(el){var ins=document.querySelectorAll('#plBox [data-plgp]'),ix=[].indexOf.call(ins,el);(ins[ix+1]||document.getElementById("plGen")).focus();}}
+  };
+  box.onclick=function(e){
+    var b=e.target.closest("button");if(!b)return;
+    if(b.dataset.plu&&b.dataset.plu!==pl.unidad){
+      var to=b.dataset.plu;
+      aplicar(function(){Object.keys(pl.valores).forEach(function(es){pl.valores[es]=pl.valores[es].map(function(x){x=+x||0;return to==="hh"?Math.round(x*hp):r2(x/hp);});});pl.unidad=to;},
+        to==="hh"?"Plan en HH":"Plan en personas equivalentes");
+    }else if(b.dataset.plfill){
+      var es=b.dataset.plfill,row=pl.valores[es]||[],v0=row.filter(function(x){return +x>0;})[0];
+      if(!v0){toast("Cargá primero un valor en la fila de "+es);return;}
+      aplicar(function(){pl.valores[es]=new Array(n).fill(+v0);});
+    }else if(b.dataset.plclr){var es2=b.dataset.plclr;aplicar(function(){delete pl.valores[es2];});}
+    else if(b.id==="plClr"){aplicar(function(){pl.valores={};},"Plan vacío · Ctrl+Z para deshacer");}
+    else if(b.id==="plFix"){
+      var d=+p.duracion;
+      aplicar(function(){Object.keys(pl.valores).forEach(function(es){var r=pl.valores[es].slice(0,n).map(function(x){return +x||0;});while(r.length<n)r.push(0);
+        pl.valores[es]=E.reescalar(r,d).map(function(x){return pers?r2(x):Math.round(x);});});pl.meses=d;p.duracion=null;},"Plan fijado en "+d+" meses");
+    }else if(b.id==="plGen"){
+      var w=formaPlan(g.forma,n);
+      aplicar(function(){var val={};S.datos.especialidades.forEach(function(es){var pc=(+g.pct[es]||0)/100;if(pc>0)val[es]=w.map(function(x){var hhv=g.total*pc*x;return pers?r2(hhv/hp):Math.round(hhv);});});pl.valores=val;},
+        "Plan generado: "+hh(g.total)+" HH");
+    }
+  };
+  document.getElementById("plGenBox").ontoggle=function(){g.abierto=this.open;};
+}
+/* planes de «Otro» en formato largo: una fila por proyecto, mes y especialidad */
+function csvPlanes(){
+  var rows=[];
+  S.datos.proyectos.forEach(function(p){
+    if(!esOtro(p)||!p.planManual)return;
+    var pl=planDe(p),f=factorPlan(pl),i0=E.mesIdx(p.fechaInicio);
+    S.datos.especialidades.forEach(function(e){(pl.valores[e]||[]).slice(0,pl.meses).forEach(function(x,i){
+      x=+x||0;if(!x)return;
+      rows.push([p.proyecto,pl.unidad==="hh"?"HH":"Personas",E.mesStr(i0+i),e,String(x).replace(".",","),Math.round(x*f)].join(";"));
+    });});
+  });
+  if(!rows.length)return "";
+  return ["Proyecto;Unidad;Mes;Especialidad;Valor;HH"].concat(rows).join("\r\n");
 }
 function moverP(p,k){
   if(!p.simulable){toast("Proyecto no simulable");return;}
@@ -1171,7 +1349,7 @@ function wireClicks(){
     var seg=t.closest&&t.closest(".seg");
     if(seg){
       var p=findP(seg.dataset.seg),sp=spanOf(p),r=seg.getBoundingClientRect(),k=Math.floor((e.clientX-r.left)/S.cw),m=hhMensual(p);
-      if(seg.dataset.sens){var bl=E.bloques(p,S.datos.curvas,S.datos.parametros)[+seg.dataset.sens];k+=bl[0];}
+      if(seg.dataset.sens){var bl=E.bloques(p,S.datos.curvas,PV())[+seg.dataset.sens];k+=bl[0];}
       h='<div><b style="font-family:inherit">'+esc(p.proyecto)+'</b></div>'+mlabel(E.mesStr(E.mesIdx(R.meses[0])+sp.start+k))+': <b>'+hh(m[sp.start+k]||0)+'</b> HH<br>Total <b>'+hh(totalP(p))+'</b> HH'+'<br>Duración <b>'+sp.dur+'</b> meses'+(durMod(p)?' (curvas: '+sp.base+')':'')+(seg.dataset.sens?'<br>Sensibilidad '+seg.dataset.sens+' (no se arrastra: se mueve con el bloque original)':'')+(p.simulable?'<br>Arrastrá para mover · bordes para la duración':'<br>Fecha y duración fijas');
     }
     if(!h){tip.className="";return;}
@@ -1400,7 +1578,7 @@ function openParametros(){renderParam();openDlg(true);}
 function refreshParam(){if(document.getElementById("parBox"))renderParam();}
 function usaCurva(nombre){
   var P=S.datos.parametros;
-  return S.datos.proyectos.filter(function(p){return E.componentes(p,P).some(function(c){return c.curva===nombre;});});
+  return S.datos.proyectos.filter(function(p){return !esOtro(p)&&E.componentes(p,P).some(function(c){return c.curva===nombre;});});
 }
 function renderParam(){
   var P=S.datos.parametros,top=dlg.scrollTop;
@@ -1469,7 +1647,7 @@ function tabDNN(P){
     +'<div class="f"><label for="fxOM">O&amp;M (% · 12 meses)</label>'+numIn('id="fxOM" data-fx="factorOM" class="pct"',pct(P.factorOM))+'</div></div>'
     +'<div><table class="pk"><tr><th>Proyecto</th><th>Curva</th><th class="r">HH</th></tr>';
   S.datos.proyectos.forEach(function(p){
-    if(p.tipoCliente==="DPI")return;
+    if(p.tipoCliente==="DPI"||esOtro(p))return;
     var c=E.componentes(p,P)[0],man=p.hhProy!=null&&p.hhProy!=="";
     html+='<tr class="click" data-goto="'+esc(p.id)+'"><td>'+esc(p.proyecto)+'</td><td>'+esc(c.curva||"—")+'</td><td class="calc">'+(man?'<span class="fl warn" title="HH Estimadas Proy cargadas en el proyecto">manual</span> ':'')+hh(c.hh)+'</td></tr>';
   });
@@ -1592,7 +1770,7 @@ var CAMPOS=[
   {k:"nombre",n:"Nombre",t:"text",w:140},
   {k:"tipoCliente",n:"Tipo",t:"sel",op:["DPI","DNN","O&M"],w:70},
   {k:"nivelDNN",n:"Nivel DNN",t:"sel",op:["","DNN Cat1","DNN Cat2"],w:100},
-  {k:"tecnologia",n:"Tecnología",t:"sel",op:["Solar","Bess","Eólico","Termico"],w:96},
+  {k:"tecnologia",n:"Tecnología",t:"sel",op:["Solar","Bess","Eólico","Termico","Otro"],w:96},
   {k:"potencia",n:"MW",t:"num"},
   {k:"tamano",n:"Tamaño",t:"sel",op:["","Chico","Mediano","Grande","Muy Grande"],vacio:"auto",w:112},
   {k:"tensionPOE",n:"POE kV",t:"num"},
@@ -1608,16 +1786,18 @@ var CAMPOS=[
   {k:"incluir",n:"Incluir",t:"chk"}
 ];
 /* campos que entran al registro de cambios (además de los de la tabla) */
-var CAMPOS_DIFF=CAMPOS.concat([{k:"hhParque",n:"HH manual parque",vacio:"modelo"},{k:"hhEt",n:"HH manual ET",vacio:"modelo"},{k:"hhLinea",n:"HH manual línea",vacio:"modelo"},{k:"hhProy",n:"HH manual proyecto",vacio:"modelo"},{k:"notaHH",n:"Motivo HH"}]);
+var CAMPOS_DIFF=CAMPOS.concat([{k:"planManual",n:"Plan de recursos",vacio:"—"},{k:"hhParque",n:"HH manual parque",vacio:"modelo"},{k:"hhEt",n:"HH manual ET",vacio:"modelo"},{k:"hhLinea",n:"HH manual línea",vacio:"modelo"},{k:"hhProy",n:"HH manual proyecto",vacio:"modelo"},{k:"notaHH",n:"Motivo HH"}]);
 function valorCampo(p,k){
   if(k==="fijo")return !p.simulable;
   if(k==="incluir")return p.incluir!==false;
+  if(k==="planManual")return esOtro(p)&&p.planManual?JSON.stringify(p.planManual):"";
   var v=p[k];return v==null?"":v;
 }
 function txtCampo(k,v){
   if(v===""||v==null){var c=CAMPOS_DIFF.filter(function(x){return x.k===k;})[0];return c&&c.vacio?c.vacio:"—";}
   if(v===true)return "sí";if(v===false)return "no";
   if(k==="fechaInicio")return mlabel(v);
+  if(k==="planManual"){try{var pl=JSON.parse(v);return pl.meses+" meses · "+hh(totalPlan({planManual:pl}))+" HH";}catch(e){return "—";}}
   if(k==="factorSolapamiento")return pctEnt(+v);
   if(k==="avance")return NFX.format(v)+"%";
   if(typeof v==="number")return NFX.format(v);
@@ -1629,7 +1809,8 @@ function avisosProyecto(p,cod){
   else if(cod[p.proyecto]>1)a.push("Código repetido");
   if(!/^\d{4}-\d{2}$/.test(p.fechaInicio||""))a.push("Falta la fecha de inicio");
   if(p.tipoCliente==="DNN"&&["DNN Cat1","DNN Cat2"].indexOf(p.nivelDNN)<0)a.push("DNN sin nivel");
-  if(!(+p.potencia>0)&&(p.hhProy==null||p.hhProy==="")&&(p.hhParque==null||p.hhParque===""))a.push("Sin potencia ni HH manuales");
+  if(esOtro(p)){if(!(totalPlan(p)>0))a.push("Plan de recursos vacío: no suma HH");}
+  else if(!(+p.potencia>0)&&(p.hhProy==null||p.hhProy==="")&&(p.hhParque==null||p.hhParque===""))a.push("Sin potencia ni HH manuales");
   if(p.tipoCliente!=="DNN"&&+p.sensibilidades>0)a.push("Las sensibilidades solo aplican a proyectos DNN");
   if(p.tipoCliente!=="DPI"&&(p.est||p.linea))a.push("ET/Línea no se usan en "+p.tipoCliente);
   return a;
@@ -1654,11 +1835,11 @@ function openProyectos(){
       else if(c.t==="num")html+='<td><input type="number" step="any" min="0" '+a+' value="'+esc(c.pct&&v!==""?Math.round(v*100):v)+'"'+(c.vacio?' placeholder="'+c.vacio+'"':'')+'></td>';
       else html+='<td><input type="text" '+a+' value="'+esc(v)+'" style="width:'+c.w+'px"></td>';
     });
-    var man=hhManual(p),totMod=0,totAsig=0;
+    var man=hhManual(p)||esOtro(p),totMod=0,totAsig=0;
     hhModelo(p).forEach(function(c){totMod+=c.hh;});
-    E.componentes(p,S.datos.parametros).forEach(function(c){totAsig+=c.hh;});
+    E.componentes(p,PV()).forEach(function(c){totAsig+=c.hh;});
     html+='<td><input type="number" min="0" step="100" data-pc="'+esc(p.id)+'|hhTotal" aria-label="HH asignadas '+esc(p.proyecto)+'" placeholder="'+Math.round(totMod)+'" value="'+(man?Math.round(totAsig):"")+'"'
-      +' title="'+(man?'Cargadas a mano (modelo: '+hh(totMod)+' HH). Vaciá la celda para volver al modelo.':'Modelo: '+hh(totMod)+' HH. Escribí otro valor para pisarlo.')+'" style="width:96px'+(man?';border-color:var(--warn-ink);font-weight:600':'')+'"></td>'
+      +' title="'+(esOtro(p)?'Total del plan de recursos manual. Otro valor escala todo el plan en la misma proporción.':man?'Cargadas a mano (modelo: '+hh(totMod)+' HH). Vaciá la celda para volver al modelo.':'Modelo: '+hh(totMod)+' HH. Escribí otro valor para pisarlo.')+'" style="width:96px'+(man?';border-color:var(--warn-ink);font-weight:600':'')+'"></td>'
       +'<td><input type="text" data-pc="'+esc(p.id)+'|notaHH" aria-label="Motivo del ajuste de HH de '+esc(p.proyecto)+'" value="'+esc(p.notaHH||"")+'" placeholder="'+(man?"¿por qué?":"")+'" style="width:150px"></td>'
       +'<td class="calc">'+hhK(totalP(p))+'</td><td class="x"><button data-lpdel="'+esc(p.id)+'" title="Eliminar '+esc(p.proyecto)+'">✕</button></td></tr>';
   });
@@ -1685,6 +1866,7 @@ function openProyectos(){
       if(k==="hhTotal"){
         var n0=t.value===""?null:parseFloat(String(t.value).replace(",","."));
         if(n0!=null&&(isNaN(n0)||n0<0)){toast("Ingresá un número de HH mayor o igual a cero");openProyectos();return;}
+        if(esOtro(p)&&(n0==null||!(totalPlan(p)>0))){toast(n0==null?"«Otro» no tiene modelo: sus HH salen del plan de recursos":"El plan de recursos está vacío: cargalo primero");openPlan(p);return;}
         push();asignarHHTotal(p,n0);
         if(n0!=null)toast(p.proyecto+": "+hh(n0)+" HH asignadas"+(p.notaHH?"":" · completá el motivo"));
       }else{push();p.notaHH=t.value.trim()||null;}
@@ -1712,6 +1894,7 @@ function openProyectos(){
     }
     else if(k==="fijo")p.simulable=!v;
     else if(k==="incluir")p.incluir=!!v;
+    else if(k==="tecnologia"&&v==="Otro"){if(!esOtro(p))aOtro(p);}
     else if(c.t==="sel")p[k]=v===""?null:v;
     else p[k]=k==="proyecto"?String(v).trim():(String(v).trim()||null);
     if(k==="tipoCliente"&&v==="DNN"&&!p.nivelDNN)p.nivelDNN="DNN Cat1";
@@ -1727,9 +1910,10 @@ function openProyectos(){
 /* HH totales cargadas a mano: DNN/O&M van directo; en DPI se reparten entre Parque, ET y Línea
    en la proporción actual (manual o del modelo). null = todo vuelve al modelo. */
 function asignarHHTotal(p,total){
+  if(esOtro(p)){if(total!=null)escalarPlan(p,total);return;}
   if(total==null){p.hhParque=p.hhEt=p.hhLinea=p.hhProy=null;p.notaHH=null;return;}
   if(p.tipoCliente!=="DPI"){p.hhProy=Math.round(total);return;}
-  var comps=E.componentes(p,S.datos.parametros),suma=0;
+  var comps=E.componentes(p,PV()),suma=0;
   comps.forEach(function(c){suma+=c.hh;});
   if(suma<=0){comps=hhModelo(p);suma=0;comps.forEach(function(c){suma+=c.hh;});}
   var asignado=0;
@@ -1755,14 +1939,14 @@ function csvProyectos(){
   var na=function(v){return v==null||v===""?"N/A":v;};
   var dec=function(v,d){return v==null||v===""?"":Number(v).toFixed(d).replace(".",",");};
   var head=["Proyectos","Nombre","Tipo Cliente","Nivel DNN","Tecnología","Factor Solapa","Potencia","Tensión POE","Est Transformadora","Linea","Fecha Inicio","Estado","Calendario Fijo","% Avance","Duración meses","Tamaño","Incluir","Sensibilidades",
-    "HH Estimadas Parque","HH Estimadas ET","HH Estimadas Línea","HH Estimadas Proy","Motivo HH"];
+    "HH Estimadas Parque","HH Estimadas ET","HH Estimadas Línea","HH Estimadas Proy","Motivo HH","Plan Manual"];
   var rows=[head.map(q).join(",")];
   S.datos.proyectos.forEach(function(p){
     var f=p.fechaInicio?("01/"+p.fechaInicio.slice(5)+"/"+p.fechaInicio.slice(0,4)+" 0:00"):"";
     rows.push([p.proyecto,p.nombre||"",p.tipoCliente,p.nivelDNN?p.nivelDNN.replace("DNN Cat","Cat "):"N/A",p.tecnologia,dec(p.factorSolapamiento==null?1:p.factorSolapamiento,2),
       p.potencia==null?"":String(p.potencia).replace(".",","),p.tensionPOE==null?"":p.tensionPOE,na(p.est),na(p.linea),f,p.estado||"",p.simulable?"No":"Si",
       p.avance==null?"":p.avance,p.duracion==null?"":p.duracion,p.tamano||"",p.incluir===false?"No":"Si",p.sensibilidades||"",
-      vacioV(p.hhParque)?"":p.hhParque,vacioV(p.hhEt)?"":p.hhEt,vacioV(p.hhLinea)?"":p.hhLinea,vacioV(p.hhProy)?"":p.hhProy,p.notaHH||""].map(q).join(","));
+      vacioV(p.hhParque)?"":p.hhParque,vacioV(p.hhEt)?"":p.hhEt,vacioV(p.hhLinea)?"":p.hhLinea,vacioV(p.hhProy)?"":p.hhProy,p.notaHH||"",esOtro(p)&&p.planManual?JSON.stringify(p.planManual):""].map(q).join(","));
   });
   return rows.join("\r\n");
 }
@@ -1910,12 +2094,13 @@ function offer(filename,data){
 function openExport(){
   document.getElementById("dlgBody").innerHTML='<h3>Exportar</h3><div class="row-actions">'
     +'<button class="btn" id="exF">Forecast mensual (CSV)</button><button class="btn" id="exM">Matriz de ocupación (CSV)</button>'
-    +'<button class="btn" id="exJ">Escenario (JSON)</button><button class="btn" id="exP">Lista de proyectos (CSV)</button><button class="btn" id="exT">Copiar matriz</button></div>'
+    +'<button class="btn" id="exJ">Escenario (JSON)</button><button class="btn" id="exP">Lista de proyectos (CSV)</button><button class="btn" id="exPl">Planes de recursos «Otro» (CSV)</button><button class="btn" id="exT">Copiar matriz</button></div>'
     +'<div class="hint">La lista de proyectos usa las columnas de DIM_Proyecto (más Duración, Tamaño e Incluir) y se puede volver a importar. El forecast mensual tiene la misma forma que Forecast_Mes_V4 (una fila por proyecto, componente, mes y especialidad). Los CSV usan punto y coma y coma decimal.</div>';
   openDlg(false);
   document.getElementById("exF").onclick=function(){offer(slug()+"-forecast.csv","﻿"+csvForecast());};
   document.getElementById("exM").onclick=function(){offer(slug()+"-ocupacion.csv","﻿"+csvMatriz());};
   document.getElementById("exP").onclick=function(){offer(slug()+"-proyectos.csv","\ufeff"+csvProyectos());};
+  document.getElementById("exPl").onclick=function(){var t=csvPlanes();if(!t)toast("No hay proyectos con tecnología «Otro»");else offer(slug()+"-planes-otro.csv","\ufeff"+t);};
   document.getElementById("exJ").onclick=function(){offer(slug()+".json",JSON.stringify({escenario:S.nombre,datos:S.datos},null,1));};
   document.getElementById("exT").onclick=function(){
     var tsv=csvMatriz().split("\n").map(function(l){return l.split(";").join("\t");}).join("\n");
@@ -1944,7 +2129,7 @@ function proyectosDesdeCSV(texto){
   var tx=function(v){v=(v||"").trim();return /^(|n\/a|na|-|none)$/i.test(v)?null:v;};
   var nm=function(v){v=tx(v);if(v===null)return null;if((v.match(/,/g)||[]).length===1&&v.indexOf(".")>=0)v=v.replace(/\./g,"");return +v.replace(",",".");};
   var mes=function(v){v=tx(v);if(!v)return null;var d=v.split(" ")[0];if(d.indexOf("/")>=0){var a=d.split("/");return a[2]+"-"+String(+a[1]).padStart(2,"0");}return d.slice(0,7);};
-  var TEC={bess:"Bess",solar:"Solar","eólico":"Eólico",eolico:"Eólico",termico:"Termico","térmico":"Termico"};
+  var TEC={bess:"Bess",solar:"Solar","eólico":"Eólico",eolico:"Eólico",termico:"Termico","térmico":"Termico",otro:"Otro",otra:"Otro"};
   rows.forEach(function(r,i){
     var cod=tx(col(r,"Proyectos","Proyecto"));if(!cod)return;
     var tipo=tx(col(r,"Tipo Cliente")),est=tx(col(r,"Est Transformadora")),ln=tx(col(r,"Linea","Línea")),niv=tx(col(r,"Nivel DNN"));
@@ -1959,6 +2144,9 @@ function proyectosDesdeCSV(texto){
       notaHH:tx(col(r,"Motivo HH")),factorSolapamiento:nm(col(r,"Factor Solapa","Factor Solapamiento"))||1,
       duracion:nm(col(r,"Duración meses","Duracion meses")),sensibilidades:nm(col(r,"Sensibilidades"))||null,tensionPOE:nm(col(r,"Tensión POE")),avance:nm(col(r,"% Avance"))};
     if(/^(no|false|0)$/i.test(tx(col(r,"Incluir"))||""))p.incluir=false;
+    var pm=tx(col(r,"Plan Manual"));
+    if(pm){try{p.planManual=JSON.parse(pm);}catch(e){av.push(cod+": «Plan Manual» ilegible (se ignora)");}}
+    if(p.tecnologia==="Otro"&&!(p.planManual&&p.planManual.meses))av.push(cod+": tecnología Otro sin plan de recursos");
     if(["DPI","DNN","O&M"].indexOf(tipo)<0)av.push(cod+": Tipo Cliente desconocido ("+tipo+")");
     if(!p.fechaInicio)av.push(cod+": sin Fecha Inicio");
     if(tipo==="DNN"&&["DNN Cat1","DNN Cat2"].indexOf(p.nivelDNN)<0)av.push(cod+": DNN sin Nivel DNN válido");

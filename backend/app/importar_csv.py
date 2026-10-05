@@ -4,7 +4,7 @@ Columnas esperadas (el orden no importa; se ignoran las que no se usan):
 
     Proyectos · Nombre · Tipo Cliente · Nivel DNN · Tecnología · Factor Solapa · Potencia ·
     Tensión POE · Est Transformadora · Linea · Fecha Inicio · Estado · Calendario Fijo · % Avance
-    (opcionales, los agrega «Exportar → Lista de proyectos»: Duración meses · Tamaño · Incluir)
+    (opcionales, los agrega «Exportar → Lista de proyectos»: Duración meses · Tamaño · Incluir · Plan Manual)
 
 Reglas de mapeo:
 - "N/A" o vacío -> sin dato.
@@ -12,6 +12,7 @@ Reglas de mapeo:
 - Fecha "dd/mm/aaaa hh:mm" -> mes "aaaa-mm" (el modelo trabaja por mes).
 - "Et Nueva" -> "ET Nueva"; "Cat 2" -> "DNN Cat2" (solo para DNN).
 - Calendario Fijo = "Si" -> proyecto NO simulable (no se mueve ni se estira).
+- Tecnología "Otro": sus HH salen de la columna Plan Manual (JSON con unidad, meses y valores por especialidad).
 - El CSV no trae Tamaño: lo deriva el motor a partir de la potencia (motor.tamano).
 
 Uso:
@@ -21,6 +22,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import sys
 from pathlib import Path
 
@@ -53,7 +55,7 @@ def _mes(v) -> str | None:
 def _tecnologia(v):
     v = _txt(v)
     return {"bess": "Bess", "solar": "Solar", "eólico": "Eólico", "eolico": "Eólico",
-            "termico": "Termico", "térmico": "Termico"}.get((v or "").lower(), v)
+            "termico": "Termico", "térmico": "Termico", "otro": "Otro", "otra": "Otro"}.get((v or "").lower(), v)
 
 
 def _est(v):
@@ -124,6 +126,14 @@ def leer(texto: str) -> tuple[list[dict], list[str]]:
         }
         if (_txt(f.get("Incluir")) or "").lower() in ("no", "false", "0"):
             p["incluir"] = False
+        plan = _txt(f.get("Plan Manual"))  # tecnología «Otro»: plan de recursos en JSON
+        if plan:
+            try:
+                p["planManual"] = json.loads(plan)
+            except ValueError:
+                avisos.append(f"{codigo}: «Plan Manual» ilegible (se ignora)")
+        if p["tecnologia"] == "Otro" and not (p.get("planManual") or {}).get("meses"):
+            avisos.append(f"{codigo}: tecnología Otro sin plan de recursos")
         if tipo not in ("DPI", "DNN", "O&M"):
             avisos.append(f"{codigo}: Tipo Cliente desconocido {tipo!r}")
         if not p["fechaInicio"]:

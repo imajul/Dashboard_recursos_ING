@@ -145,6 +145,37 @@ class ReglasDeNegocio(unittest.TestCase):
         self.assertEqual(len(motor.forecast([dict(dpi, sensibilidades=2)], d["curvas"], d["parametros"])),
                          len(motor.forecast([dpi], d["curvas"], d["parametros"])))
 
+    def test_tecnologia_otro_plan_manual(self):
+        d = dataset()
+        otro = {"id": 99, "proyecto": "HIDRO", "tipoCliente": "DPI", "tecnologia": "Otro", "fechaInicio": "2027-03",
+                "factorSolapamiento": 0.5,  # no se aplica a «Otro»
+                "planManual": {"unidad": "personas", "meses": 3,
+                               "valores": {"Eléctricos": [1, 2, 2], "Civiles": [0.5, 0.5, 0]}}}
+        hp = 140 * 0.85
+        params = {**d["parametros"], "hhPersonaMes": hp}
+        self.assertAlmostEqual(motor.componentes(otro, params)[0]["hh"], 6 * hp)
+        f = motor.forecast([otro], d["curvas"], params)
+        por_mes = {}
+        for x in f:
+            por_mes[(motor.mes_str(x["mes"]), x["especialidad"])] = por_mes.get((motor.mes_str(x["mes"]), x["especialidad"]), 0) + x["hh"]
+        self.assertAlmostEqual(por_mes[("2027-04", "Eléctricos")], 2 * hp)
+        self.assertAlmostEqual(por_mes[("2027-03", "Civiles")], 0.5 * hp)
+        self.assertAlmostEqual(sum(x["hh"] for x in f), 6 * hp)            # sin solapamiento
+        # en HH
+        otro_hh = dict(otro, planManual={"unidad": "hh", "meses": 2, "valores": {"Estudios": [100, 50]}})
+        self.assertAlmostEqual(sum(x["hh"] for x in motor.forecast([otro_hh], d["curvas"], params)), 150)
+        # duración: estira conservando HH
+        largo = motor.forecast([dict(otro, duracion=6)], d["curvas"], params)
+        self.assertEqual(len({x["mes"] for x in largo}), 6)
+        self.assertAlmostEqual(sum(x["hh"] for x in largo), 6 * hp)
+        # sensibilidad DNN sobre un «Otro»
+        dnn = dict(otro, tipoCliente="DNN", sensibilidades=1)
+        self.assertEqual([b for b in motor.bloques(dnn, d["curvas"], params)], [(0, 3), (5, 3)])
+        # calcular usa HH/persona × eficiencia de la capacidad
+        d2 = dataset(); d2["proyectos"] = [otro]
+        r = motor.calcular(d2)
+        self.assertAlmostEqual(r["kpis"]["hhForecastTotal"], 6 * d2["capacidad"]["hhMesPersona"] * d2["capacidad"]["eficiencia"])
+
     def test_escenario_sumar_electricos_baja_exceso(self):
         base = motor.calcular(self.d)["cuellos"]["Eléctricos"]["hhExcedidas"]
         esc = {"capacidad": {"dotacion": {"Eléctricos": 9}}}
@@ -174,6 +205,15 @@ class ReglasDeNegocio(unittest.TestCase):
         self.assertEqual((b["est"], b["linea"], b["factorSolapamiento"], b["simulable"]), (None, None, 0.43, True))
         self.assertEqual((c["nivelDNN"], c["tipoCliente"]), ("DNN Cat2", "DNN"))
         self.assertEqual(sum(x["hh"] for x in motor.componentes(a, self.params)), 11800)
+
+    def test_importar_csv_otro(self):
+        texto = ('"Proyectos","Tipo Cliente","Tecnología","Fecha Inicio","Plan Manual"\n'
+                 '"PX1","DPI","otro","01/03/2027 0:00","{""unidad"":""hh"",""meses"":2,""valores"":{""Civiles"":[100,50]}}"\n'
+                 '"PX2","DPI","Otro","01/03/2027 0:00",""\n')
+        ps, avisos = leer(texto)
+        self.assertEqual(ps[0]["tecnologia"], "Otro")
+        self.assertEqual(sum(c["hh"] for c in motor.componentes(ps[0], self.params)), 150)
+        self.assertEqual(avisos, ["PX2: tecnología Otro sin plan de recursos"])
 
     def test_reescalar_conserva_suma_y_forma(self):
         curva = [0.1, 0.2, 0.3, 0.4]
@@ -266,6 +306,24 @@ class ParidadJavaScript(unittest.TestCase):
                  for i, e in enumerate(["Civiles", "Eléctricos", "Eléctricos", "Coordinadores", "Mecánicos",
                                         "Electrónicos", "Eléctricos", "Civiles", "Eléctricos", "Civiles"])]
         self._comparar({"capacidad": {"staff": staff}})
+
+    def test_paridad_otro(self):
+        import tempfile
+        d = json.loads((RAIZ / "data" / "sample_data.json").read_text(encoding="utf-8"))
+        d["proyectos"].append({"id": 99, "proyecto": "HIDRO", "tipoCliente": "DNN", "tecnologia": "Otro", "fechaInicio": "2027-02",
+                               "sensibilidades": 1, "duracion": 7,
+                               "planManual": {"unidad": "personas", "meses": 4,
+                                              "valores": {"Eléctricos": [1, 2, 2.5, 1], "Estudios": [1, 1, 0, 0]}}})
+        d["proyectos"].append({"id": 98, "proyecto": "OTROHH", "tipoCliente": "DPI", "tecnologia": "Otro", "fechaInicio": "2026-11",
+                               "planManual": {"unidad": "hh", "meses": 3, "valores": {"Civiles": [300, 200, 100]}}})
+        esc = {"capacidad": {"dotacion": DOTACION_TEST, "eficiencia": 0.8}}
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as f:
+            json.dump(d, f, ensure_ascii=False)
+        js = self._js(esc, f.name)
+        py = motor.calcular(d, esc)
+        for clave in ("hhExcedidas", "hhForecastTotal", "hhForecastHorizonte"):
+            self.assertAlmostEqual(py["kpis"][clave], js["kpis"][clave], places=6)
+        self.assertEqual([x["proyecto"] for x in py["pareto"]], [x["proyecto"] for x in js["pareto"]])
 
     def test_paridad_base(self):
         self._comparar({})

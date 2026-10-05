@@ -229,7 +229,8 @@ def _recalcular(cn, esc_id: int | None) -> None:
     d = _datos(cn)
     cambios = _cambios(cn, esc_id)
     proyectos, _ = motor.aplicar_escenario(d, cambios)
-    filas = motor.forecast(proyectos, d["curvas"], d["parametros"])
+    cap = d["capacidad"]
+    filas = motor.forecast(proyectos, d["curvas"], {**d["parametros"], "hhPersonaMes": cap["hhMesPersona"] * cap["eficiencia"]})
     kpis = motor.calcular(d, cambios)["kpis"] if esc_id is not None else None
     repositorio.materializar_forecast(cn, esc_id, filas, kpis)
 

@@ -78,8 +78,44 @@ def hh_parque_base(p: dict, params: dict) -> float:
     return interpolar(puntos, float(p.get("potencia") or 0))
 
 
+# ---------------------------------------------------------------- tecnología «Otro»
+HH_PERSONA_DEFECTO = 140 * 0.85
+
+
+def es_otro(p: dict) -> bool:
+    return p.get("tecnologia") == "Otro"
+
+
+def plan_hh(p: dict, params: dict) -> dict:
+    """Plan de recursos manual de un proyecto «Otro» en HH: {especialidad: [HH mes 1..n]}.
+
+    planManual = {"unidad": "personas" | "hh", "meses": n, "valores": {especialidad: [..]}}
+    En personas equivalentes se convierte con params["hhPersonaMes"] (HH/persona × eficiencia).
+    """
+    plan = p.get("planManual") or {}
+    n = int(plan.get("meses") or 0)
+    f = float(params.get("hhPersonaMes") or HH_PERSONA_DEFECTO) if plan.get("unidad", "personas") == "personas" else 1.0
+    out = {}
+    for esp, vals in (plan.get("valores") or {}).items():
+        v = [float(x or 0) * f for x in (vals or [])][:n]
+        out[esp] = v + [0.0] * (n - len(v))
+    return out
+
+
+def curvas_de(p: dict, curvas: dict, params: dict) -> dict:
+    """Curvas a usar para un proyecto: las de DIM_Curvas o, si es «Otro», la de su plan manual."""
+    if not es_otro(p):
+        return curvas
+    hh = plan_hh(p, params)
+    total = sum(sum(v) for v in hh.values())
+    return {"Manual": {e: [x / total for x in v] for e, v in hh.items()} if total > 0 else {}}
+
+
 def componentes(p: dict, params: dict) -> list[dict]:
     """Descompone un proyecto en componentes con HH y curva (Forecast_Componentes)."""
+    if es_otro(p):
+        total = sum(sum(v) for v in plan_hh(p, params).values())
+        return [{"componente": "Otro", "curva": "Manual", "hh": total}]
     tipo = p["tipoCliente"]
     if tipo == "DNN":
         hh = p["hhProy"] if not _vacio(p.get("hhProy")) else (
@@ -157,6 +193,7 @@ def largo_curva(curvas: dict, nombre: str) -> int:
 
 def duracion_base(p: dict, curvas: dict, params: dict) -> int:
     """Duración del proyecto según sus curvas: la del componente más largo."""
+    curvas = curvas_de(p, curvas, params)
     return max((largo_curva(curvas, c["curva"]) for c in componentes(p, params)), default=0)
 
 
@@ -202,6 +239,7 @@ def bloques(p: dict, curvas: dict, params: dict) -> list[tuple[int, int]]:
     Cada sensibilidad repite el trabajo (mismas HH, curva y duración) y arranca
     MESES_SENSIBILIDAD meses después del último mes del bloque anterior.
     """
+    curvas = curvas_de(p, curvas, params)
     comps = componentes(p, params)
     n_base = max((largo_curva(curvas, c["curva"]) for c in comps), default=0)
     dur = max((largo_componente(largo_curva(curvas, c["curva"]), n_base, p.get("duracion")) for c in comps), default=0)
@@ -223,13 +261,14 @@ def forecast(proyectos: list[dict], curvas: dict, params: dict) -> list[dict]:
             continue
         inicio = mes_idx(p["fechaInicio"]) + int(p.get("desplazamiento") or 0)
         solap = p.get("factorSolapamiento")
-        solap = 1.0 if _vacio(solap) else float(solap)
+        solap = 1.0 if _vacio(solap) or es_otro(p) else float(solap)  # «Otro»: sin solapamiento
+        cv = curvas_de(p, curvas, params)
         comps = componentes(p, params)
-        n_base = max((largo_curva(curvas, c["curva"]) for c in comps), default=0)
+        n_base = max((largo_curva(cv, c["curva"]) for c in comps), default=0)
         desplazamientos = [d for d, _ in bloques(p, curvas, params)]
         for c in comps:
-            curva = curvas.get(c["curva"]) or {}
-            n_c = largo_curva(curvas, c["curva"])
+            curva = cv.get(c["curva"]) or {}
+            n_c = largo_curva(cv, c["curva"])
             n_nuevo = largo_componente(n_c, n_base, p.get("duracion"))
             for esp, factores in curva.items():
                 if n_nuevo != n_c:
@@ -300,7 +339,8 @@ def _ocupacion(d: float, c: float) -> float:
 def calcular(datos: dict, escenario: dict | None = None) -> dict:
     proyectos, cap = aplicar_escenario(datos, escenario)
     esps = datos["especialidades"]
-    filas = forecast(proyectos, datos["curvas"], datos["parametros"])
+    params = {**datos["parametros"], "hhPersonaMes": cap["hhMesPersona"] * cap["eficiencia"]}
+    filas = forecast(proyectos, datos["curvas"], params)
 
     m0 = mes_idx(datos["horizonte"]["desde"])
     n = datos["horizonte"]["meses"]
@@ -393,10 +433,11 @@ def calcular(datos: dict, escenario: dict | None = None) -> dict:
 
 def detalle(datos: dict, escenario: dict | None, mes: str, especialidad: str) -> list[dict]:
     """Qué proyectos/componentes explican la demanda de una celda de la matriz."""
-    proyectos, _ = aplicar_escenario(datos, escenario)
+    proyectos, cap = aplicar_escenario(datos, escenario)
     m = mes_idx(mes)
     agg = defaultdict(float)
-    for f in forecast(proyectos, datos["curvas"], datos["parametros"]):
+    params = {**datos["parametros"], "hhPersonaMes": cap["hhMesPersona"] * cap["eficiencia"]}
+    for f in forecast(proyectos, datos["curvas"], params):
         if f["mes"] == m and f["especialidad"] == especialidad:
             comp = f["componente"] + (f" · sensibilidad {f['bloque']}" if f.get("bloque") else "")
             agg[(f["proyecto"], comp)] += f["hh"]

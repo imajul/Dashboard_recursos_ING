@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS dim_proyecto (
     sp_item_id           TEXT UNIQUE,              -- id del ítem en la lista SharePoint
     proyecto             TEXT NOT NULL,
     tipo_cliente         TEXT NOT NULL CHECK (tipo_cliente IN ('DPI','DNN','O&M')),
-    tecnologia           TEXT NOT NULL,            -- Solar | Bess | Eólico | Termico
+    tecnologia           TEXT NOT NULL,            -- Solar | Bess | Eólico | Termico | Otro
     potencia_mw          REAL,
     tamano               TEXT CHECK (tamano IN ('Chico','Mediano','Grande','Muy Grande')),
     nivel_dnn            TEXT CHECK (nivel_dnn IN ('DNN Cat1','DNN Cat2') OR nivel_dnn IS NULL),
@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS dim_proyecto (
     hh_proy_manual       REAL,
     factor_solapamiento  REAL NOT NULL DEFAULT 1 CHECK (factor_solapamiento BETWEEN 0 AND 1),
     duracion_meses       INTEGER CHECK (duracion_meses >= 1),  -- NULL = la de las curvas; si no, se reescalan
+    plan_manual          TEXT,                     -- tecnología «Otro»: JSON {unidad, meses, valores{especialidad:[..]}}
     sp_modified          TEXT,                     -- lastModifiedDateTime de Graph
     sincronizado_ts      TEXT NOT NULL DEFAULT (datetime('now'))
 );
