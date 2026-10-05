@@ -7,6 +7,7 @@ simulación de recursos en vivo.
 |---|---|
 | [`docs/PROPUESTA_TECNICA.md`](docs/PROPUESTA_TECNICA.md) | Propuesta técnica completa: arquitectura, modelo de datos, SharePoint, reemplazo de las tablas DAX, simulación, escenarios, viabilidad y diagramas. |
 | [`prototipo/`](prototipo) | Prototipo funcional en HTML/JS: Gantt de proyectos arrastrable (inicio y duración), matriz de ocupación con semáforo, gráfico demanda vs capacidad, edición de recursos y de los parámetros del modelo (tablas de HH y curvas), escenarios, comparación, exportación CSV/JSON y reporte PDF. Abrir `prototipo/index.html`. |
+| [`dist/capacidad-ingenieria.html`](dist/capacidad-ingenieria.html) | **Versión para compartir**: la herramienta completa en un solo archivo. Se manda por mail/Teams y se abre con doble clic, sin cuenta ni instalación. |
 | [`backend/`](backend) | Motor de cálculo en Python (`app/motor.py`), API FastAPI, repositorio SQLite/SQL Server y conector SharePoint vía Microsoft Graph. |
 | [`db/schema.sql`](db/schema.sql) | Modelo de datos. |
 | [`data/proyectos.csv`](data/proyectos.csv) | Lista de proyectos exportada de SharePoint (DIM_Proyecto). Es la fuente de los proyectos. |
@@ -31,3 +32,15 @@ cd backend && uvicorn app.main:app --reload
 - **Para todos los usuarios:** reemplazar `data/proyectos.csv` y correr `cd backend && python -m app.datos_ejemplo` (regenera `data/sample_data.json` y `prototipo/data.js`). Para revisar el mapeo antes: `python -m app.importar_csv ../data/proyectos.csv`.
 
 Mapeo: "N/A" = sin dato · fecha dd/mm/aaaa → mes · **Calendario Fijo = Si → no simulable** · el **Tamaño** se deriva de la potencia con las tablas de HH Parque si el CSV no lo trae.
+
+## Compartir la herramienta sin cuenta
+
+`dist/capacidad-ingenieria.html` es la herramienta completa en un único archivo (motor + datos adentro).
+Se adjunta por mail o Teams, o se deja en una carpeta compartida o biblioteca de SharePoint; quien lo
+recibe lo **descarga y lo abre con doble clic** en Chrome o Edge. Funciona sin internet, salvo el
+botón Reporte PDF.
+
+- Cada persona trabaja sobre su copia: lo que cambia queda en su navegador. Para pasar un escenario,
+  **Exportar → Escenario (JSON)** y el otro lo abre con **Importar**.
+- Después de actualizar proyectos o parámetros, regenerar el archivo:
+  `cd backend && python -m app.datos_ejemplo && cd .. && python scripts/build_standalone.py`.

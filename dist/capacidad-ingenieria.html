@@ -1,0 +1,3163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<!-- Versión autocontenida generada el 05/10/2026 -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Capacidad de Ingeniería</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: barra de herramientas + franja de KPIs; debajo, una sola línea de tiempo mensual
+   compartida por el Gantt de proyectos, la matriz de ocupación y el gráfico demanda/capacidad;
+   editor lateral contextual a la derecha; chips de filtro en el pie. */
+:root{
+  --paper:#ffffff;
+  --ink:#15201a;
+  --ink-soft:#5b6b62;
+  --rule:#c9d2cc;
+  --rule-soft:#e5eae7;
+  --band:#22351f;
+  --band-ink:#f2f5f0;
+  --band-2:#dfe4e0;
+  --band-3:#eef1ee;
+  --surface:#f4f6f4;
+  --chip:#ffffff;
+  --danger:#c2261b;
+  --today:#1a6fd4;
+  --focus:#4c8a45;
+  /* identidad por tipo de cliente (misma en barras, gráficos y leyendas) */
+  --t-dpi:#9DC3E6;
+  --t-dnn:#F4B183;
+  --t-om:#A9D18E;
+  --t-ink:#101510;
+  /* semáforo de ocupación */
+  --ok-bg:#dcf0d8;--ok-ink:#265c22;
+  --warn-bg:#fff3cd;--warn-ink:#7a5a06;
+  --crit-bg:#fde0dd;--crit-ink:#8c1c14;
+  --err-bg:#fdeceb;--err-ink:#8c1c14;
+  --shadow:0 1px 2px rgba(20,35,25,.10),0 8px 24px rgba(20,35,25,.08);
+  --cw:46px;
+  --rowh:34px;
+  --labelw:380px;
+  --f-ui:"Inter Tight",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-num:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#121613;--ink:#e8ede9;--ink-soft:#9aa9a0;--rule:#2d372f;--rule-soft:#212a23;
+    --band:#1c2b1a;--band-ink:#e5ebe3;--band-2:#232c25;--band-3:#1a211c;--surface:#171d19;--chip:#1c231e;
+    --danger:#ff6b5e;--today:#6aa8ff;--focus:#8fd187;
+    --ok-bg:#16300f;--ok-ink:#a9e39c;--warn-bg:#3a2e08;--warn-ink:#ffd977;--crit-bg:#3a1512;--crit-ink:#ffb4ac;
+    --err-bg:#3a1512;--err-ink:#ffb4ac;
+    --shadow:0 1px 2px rgba(0,0,0,.5),0 8px 24px rgba(0,0,0,.35);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#121613;--ink:#e8ede9;--ink-soft:#9aa9a0;--rule:#2d372f;--rule-soft:#212a23;
+  --band:#1c2b1a;--band-ink:#e5ebe3;--band-2:#232c25;--band-3:#1a211c;--surface:#171d19;--chip:#1c231e;
+  --danger:#ff6b5e;--today:#6aa8ff;--focus:#8fd187;
+  --ok-bg:#16300f;--ok-ink:#a9e39c;--warn-bg:#3a2e08;--warn-ink:#ffd977;--crit-bg:#3a1512;--crit-ink:#ffb4ac;
+  --err-bg:#3a1512;--err-ink:#ffb4ac;
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 8px 24px rgba(0,0,0,.35);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+body{
+  background:var(--paper);color:var(--ink);font-family:var(--f-ui);
+  font-size:14px;line-height:1.35;-webkit-font-smoothing:antialiased;
+  display:flex;flex-direction:column;overflow:hidden;
+}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+#errbar{display:none;background:var(--err-bg);color:var(--err-ink);border-bottom:1px solid var(--rule);
+  padding:6px 16px;font:500 12px/1.4 var(--f-num)}
+#errbar.on{display:block}
+
+/* ---------- barra superior ---------- */
+header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 16px;
+  border-bottom:1px solid var(--rule);background:var(--paper);position:relative;z-index:60}
+#title{font-weight:700;font-size:17px;letter-spacing:-.01em;border:none;background:transparent;
+  flex:1 1 220px;min-width:160px;max-width:380px;padding:2px 4px;border-radius:4px}
+#title:hover{background:var(--band-3)}
+#escName{font:600 11px/1 var(--f-num);padding:3px 6px;border-radius:3px;background:var(--band-3);color:var(--ink-soft);white-space:nowrap}
+.tools{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-left:auto}
+.btn{border:1px solid var(--rule);background:var(--chip);border-radius:6px;padding:5px 10px;
+  font-size:13px;font-weight:500;white-space:nowrap}
+.btn:hover{border-color:var(--ink-soft)}
+.btn.primary{background:var(--band);color:var(--band-ink);border-color:var(--band)}
+.btn.on{background:var(--band-2);border-color:var(--ink-soft)}
+.btn[disabled]{opacity:.4;cursor:not-allowed}
+.btn.sm{padding:3px 8px;font-size:12px}
+.sep{width:1px;height:22px;background:var(--rule);margin:0 2px}
+.zoom{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-soft)}
+input[type=range]{width:90px;accent-color:var(--focus)}
+
+/* ---------- franja de KPIs ---------- */
+#kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));border-bottom:1px solid var(--rule);background:var(--surface)}
+.kpi{padding:8px 16px;border-right:1px solid var(--rule-soft);min-width:0;display:flex;flex-direction:column;gap:2px}
+.kpi:last-child{border-right:none}
+.kpi .k{font-size:11px;color:var(--ink-soft);letter-spacing:.04em;text-transform:uppercase;font-weight:600}
+.kpi .v{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+.kpi .v b{font:600 19px/1.15 var(--f-num);font-variant-numeric:tabular-nums}
+.kpi .s{font-size:11.5px;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi.crit .v b{color:var(--crit-ink)}
+.mix{display:flex;height:9px;border-radius:2px;overflow:hidden;margin-top:4px;gap:2px;background:var(--paper)}
+.mix i{display:block;height:100%}
+.delta{font:600 11px/1 var(--f-num);padding:2px 4px;border-radius:3px;flex:0 0 auto}
+.delta.late{background:var(--crit-bg);color:var(--crit-ink)}
+.delta.early{background:var(--ok-bg);color:var(--ok-ink)}
+.delta.same{background:var(--band-3);color:var(--ink-soft)}
+
+#main{flex:1;min-height:0;display:flex;align-items:stretch}
+
+/* ---------- grilla / línea de tiempo ---------- */
+#wrap{flex:1;min-width:0;overflow:auto;position:relative}
+#grid{position:relative;width:max-content;min-width:100%}
+.lrow{display:flex;align-items:stretch}
+.lcell{position:sticky;left:0;z-index:30;background:var(--paper);display:flex;
+  flex:0 0 var(--labelw);width:var(--labelw);border-right:1px solid var(--rule)}
+.area{flex:0 0 92px;border-right:1px solid var(--rule);display:flex;flex-direction:column;align-items:center;
+  justify-content:center;text-align:center;font-weight:700;font-size:13px;padding:4px 6px;background:var(--paper);gap:3px}
+.area small{font-weight:500;font-size:10.5px;color:var(--ink-soft);line-height:1.2}
+.area i{width:22px;height:6px;border-radius:2px;display:block}
+.tname{flex:1;min-width:0;display:flex;align-items:center;gap:6px;padding:0 8px;font-size:13px;
+  border-bottom:1px solid var(--rule-soft);height:var(--rowh);cursor:pointer}
+.tname:hover{background:var(--band-3)}
+.tname.sel{background:var(--band-2)}
+.tname .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tname.excl .nm{text-decoration:line-through;color:var(--ink-soft)}
+.tname input[type=checkbox]{margin:0;accent-color:var(--focus)}
+.fl{font:600 11px/1 var(--f-num);padding:2px 4px;border-radius:3px;background:var(--band-3);color:var(--ink-soft);flex:0 0 auto;white-space:nowrap}
+.fl.lock{background:transparent;border:1px solid var(--rule)}
+.fl.ok{background:var(--ok-bg);color:var(--ok-ink)}
+.fl.warn{background:var(--warn-bg);color:var(--warn-ink)}
+.fl.crit{background:var(--crit-bg);color:var(--crit-ink)}
+.tname.off,.tl.off{opacity:.22}
+
+.tl{position:relative;height:var(--rowh);border-bottom:1px solid var(--rule-soft);flex:0 0 auto}
+.tl::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background-image:repeating-linear-gradient(to right,var(--rule-soft) 0 1px,transparent 1px var(--cw))}
+.yband,.mband,.nband{display:flex;flex:0 0 auto}
+.ycell,.mcell,.ncell{display:flex;align-items:center;justify-content:center;font-size:11px;height:22px;flex:0 0 auto}
+.ycell{background:var(--band-2);color:var(--ink);font-weight:700;font-size:12px;border-right:1px solid var(--paper)}
+.mcell{background:var(--band-3);color:var(--ink-soft);border-right:1px solid var(--rule-soft)}
+.ncell{background:var(--paper);color:var(--ink);font:600 10.5px/1 var(--f-num);border-right:1px solid var(--rule-soft);border-bottom:1px solid var(--rule)}
+.hhead{position:sticky;left:0;z-index:31;flex:0 0 var(--labelw);width:var(--labelw);
+  background:var(--band);color:var(--band-ink);border-right:1px solid var(--rule);
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+.headwrap{position:sticky;top:0;z-index:40;background:var(--paper)}
+.secrow .hhead{justify-content:flex-start;padding:5px 12px;min-height:26px;gap:2px 8px;flex-wrap:wrap}
+.secrow .hhead small{font-weight:500;opacity:.75;font-size:11px}
+.secrow .band{background:var(--band);flex:0 0 auto}
+
+/* barras de proyecto */
+.seg{position:absolute;top:3px;height:20px;border-radius:2px;display:grid;align-items:center;
+  user-select:none;overflow:hidden;box-shadow:inset 0 0 0 1px rgba(0,0,0,.10);color:var(--t-ink);
+  touch-action:none;-webkit-user-select:none;cursor:pointer}
+.seg.mov{cursor:grab}
+.seg.dragging{cursor:grabbing;opacity:.85;z-index:15}
+.seg .h{position:absolute;top:0;bottom:0;width:8px;cursor:ew-resize;z-index:3}
+.seg .h.l{left:0}.seg .h.r{right:0}
+.seg .h::after{content:"";position:absolute;top:4px;bottom:4px;width:2px;border-radius:1px;background:rgba(0,0,0,.35);opacity:0;transition:opacity .12s}
+.seg .h.l::after{left:2px}.seg .h.r::after{right:2px}
+.seg.mov:hover .h::after,.seg.sel .h::after{opacity:1}
+.seg.resizing{cursor:ew-resize;opacity:.85;z-index:15}
+.seg.sel{box-shadow:inset 0 0 0 1px rgba(0,0,0,.10),0 0 0 2px var(--today);z-index:12}
+.seg.dim{opacity:.16;filter:grayscale(.6)}
+.seg.excl{opacity:.35;background-image:repeating-linear-gradient(45deg,rgba(0,0,0,.12) 0 3px,transparent 3px 6px)!important}
+.seg .c{pointer-events:none;font:600 10.5px/1 var(--f-num);text-align:center;overflow:hidden;
+  border-right:1px solid rgba(0,0,0,.10);height:100%;display:flex;align-items:center;justify-content:center}
+.seg .c:last-child{border-right:none}
+.ghost{position:absolute;height:3px;border-radius:2px;pointer-events:none;opacity:.9;bottom:3px}
+.ghost.et{background:var(--ink-soft)}
+.ghost.ln{background:var(--ink);opacity:.45}
+.dragtag{position:absolute;top:-1px;font:600 10px/1 var(--f-num);background:var(--band);color:var(--band-ink);
+  padding:3px 5px;border-radius:3px;z-index:20;pointer-events:none;white-space:nowrap}
+
+/* celdas de ocupación */
+.occ{position:absolute;top:0;bottom:0;display:flex;align-items:center;justify-content:center;
+  font:600 11px/1 var(--f-num);border-right:1px solid var(--paper);cursor:pointer}
+.occ.ok{background:var(--ok-bg);color:var(--ok-ink)}
+.occ.warn{background:var(--warn-bg);color:var(--warn-ink)}
+.occ.crit{background:var(--crit-bg);color:var(--crit-ink)}
+.occ.zero{background:transparent;color:var(--ink-soft);font-weight:500}
+.occ.sel{box-shadow:inset 0 0 0 2px var(--today)}
+.occ:hover{filter:brightness(.95)}
+.stepper{display:inline-flex;align-items:center;border:1px solid var(--rule);border-radius:5px;overflow:hidden;flex:0 0 auto;background:var(--chip)}
+.stepper button{border:none;background:transparent;width:22px;height:22px;font-size:14px;line-height:1;padding:0}
+.stepper button:hover{background:var(--band-3)}
+.stepper span{min-width:24px;text-align:center;font:600 12px/22px var(--f-num);border-left:1px solid var(--rule-soft);border-right:1px solid var(--rule-soft)}
+.esp-ele .nm b{color:var(--ink)}
+
+/* gráfico alineado */
+.tl.chart{height:150px;border-bottom:1px solid var(--rule)}
+.tl.chart::before{display:none}
+.chartlbl{flex:1;display:flex;flex-direction:column;gap:6px;padding:10px 8px;justify-content:center;min-width:0}
+.chartlbl select{border:1px solid var(--rule);border-radius:6px;padding:4px 6px;background:var(--chip);font-size:12.5px;max-width:100%}
+.leg{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--ink-soft);white-space:nowrap}
+.leg i{width:14px;height:10px;border-radius:2px;display:inline-block;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
+.leg i.line{height:2px;box-shadow:none;background:var(--ink)}
+.legs{display:flex;flex-wrap:wrap;gap:4px 10px}
+svg text{fill:var(--ink-soft);font:500 9.5px var(--f-num)}
+
+.vline{position:absolute;top:0;bottom:0;width:0;border-left:2px solid var(--danger);z-index:20;pointer-events:none}
+.vline.dashed{border-left-style:dashed}
+.vline .lbl{position:absolute;bottom:4px;left:3px;font:600 10px/1 var(--f-num);color:var(--danger);
+  background:var(--paper);padding:2px 3px;border-radius:2px;white-space:nowrap}
+.vline.today{border-left:2px dotted var(--today)}
+.vline.today .lbl{color:var(--today);bottom:22px}
+#overlay{position:absolute;left:var(--labelw);top:0;bottom:0;pointer-events:none;z-index:20}
+
+/* ---------- editor lateral ---------- */
+#editor{flex:0 0 360px;overflow:auto;background:var(--surface);border-left:1px solid var(--rule);padding:14px 16px 24px}
+@media (max-width:900px){
+  #main{flex-direction:column}
+  #editor{flex:0 0 auto;max-height:45%;border-left:none;border-top:1px solid var(--rule)}
+}
+#editor h3{margin:0 0 2px;font-size:15px;text-wrap:balance}
+#editor h4{margin:16px 0 6px;font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.05em}
+#editor .sub{color:var(--ink-soft);font-size:12px;margin-bottom:12px}
+.f{margin-bottom:10px}
+.f label{display:block;font-size:12px;color:var(--ink-soft);margin-bottom:3px}
+.f input[type=text],.f input[type=number],.f input[type=month],.f select{
+  width:100%;border:1px solid var(--rule);border-radius:6px;padding:6px 8px;background:var(--chip)}
+.f input[type=number]{font-family:var(--f-num);text-align:right}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.chk{display:flex;align-items:center;gap:6px;font-size:12.5px}
+.chk input{accent-color:var(--focus)}
+.row-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.hint{font-size:11.5px;color:var(--ink-soft);margin-top:8px;line-height:1.45}
+.holg{font-size:12px;background:var(--band-3);border-left:3px solid var(--focus);padding:6px 8px;border-radius:0 5px 5px 0;margin-bottom:10px}
+.holg.crit{border-left-color:var(--danger)}
+table.pk{width:100%;border-collapse:collapse;font-size:12.5px}
+table.pk th{text-align:left;font-weight:600;color:var(--ink-soft);font-size:11.5px;padding:4px 5px;border-bottom:1px solid var(--rule);white-space:nowrap}
+table.pk td{padding:4px 5px;border-bottom:1px solid var(--rule-soft)}
+table.pk td.r,table.pk th.r{text-align:right}
+table.pk td.calc{font:600 12px/1 var(--f-num);text-align:right;white-space:nowrap}
+table.pk input,table.pk select{width:100%;border:1px solid var(--rule);border-radius:5px;padding:4px 5px;background:var(--chip);font-size:12.5px}
+table.pk input[type=number]{text-align:right;font-family:var(--f-num);min-width:56px}
+table.pk tr.click{cursor:pointer}
+table.pk tr.click:hover td{background:var(--band-3)}
+table.pk td.x button{border:none;background:transparent;color:var(--ink-soft);font-size:15px;padding:0 4px}
+.hbar{display:grid;grid-template-columns:minmax(0,1fr) 70px;gap:2px 8px;align-items:center;font-size:12px}
+.hbar .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.hbar .t:hover{text-decoration:underline}
+.hbar .b{grid-column:1/-1;height:6px;border-radius:0 2px 2px 0;margin-bottom:6px;background:var(--band-3)}
+.hbar .b i{display:block;height:100%;border-radius:0 2px 2px 0}
+.hbar .v{text-align:right;font:600 11.5px/1 var(--f-num)}
+.cuello{display:grid;grid-template-columns:1fr auto;gap:2px 8px;padding:7px 0;border-bottom:1px solid var(--rule-soft);font-size:12.5px;align-items:center}
+.cuello small{color:var(--ink-soft);grid-column:1/2}
+.spark{display:block;width:100%;height:70px}
+
+/* ---------- pie ---------- */
+footer{padding:8px 16px;display:flex;gap:6px 10px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--ink-soft);border-top:1px solid var(--rule)}
+.fchip{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--rule);background:var(--chip);
+  border-radius:999px;padding:3px 9px;font-size:11.5px;color:var(--ink-soft);white-space:nowrap}
+.fchip i{width:12px;height:9px;border-radius:2px;display:inline-block;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
+.fchip b{font-family:var(--f-num);font-weight:600;color:var(--ink)}
+.fchip:hover{border-color:var(--ink-soft)}
+.fchip.on{background:var(--band);color:var(--band-ink);border-color:var(--band)}
+.fchip.on b{color:var(--band-ink)}
+.sem{display:inline-flex;align-items:center;gap:4px}
+.sem i{font:600 10px/1 var(--f-num);padding:2px 4px;border-radius:3px;font-style:normal}
+
+/* ---------- diálogo, tooltip, toast ---------- */
+dialog{z-index:1000;position:fixed;margin:0;left:50%;top:7vh;transform:translateX(-50%);max-height:86vh;overflow:auto;
+  border:1px solid var(--rule);border-radius:10px;background:var(--paper);color:var(--ink);padding:0 16px 16px;
+  max-width:560px;width:92%;box-shadow:0 10px 34px rgba(10,20,14,.22),0 2px 6px rgba(10,20,14,.12)}
+dialog.wide{max-width:980px}
+dialog::backdrop{background:transparent}
+#dlgBar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:8px;margin:0 -16px 12px;
+  padding:9px 14px;background:var(--band);color:var(--band-ink);cursor:grab;touch-action:none;user-select:none;border-radius:9px 9px 0 0}
+dialog.moving #dlgBar{cursor:grabbing}
+#dlgBar .grab{opacity:.65;font-size:14px;letter-spacing:-2px}
+#dlgBar .hintbar{font-size:10.5px;opacity:.6;white-space:nowrap}
+#dlgTitle{flex:1;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#dlgX{border:none;background:transparent;color:var(--band-ink);font-size:14px;padding:2px 4px;border-radius:4px;opacity:.8}
+#dlgX:hover{opacity:1}
+#dlgBody h3:first-child{margin-top:0}
+.sc{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--rule-soft)}
+.sc small{color:var(--ink-soft)}
+.tablewrap{overflow-x:auto}
+/* parámetros */
+.ptabs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 12px;padding-bottom:10px;border-bottom:1px solid var(--rule-soft)}
+.psub{color:var(--ink-soft);font-size:12px;line-height:1.45;max-width:72ch}
+.pgrid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:760px){.pgrid{grid-template-columns:1fr}}
+table.pk td.tam{font-weight:600;vertical-align:top;padding-top:8px}
+table.pk tr.grp td{border-top:1px solid var(--rule)}
+table.pk input.pct{min-width:58px}
+table.cm{font-size:12px}
+table.cm th,table.cm td{padding:3px 3px;text-align:right}
+table.cm th:first-child,table.cm td:first-child{text-align:left;white-space:nowrap;padding-right:8px}
+table.cm input[type=number]{min-width:0;width:58px;padding:3px 4px;font-size:11.5px}
+table.cm tfoot td{font:600 11px/1.2 var(--f-num);color:var(--ink-soft);border-bottom:none}
+.mb{height:26px;display:flex;align-items:flex-end;justify-content:center;margin-bottom:2px}
+.mb i{display:block;width:60%;min-height:1px;background:var(--ink-soft);border-radius:2px 2px 0 0}
+.chip{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+#tip{position:fixed;z-index:1200;pointer-events:none;background:var(--band);color:var(--band-ink);border-radius:6px;
+  padding:7px 9px;font-size:12px;line-height:1.4;box-shadow:var(--shadow);max-width:280px;display:none}
+#tip.on{display:block}
+#tip b{font-family:var(--f-num)}
+#toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--band);color:var(--band-ink);
+  padding:8px 14px;border-radius:7px;font-size:13px;z-index:1300;opacity:0;pointer-events:none;transition:opacity .18s}
+#toast.on{opacity:1}
+#buscar{display:none}
+#buscar.on{display:flex;align-items:center;gap:6px;padding:6px 16px;border-bottom:1px solid var(--rule);background:var(--band-3)}
+#buscarInp{flex:1;max-width:320px;border:1px solid var(--rule);border-radius:6px;padding:5px 9px;background:var(--chip)}
+table.atajos{width:100%;border-collapse:collapse;font-size:12.5px}
+table.atajos td{padding:4px 6px;border-bottom:1px solid var(--rule-soft)}
+table.atajos td:first-child{width:190px;white-space:nowrap}
+kbd{font:600 11px var(--f-num);background:var(--band-3);border:1px solid var(--rule);border-bottom-width:2px;border-radius:4px;padding:2px 5px;white-space:nowrap}
+.muestra{font:600 10.5px/1 var(--f-num);padding:3px 6px;border-radius:3px;border:1px dashed var(--rule);color:var(--ink-soft)}
+@media (max-width:700px){
+  :root{--labelw:230px}
+  .area{flex:0 0 54px;font-size:11px}
+  .area small{display:none}
+  .tname .fl.hide-s{display:none}
+  header{gap:8px}
+  .tools{flex-wrap:nowrap;overflow-x:auto;width:100%;padding-bottom:2px}
+  #kpis{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .kpi{padding:6px 10px}
+  .kpi .s{display:none}
+  .kpi .v b{font-size:16px}
+}
+@media (prefers-reduced-motion:reduce){#toast,.seg .h::after{transition:none}}
+</style>
+</head>
+<body>
+
+<header>
+  <input id="title" value="Plan de capacidad · Ingeniería" aria-label="Título del plan">
+  <span id="escName" title="Escenario abierto"></span>
+  <span class="muestra" title="Proyectos del CSV de SharePoint; parámetros, curvas y dotación son ilustrativos">capacidad de ejemplo</span>
+  <div class="tools">
+    <button class="btn" id="addBtn">Agregar proyecto</button>
+    <button class="btn" id="undo" disabled>Deshacer</button>
+    <div class="sep"></div>
+    <button class="btn" id="resBtn" title="Dotación, HH por persona, eficiencia, horizonte">Recursos</button>
+    <button class="btn" id="parBtn" title="Tablas de HH por tecnología y tamaño, ET, Línea, DNN, O&amp;M y curvas">Parámetros</button>
+    <button class="btn" id="minBtn" title="Personas mínimas para que ningún mes supere el 100 %">Nivelar</button>
+    <div class="sep"></div>
+    <button class="btn" id="scenBtn">Escenarios</button>
+    <button class="btn" id="cmpBtn">Comparar</button>
+    <button class="btn primary" id="pdfBtn" title="Reporte PDF para la dirección">Reporte PDF</button>
+    <button class="btn" id="exportBtn">Exportar</button>
+    <button class="btn" id="importBtn" title="Escenario (JSON) o lista de proyectos exportada de SharePoint (CSV)">Importar</button>
+    <input type="file" id="file" accept=".json,.csv" hidden>
+    <div class="sep"></div>
+    <div class="zoom"><label for="zoom">Zoom</label><input type="range" id="zoom" min="30" max="80" value="46"></div>
+    <button class="btn" id="kbdBtn" title="Atajos de teclado (F1)">⌨</button>
+    <button class="btn" id="theme" title="Claro / oscuro">◐</button>
+  </div>
+</header>
+
+<div id="kpis"></div>
+<div id="buscar"><input type="text" id="buscarInp" placeholder="Buscar proyecto…" aria-label="Buscar proyecto"><button class="btn sm" id="buscarX" title="Cerrar">✕</button></div>
+<div id="errbar"></div>
+
+<div id="main">
+  <div id="wrap">
+    <div id="grid">
+      <div class="headwrap" id="head"></div>
+      <div id="rows"></div>
+      <div id="cap"></div>
+      <div id="overlay"></div>
+    </div>
+  </div>
+  <div id="editor"></div>
+</div>
+
+<footer id="legend"></footer>
+
+<dialog id="dlg">
+  <div id="dlgBar"><span class="grab">⠿</span><span id="dlgTitle"></span><span class="hintbar">arrastrá para mover · doble clic para centrar</span><button id="dlgX" title="Cerrar">✕</button></div>
+  <div id="dlgBody"></div>
+  <div class="row-actions" style="margin-top:14px;justify-content:flex-end"><button class="btn" id="dlgClose">Cerrar</button></div>
+</dialog>
+<div id="tip"></div>
+<div id="toast"></div>
+
+<script>/* data.js */
+// Generado por backend/app/datos_ejemplo.py — proyectos de data/proyectos.csv.
+window.SAMPLE_DATA = {
+ "meta": {
+  "origen": "data/proyectos.csv",
+  "version": "proyectos-csv-2026-10",
+  "nota": "Proyectos del CSV de SharePoint; parámetros, curvas y capacidad ilustrativos"
+ },
+ "horizonte": {
+  "desde": "2026-10",
+  "meses": 24
+ },
+ "especialidades": [
+  "Civiles",
+  "Coordinadores",
+  "Eléctricos",
+  "Electrónicos",
+  "Mecánicos"
+ ],
+ "parametros": {
+  "parque": {
+   "Solar|Chico": [
+    [
+     1,
+     800
+    ],
+    [
+     20,
+     1500
+    ]
+   ],
+   "Solar|Mediano": [
+    [
+     20,
+     1500
+    ],
+    [
+     100,
+     3500
+    ]
+   ],
+   "Solar|Grande": [
+    [
+     100,
+     3500
+    ],
+    [
+     300,
+     7000
+    ]
+   ],
+   "Solar|Muy Grande": [
+    [
+     300,
+     7000
+    ],
+    [
+     500,
+     10000
+    ]
+   ],
+   "Bess|Chico": [
+    [
+     1,
+     600
+    ],
+    [
+     20,
+     1200
+    ]
+   ],
+   "Bess|Mediano": [
+    [
+     20,
+     1200
+    ],
+    [
+     100,
+     3000
+    ]
+   ],
+   "Bess|Grande": [
+    [
+     100,
+     3000
+    ],
+    [
+     250,
+     5500
+    ]
+   ],
+   "Bess|Muy Grande": [
+    [
+     250,
+     5500
+    ],
+    [
+     500,
+     8500
+    ]
+   ],
+   "Eólico|Chico": [
+    [
+     1,
+     1000
+    ],
+    [
+     30,
+     2000
+    ]
+   ],
+   "Eólico|Mediano": [
+    [
+     30,
+     2000
+    ],
+    [
+     100,
+     4500
+    ]
+   ],
+   "Eólico|Grande": [
+    [
+     100,
+     4500
+    ],
+    [
+     300,
+     8500
+    ]
+   ],
+   "Eólico|Muy Grande": [
+    [
+     300,
+     8500
+    ],
+    [
+     600,
+     13000
+    ]
+   ],
+   "Termico|Chico": [
+    [
+     1,
+     1200
+    ],
+    [
+     50,
+     2500
+    ]
+   ],
+   "Termico|Mediano": [
+    [
+     50,
+     2500
+    ],
+    [
+     150,
+     5000
+    ]
+   ],
+   "Termico|Grande": [
+    [
+     150,
+     5000
+    ],
+    [
+     400,
+     9000
+    ]
+   ],
+   "Termico|Muy Grande": [
+    [
+     400,
+     9000
+    ],
+    [
+     800,
+     14000
+    ]
+   ]
+  },
+  "et": {
+   "Chico": 500,
+   "Mediano": 1000,
+   "Grande": 2000,
+   "Muy Grande": 3000
+  },
+  "factorAmpliacionET": 0.3,
+  "linea": {
+   "Chico": 300,
+   "Mediano": 600,
+   "Grande": 1200,
+   "Muy Grande": 1800
+  },
+  "factorLineaMT": 0.7,
+  "factorDNN": {
+   "DNN Cat1": 0.06,
+   "DNN Cat2": 0.15
+  },
+  "factorOM": 0.08
+ },
+ "capacidad": {
+  "hhMesPersona": 140,
+  "eficiencia": 0.85,
+  "dotacion": {
+   "Civiles": 8,
+   "Coordinadores": 6,
+   "Eléctricos": 14,
+   "Electrónicos": 4,
+   "Mecánicos": 5
+  },
+  "subcontratoHH": {},
+  "eventos": [
+   {
+    "especialidad": "Eléctricos",
+    "desde": "2027-03",
+    "hasta": null,
+    "delta": -1,
+    "nota": "Jubilación prevista"
+   }
+  ]
+ },
+ "curvas": {
+  "Solar": {
+   "Civiles": [
+    0.0176,
+    0.0276,
+    0.0375,
+    0.0422,
+    0.039,
+    0.0297,
+    0.0194,
+    0.0118,
+    0.0078,
+    0.0062,
+    0.0057,
+    0.0055
+   ],
+   "Coordinadores": [
+    0.0039,
+    0.0053,
+    0.0084,
+    0.0136,
+    0.0198,
+    0.0241,
+    0.0241,
+    0.0198,
+    0.0136,
+    0.0084,
+    0.0053,
+    0.0039
+   ],
+   "Eléctricos": [
+    0.0089,
+    0.01,
+    0.0131,
+    0.0204,
+    0.0334,
+    0.0498,
+    0.0629,
+    0.0655,
+    0.0559,
+    0.0398,
+    0.0249,
+    0.0154
+   ],
+   "Electrónicos": [
+    0.0022,
+    0.0023,
+    0.0024,
+    0.0029,
+    0.0043,
+    0.007,
+    0.011,
+    0.015,
+    0.017,
+    0.0158,
+    0.0122,
+    0.008
+   ],
+   "Mecánicos": [
+    0.0023,
+    0.0029,
+    0.0042,
+    0.0069,
+    0.0107,
+    0.0146,
+    0.0165,
+    0.0152,
+    0.0116,
+    0.0076,
+    0.0046,
+    0.003
+   ]
+  },
+  "Bess": {
+   "Civiles": [
+    0.0153,
+    0.0263,
+    0.0335,
+    0.0302,
+    0.0195,
+    0.0103,
+    0.0059,
+    0.0047,
+    0.0044
+   ],
+   "Coordinadores": [
+    0.0054,
+    0.0088,
+    0.0168,
+    0.0276,
+    0.0329,
+    0.0276,
+    0.0168,
+    0.0088,
+    0.0054
+   ],
+   "Eléctricos": [
+    0.012,
+    0.0148,
+    0.0251,
+    0.048,
+    0.0764,
+    0.088,
+    0.0712,
+    0.0424,
+    0.0221
+   ],
+   "Electrónicos": [
+    0.006,
+    0.0062,
+    0.0074,
+    0.0123,
+    0.0236,
+    0.0384,
+    0.0454,
+    0.0378,
+    0.023
+   ],
+   "Mecánicos": [
+    0.0032,
+    0.0045,
+    0.0084,
+    0.0152,
+    0.0212,
+    0.0208,
+    0.0145,
+    0.0079,
+    0.0043
+   ]
+  },
+  "Eólico": {
+   "Civiles": [
+    0.0161,
+    0.0234,
+    0.0315,
+    0.0381,
+    0.0406,
+    0.0381,
+    0.0315,
+    0.0234,
+    0.0161,
+    0.0108,
+    0.0077,
+    0.0062,
+    0.0056,
+    0.0054,
+    0.0053
+   ],
+   "Coordinadores": [
+    0.003,
+    0.0038,
+    0.0053,
+    0.0078,
+    0.0114,
+    0.0153,
+    0.0185,
+    0.0197,
+    0.0185,
+    0.0153,
+    0.0114,
+    0.0078,
+    0.0053,
+    0.0038,
+    0.003
+   ],
+   "Eléctricos": [
+    0.0053,
+    0.0057,
+    0.0067,
+    0.0088,
+    0.0129,
+    0.0191,
+    0.0269,
+    0.0344,
+    0.039,
+    0.039,
+    0.0344,
+    0.0269,
+    0.0191,
+    0.0129,
+    0.0088
+   ],
+   "Electrónicos": [
+    0.0009,
+    0.0009,
+    0.0009,
+    0.001,
+    0.0012,
+    0.0016,
+    0.0024,
+    0.0035,
+    0.0049,
+    0.0061,
+    0.0068,
+    0.0066,
+    0.0057,
+    0.0043,
+    0.003
+   ],
+   "Mecánicos": [
+    0.0037,
+    0.0042,
+    0.0054,
+    0.0077,
+    0.0115,
+    0.0165,
+    0.0217,
+    0.0254,
+    0.0262,
+    0.0238,
+    0.0192,
+    0.0139,
+    0.0094,
+    0.0064,
+    0.0047
+   ]
+  },
+  "Termico": {
+   "Civiles": [
+    0.0107,
+    0.0156,
+    0.021,
+    0.0254,
+    0.0271,
+    0.0254,
+    0.021,
+    0.0156,
+    0.0107,
+    0.0072,
+    0.0052,
+    0.0042,
+    0.0037,
+    0.0036,
+    0.0035
+   ],
+   "Coordinadores": [
+    0.003,
+    0.0038,
+    0.0053,
+    0.0078,
+    0.0114,
+    0.0153,
+    0.0185,
+    0.0197,
+    0.0185,
+    0.0153,
+    0.0114,
+    0.0078,
+    0.0053,
+    0.0038,
+    0.003
+   ],
+   "Eléctricos": [
+    0.0044,
+    0.0048,
+    0.0056,
+    0.0074,
+    0.0107,
+    0.0159,
+    0.0224,
+    0.0287,
+    0.0325,
+    0.0325,
+    0.0287,
+    0.0224,
+    0.0159,
+    0.0107,
+    0.0074
+   ],
+   "Electrónicos": [
+    0.0018,
+    0.0018,
+    0.0019,
+    0.002,
+    0.0024,
+    0.0033,
+    0.0048,
+    0.0071,
+    0.0098,
+    0.0123,
+    0.0136,
+    0.0132,
+    0.0114,
+    0.0087,
+    0.0061
+   ],
+   "Mecánicos": [
+    0.0056,
+    0.0063,
+    0.0081,
+    0.0116,
+    0.0173,
+    0.0248,
+    0.0325,
+    0.0381,
+    0.0394,
+    0.0358,
+    0.0288,
+    0.0209,
+    0.0142,
+    0.0096,
+    0.0071
+   ]
+  },
+  "ET Nueva": {
+   "Civiles": [
+    0.0177,
+    0.0295,
+    0.0391,
+    0.0391,
+    0.0295,
+    0.0177,
+    0.0099,
+    0.0065,
+    0.0055,
+    0.0053
+   ],
+   "Coordinadores": [
+    0.0032,
+    0.0048,
+    0.0086,
+    0.0144,
+    0.019,
+    0.019,
+    0.0144,
+    0.0086,
+    0.0048,
+    0.0032
+   ],
+   "Eléctricos": [
+    0.0148,
+    0.0175,
+    0.0265,
+    0.0477,
+    0.0794,
+    0.1052,
+    0.1052,
+    0.0794,
+    0.0477,
+    0.0265
+   ],
+   "Electrónicos": [
+    0.0027,
+    0.0027,
+    0.0031,
+    0.0045,
+    0.0079,
+    0.0137,
+    0.0191,
+    0.0202,
+    0.0161,
+    0.01
+   ],
+   "Mecánicos": [
+    0.0014,
+    0.0019,
+    0.0032,
+    0.0057,
+    0.0086,
+    0.0099,
+    0.0086,
+    0.0057,
+    0.0032,
+    0.0019
+   ]
+  },
+  "Ampliación ET": {
+   "Civiles": [
+    0.0267,
+    0.0488,
+    0.0416,
+    0.0181,
+    0.0081,
+    0.0067
+   ],
+   "Coordinadores": [
+    0.0059,
+    0.0144,
+    0.0298,
+    0.0298,
+    0.0144,
+    0.0059
+   ],
+   "Eléctricos": [
+    0.0279,
+    0.0482,
+    0.1242,
+    0.1973,
+    0.1442,
+    0.0582
+   ],
+   "Electrónicos": [
+    0.0045,
+    0.0052,
+    0.0108,
+    0.0261,
+    0.0335,
+    0.0199
+   ],
+   "Mecánicos": [
+    0.0025,
+    0.0053,
+    0.0128,
+    0.0162,
+    0.0095,
+    0.0037
+   ]
+  },
+  "Línea MT": {
+   "Civiles": [
+    0.0623,
+    0.1138,
+    0.0971,
+    0.0423,
+    0.0189,
+    0.0156
+   ],
+   "Coordinadores": [
+    0.0059,
+    0.0144,
+    0.0298,
+    0.0298,
+    0.0144,
+    0.0059
+   ],
+   "Eléctricos": [
+    0.0232,
+    0.0402,
+    0.1035,
+    0.1644,
+    0.1202,
+    0.0485
+   ],
+   "Electrónicos": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "Mecánicos": [
+    0.0025,
+    0.0053,
+    0.0128,
+    0.0162,
+    0.0095,
+    0.0037
+   ]
+  },
+  "Línea AT": {
+   "Civiles": [
+    0.0407,
+    0.07,
+    0.0895,
+    0.0804,
+    0.052,
+    0.0274,
+    0.0158,
+    0.0124,
+    0.0118
+   ],
+   "Coordinadores": [
+    0.0036,
+    0.0059,
+    0.0112,
+    0.0184,
+    0.0219,
+    0.0184,
+    0.0112,
+    0.0059,
+    0.0036
+   ],
+   "Eléctricos": [
+    0.0135,
+    0.0167,
+    0.0282,
+    0.0539,
+    0.0859,
+    0.099,
+    0.0801,
+    0.0477,
+    0.0249
+   ],
+   "Electrónicos": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "Mecánicos": [
+    0.0016,
+    0.0023,
+    0.0042,
+    0.0076,
+    0.0106,
+    0.0104,
+    0.0073,
+    0.0039,
+    0.0021
+   ]
+  },
+  "DNN Cat1": {
+   "Civiles": [
+    0.0781,
+    0.058,
+    0.0139
+   ],
+   "Coordinadores": [
+    0.0522,
+    0.1956,
+    0.0522
+   ],
+   "Eléctricos": [
+    0.0389,
+    0.2,
+    0.1111
+   ],
+   "Electrónicos": [
+    0.0046,
+    0.0174,
+    0.028
+   ],
+   "Mecánicos": [
+    0.0202,
+    0.0946,
+    0.0352
+   ]
+  },
+  "DNN Cat2": {
+   "Civiles": [
+    0.0203,
+    0.035,
+    0.0447,
+    0.0402,
+    0.026,
+    0.0137,
+    0.0079,
+    0.0062,
+    0.0059
+   ],
+   "Coordinadores": [
+    0.0089,
+    0.0146,
+    0.0281,
+    0.046,
+    0.0548,
+    0.046,
+    0.0281,
+    0.0146,
+    0.0089
+   ],
+   "Eléctricos": [
+    0.0105,
+    0.013,
+    0.0219,
+    0.042,
+    0.0668,
+    0.077,
+    0.0623,
+    0.0371,
+    0.0193
+   ],
+   "Electrónicos": [
+    0.0015,
+    0.0015,
+    0.0019,
+    0.0031,
+    0.0059,
+    0.0096,
+    0.0114,
+    0.0095,
+    0.0057
+   ],
+   "Mecánicos": [
+    0.0048,
+    0.0068,
+    0.0126,
+    0.0229,
+    0.0318,
+    0.0312,
+    0.0218,
+    0.0118,
+    0.0064
+   ]
+  },
+  "O&M": {
+   "Civiles": [
+    0.0083,
+    0.0083,
+    0.0083,
+    0.0083,
+    0.0083,
+    0.0083,
+    0.0083,
+    0.0083,
+    0.0083,
+    0.0083,
+    0.0083,
+    0.0083
+   ],
+   "Coordinadores": [
+    0.0167,
+    0.0167,
+    0.0167,
+    0.0167,
+    0.0167,
+    0.0167,
+    0.0167,
+    0.0167,
+    0.0167,
+    0.0167,
+    0.0167,
+    0.0167
+   ],
+   "Eléctricos": [
+    0.0333,
+    0.0333,
+    0.0333,
+    0.0333,
+    0.0333,
+    0.0333,
+    0.0333,
+    0.0333,
+    0.0333,
+    0.0333,
+    0.0333,
+    0.0333
+   ],
+   "Electrónicos": [
+    0.0125,
+    0.0125,
+    0.0125,
+    0.0125,
+    0.0125,
+    0.0125,
+    0.0125,
+    0.0125,
+    0.0125,
+    0.0125,
+    0.0125,
+    0.0125
+   ],
+   "Mecánicos": [
+    0.0125,
+    0.0125,
+    0.0125,
+    0.0125,
+    0.0125,
+    0.0125,
+    0.0125,
+    0.0125,
+    0.0125,
+    0.0125,
+    0.0125,
+    0.0125
+   ]
+  }
+ },
+ "proyectos": [
+  {
+   "id": 1,
+   "proyecto": "PSSDV",
+   "nombre": "Sol del Valle",
+   "tipoCliente": "DPI",
+   "tecnologia": "Solar",
+   "potencia": 300.0,
+   "tamano": null,
+   "nivelDNN": null,
+   "estado": "No Iniciado",
+   "fechaInicio": "2027-02",
+   "est": "ET Nueva",
+   "linea": "Línea AT",
+   "simulable": false,
+   "hhParque": null,
+   "hhEt": null,
+   "hhLinea": null,
+   "hhProy": null,
+   "factorSolapamiento": 1.0,
+   "duracion": null,
+   "tensionPOE": 132.0,
+   "avance": null
+  },
+  {
+   "id": 2,
+   "proyecto": "PAMAS",
+   "nombre": "Maschwits",
+   "tipoCliente": "DPI",
+   "tecnologia": "Bess",
+   "potencia": 40.0,
+   "tamano": null,
+   "nivelDNN": null,
+   "estado": "En Proceso",
+   "fechaInicio": "2026-08",
+   "est": "Ampliación ET",
+   "linea": null,
+   "simulable": true,
+   "hhParque": null,
+   "hhEt": null,
+   "hhLinea": null,
+   "hhProy": null,
+   "factorSolapamiento": 1.0,
+   "duracion": null,
+   "tensionPOE": 33.0,
+   "avance": null
+  },
+  {
+   "id": 3,
+   "proyecto": "PATOC",
+   "nombre": "Tocota",
+   "tipoCliente": "DPI",
+   "tecnologia": "Bess",
+   "potencia": 15.0,
+   "tamano": null,
+   "nivelDNN": null,
+   "estado": "En Proceso",
+   "fechaInicio": "2026-05",
+   "est": null,
+   "linea": "Línea MT",
+   "simulable": true,
+   "hhParque": null,
+   "hhEt": null,
+   "hhLinea": null,
+   "hhProy": null,
+   "factorSolapamiento": 1.0,
+   "duracion": null,
+   "tensionPOE": 33.0,
+   "avance": null
+  },
+  {
+   "id": 4,
+   "proyecto": "PABRA",
+   "nombre": "Bragado",
+   "tipoCliente": "DPI",
+   "tecnologia": "Bess",
+   "potencia": 100.0,
+   "tamano": null,
+   "nivelDNN": null,
+   "estado": "En Proceso",
+   "fechaInicio": "2027-01",
+   "est": null,
+   "linea": null,
+   "simulable": true,
+   "hhParque": null,
+   "hhEt": null,
+   "hhLinea": null,
+   "hhProy": null,
+   "factorSolapamiento": 0.43,
+   "duracion": null,
+   "tensionPOE": 33.0,
+   "avance": null
+  },
+  {
+   "id": 5,
+   "proyecto": "PACGO",
+   "nombre": "Cañada de Gomez",
+   "tipoCliente": "DPI",
+   "tecnologia": "Bess",
+   "potencia": 36.0,
+   "tamano": null,
+   "nivelDNN": null,
+   "estado": "No Iniciado",
+   "fechaInicio": "2026-10",
+   "est": null,
+   "linea": null,
+   "simulable": true,
+   "hhParque": null,
+   "hhEt": null,
+   "hhLinea": null,
+   "hhProy": null,
+   "factorSolapamiento": 0.43,
+   "duracion": null,
+   "tensionPOE": 33.0,
+   "avance": null
+  },
+  {
+   "id": 6,
+   "proyecto": "PACHA",
+   "nombre": "Chascomus",
+   "tipoCliente": "DPI",
+   "tecnologia": "Bess",
+   "potencia": 45.0,
+   "tamano": null,
+   "nivelDNN": null,
+   "estado": "No Iniciado",
+   "fechaInicio": "2026-09",
+   "est": null,
+   "linea": null,
+   "simulable": true,
+   "hhParque": null,
+   "hhEt": null,
+   "hhLinea": null,
+   "hhProy": null,
+   "factorSolapamiento": 0.43,
+   "duracion": null,
+   "tensionPOE": 33.0,
+   "avance": null
+  },
+  {
+   "id": 7,
+   "proyecto": "PACRA",
+   "nombre": "Cruz Alta",
+   "tipoCliente": "DPI",
+   "tecnologia": "Bess",
+   "potencia": 100.0,
+   "tamano": null,
+   "nivelDNN": null,
+   "estado": "No Iniciado",
+   "fechaInicio": "2026-12",
+   "est": null,
+   "linea": null,
+   "simulable": true,
+   "hhParque": null,
+   "hhEt": null,
+   "hhLinea": null,
+   "hhProy": null,
+   "factorSolapamiento": 0.43,
+   "duracion": null,
+   "tensionPOE": 132.0,
+   "avance": null
+  },
+  {
+   "id": 8,
+   "proyecto": "PACRE",
+   "nombre": "Crespo",
+   "tipoCliente": "DPI",
+   "tecnologia": "Bess",
+   "potencia": 50.0,
+   "tamano": null,
+   "nivelDNN": null,
+   "estado": "En Proceso",
+   "fechaInicio": "2026-08",
+   "est": null,
+   "linea": null,
+   "simulable": false,
+   "hhParque": null,
+   "hhEt": null,
+   "hhLinea": null,
+   "hhProy": null,
+   "factorSolapamiento": 0.43,
+   "duracion": null,
+   "tensionPOE": 33.0,
+   "avance": null
+  },
+  {
+   "id": 9,
+   "proyecto": "PAMDA",
+   "nombre": "Mar de Ajo",
+   "tipoCliente": "DPI",
+   "tecnologia": "Bess",
+   "potencia": 40.0,
+   "tamano": null,
+   "nivelDNN": null,
+   "estado": "En Proceso",
+   "fechaInicio": "2026-08",
+   "est": null,
+   "linea": null,
+   "simulable": true,
+   "hhParque": null,
+   "hhEt": null,
+   "hhLinea": null,
+   "hhProy": null,
+   "factorSolapamiento": 0.43,
+   "duracion": null,
+   "tensionPOE": 33.0,
+   "avance": null
+  },
+  {
+   "id": 10,
+   "proyecto": "PASRS",
+   "nombre": "Eanta Rosa Sur",
+   "tipoCliente": "DPI",
+   "tecnologia": "Bess",
+   "potencia": 30.0,
+   "tamano": null,
+   "nivelDNN": null,
+   "estado": "En Proceso",
+   "fechaInicio": "2026-08",
+   "est": null,
+   "linea": null,
+   "simulable": false,
+   "hhParque": null,
+   "hhEt": null,
+   "hhLinea": null,
+   "hhProy": null,
+   "factorSolapamiento": 0.43,
+   "duracion": null,
+   "tensionPOE": 33.0,
+   "avance": null
+  },
+  {
+   "id": 11,
+   "proyecto": "PEHUC",
+   "nombre": "Hucalito",
+   "tipoCliente": "DPI",
+   "tecnologia": "Eólico",
+   "potencia": 30.0,
+   "tamano": null,
+   "nivelDNN": null,
+   "estado": "En Proceso",
+   "fechaInicio": "2026-08",
+   "est": null,
+   "linea": null,
+   "simulable": true,
+   "hhParque": null,
+   "hhEt": null,
+   "hhLinea": null,
+   "hhProy": null,
+   "factorSolapamiento": 1.0,
+   "duracion": null,
+   "tensionPOE": 33.0,
+   "avance": null
+  },
+  {
+   "id": 12,
+   "proyecto": "PEVI3",
+   "nombre": "Villalonga III",
+   "tipoCliente": "DNN",
+   "tecnologia": "Eólico",
+   "potencia": 33.0,
+   "tamano": null,
+   "nivelDNN": "DNN Cat2",
+   "estado": "En Proceso",
+   "fechaInicio": "2026-05",
+   "est": null,
+   "linea": null,
+   "simulable": false,
+   "hhParque": null,
+   "hhEt": null,
+   "hhLinea": null,
+   "hhProy": null,
+   "factorSolapamiento": 1.0,
+   "duracion": null,
+   "tensionPOE": 33.0,
+   "avance": null
+  },
+  {
+   "id": 13,
+   "proyecto": "PSMZS",
+   "nombre": "Mendoza Sur",
+   "tipoCliente": "DNN",
+   "tecnologia": "Solar",
+   "potencia": 50.0,
+   "tamano": null,
+   "nivelDNN": "DNN Cat2",
+   "estado": "En Proceso",
+   "fechaInicio": "2026-05",
+   "est": null,
+   "linea": null,
+   "simulable": false,
+   "hhParque": null,
+   "hhEt": null,
+   "hhLinea": null,
+   "hhProy": null,
+   "factorSolapamiento": 1.0,
+   "duracion": null,
+   "tensionPOE": 33.0,
+   "avance": null
+  },
+  {
+   "id": 14,
+   "proyecto": "PDACE",
+   "nombre": "Data Center",
+   "tipoCliente": "DNN",
+   "tecnologia": "Termico",
+   "potencia": 100.0,
+   "tamano": null,
+   "nivelDNN": "DNN Cat2",
+   "estado": "En Proceso",
+   "fechaInicio": "2026-09",
+   "est": null,
+   "linea": null,
+   "simulable": true,
+   "hhParque": null,
+   "hhEt": null,
+   "hhLinea": null,
+   "hhProy": null,
+   "factorSolapamiento": 1.0,
+   "duracion": null,
+   "tensionPOE": 33.0,
+   "avance": null
+  },
+  {
+   "id": 15,
+   "proyecto": "PEDAN",
+   "nombre": "Don Antonio",
+   "tipoCliente": "DNN",
+   "tecnologia": "Eólico",
+   "potencia": 80.0,
+   "tamano": null,
+   "nivelDNN": "DNN Cat1",
+   "estado": "En Proceso",
+   "fechaInicio": "2026-09",
+   "est": null,
+   "linea": null,
+   "simulable": false,
+   "hhParque": null,
+   "hhEt": null,
+   "hhLinea": null,
+   "hhProy": null,
+   "factorSolapamiento": 1.0,
+   "duracion": null,
+   "tensionPOE": 33.0,
+   "avance": null
+  },
+  {
+   "id": 16,
+   "proyecto": "HINUH",
+   "nombre": "Hidroeléctrica Nihuiles",
+   "tipoCliente": "O&M",
+   "tecnologia": "Solar",
+   "potencia": 100.0,
+   "tamano": null,
+   "nivelDNN": null,
+   "estado": "En Proceso",
+   "fechaInicio": "2026-09",
+   "est": null,
+   "linea": null,
+   "simulable": true,
+   "hhParque": null,
+   "hhEt": null,
+   "hhLinea": null,
+   "hhProy": null,
+   "factorSolapamiento": 1.0,
+   "duracion": null,
+   "tensionPOE": 33.0,
+   "avance": null
+  }
+ ]
+};
+
+</script>
+<script>/* engine.js */
+/*
+ * Motor de capacidad de Ingeniería — espejo JS de backend/app/motor.py.
+ * Corre en el navegador (simulación instantánea, sin ida y vuelta al servidor)
+ * y en Node (para el test de paridad con Python).
+ */
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.CapEngine = factory();
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  const TIPOS_CLIENTE = ['DPI', 'DNN', 'O&M'];
+
+  const mesIdx = (ym) => { const [y, m] = ym.split('-').map(Number); return y * 12 + (m - 1); };
+  const mesStr = (i) => `${Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}`;
+  const vacio = (v) => v === null || v === undefined || v === '';
+
+  function interpolar(puntos, x) {
+    const p = puntos.slice().sort((a, b) => a[0] - b[0]);
+    if (p.length === 1) return p[0][1];
+    let i = 0;
+    while (i < p.length - 2 && x > p[i + 1][0]) i++;
+    const [x0, y0] = p[i], [x1, y1] = p[i + 1];
+    return Math.max(0, y0 + (y1 - y0) * (x - x0) / (x1 - x0));
+  }
+
+  const TAMANOS = ['Chico', 'Mediano', 'Grande', 'Muy Grande'];
+
+  // Tamaño cargado o, si falta, el que corresponde a la potencia según las tablas de HH Parque.
+  function tamano(p, params) {
+    if (!vacio(p.tamano)) return p.tamano;
+    const mw = Number(p.potencia) || 0;
+    let elegido = TAMANOS[0];
+    for (const t of TAMANOS) {
+      const puntos = params.parque[`${p.tecnologia}|${t}`];
+      if (puntos && Math.min(...puntos.map((q) => q[0])) <= mw) elegido = t;
+    }
+    return elegido;
+  }
+
+  function hhParqueBase(p, params) {
+    const puntos = params.parque[`${p.tecnologia}|${tamano(p, params)}`];
+    return puntos ? interpolar(puntos, Number(p.potencia) || 0) : 0;
+  }
+
+  // ≙ Forecast_Componentes
+  function componentes(p, params) {
+    if (p.tipoCliente === 'DNN') {
+      const hh = !vacio(p.hhProy) ? p.hhProy : hhParqueBase(p, params) * (params.factorDNN[p.nivelDNN] || 0);
+      return [{ componente: 'DNN', curva: p.nivelDNN, hh: Number(hh) }];
+    }
+    if (p.tipoCliente === 'O&M') {
+      const hh = !vacio(p.hhProy) ? p.hhProy : hhParqueBase(p, params) * params.factorOM;
+      return [{ componente: 'O&M', curva: 'O&M', hh: Number(hh) }];
+    }
+    const comps = [{ componente: 'Parque', curva: p.tecnologia,
+      hh: Number(!vacio(p.hhParque) ? p.hhParque : hhParqueBase(p, params)) }];
+    if (!vacio(p.est)) {
+      let hh;
+      if (!vacio(p.hhEt)) hh = p.hhEt;
+      else {
+        hh = params.et[tamano(p, params)] || 0;
+        if (p.est === 'Ampliación ET') hh *= params.factorAmpliacionET;
+      }
+      comps.push({ componente: 'ET', curva: p.est, hh: Number(hh) });
+    }
+    if (!vacio(p.linea)) {
+      let hh;
+      if (!vacio(p.hhLinea)) hh = p.hhLinea;
+      else {
+        hh = params.linea[tamano(p, params)] || 0;
+        if (p.linea === 'Línea MT') hh *= params.factorLineaMT;
+      }
+      comps.push({ componente: 'Línea', curva: p.linea, hh: Number(hh) });
+    }
+    return comps;
+  }
+
+  function aplicarEscenario(datos, escenario) {
+    escenario = escenario || {};
+    const cambios = escenario.proyectos || {};
+    const proyectos = datos.proyectos.map((p) => {
+      const q = Object.assign({ incluir: true }, p, { desplazamiento: 0 });
+      const c = cambios[String(p.id)];
+      if (c) for (const k of Object.keys(c)) if (k !== 'id') q[k] = c[k];
+      return q;
+    });
+    const base = datos.capacidad;
+    const cc = escenario.capacidad || {};
+    const cap = {
+      hhMesPersona: 'hhMesPersona' in cc ? cc.hhMesPersona : base.hhMesPersona,
+      eficiencia: 'eficiencia' in cc ? cc.eficiencia : base.eficiencia,
+      dotacion: Object.assign({}, base.dotacion, cc.dotacion || {}),
+      subcontratoHH: Object.assign({}, base.subcontratoHH || {}, cc.subcontratoHH || {}),
+      eventos: (base.eventos || []).concat(cc.eventos || []),
+    };
+    return { proyectos, cap };
+  }
+
+  const largoCurva = (curvas, nombre) =>
+    Math.max(0, ...Object.values(curvas[nombre] || {}).map((v) => v.length));
+
+  function duracionBase(p, curvas, params) {
+    return Math.max(0, ...componentes(p, params).map((c) => largoCurva(curvas, c.curva)));
+  }
+
+  // Estira o comprime una curva a nNuevo meses conservando su suma y su forma.
+  function reescalar(factores, nNuevo) {
+    const n = factores.length;
+    if (nNuevo === n || n === 0) return factores.slice();
+    const acum = [0];
+    for (const f of factores) acum.push(acum[acum.length - 1] + f);
+    const c = (t) => {
+      const i = Math.floor(t);
+      if (i >= n) return acum[n];
+      return acum[i] + factores[i] * (t - i);
+    };
+    const out = [];
+    for (let j = 0; j < nNuevo; j++) out.push(c((j + 1) * n / nNuevo) - c(j * n / nNuevo));
+    return out;
+  }
+
+  function largoComponente(nC, nBase, duracion) {
+    if (vacio(duracion) || !nBase) return nC;
+    return Math.max(1, Math.floor(nC * Math.trunc(Number(duracion)) / nBase + 0.5));
+  }
+
+  // ≙ Forecast_Mes_V4 : HH Forecast = HHComponente × Factor × Factor Solapamiento
+  // Con p.duracion (meses) cada curva se reescala: mismas HH totales, otra intensidad mensual.
+  function forecast(proyectos, curvas, params) {
+    const filas = [];
+    for (const p of proyectos) {
+      if (p.incluir === false) continue;
+      const inicio = mesIdx(p.fechaInicio) + (Number(p.desplazamiento) || 0);
+      const solap = vacio(p.factorSolapamiento) ? 1 : Number(p.factorSolapamiento);
+      const comps = componentes(p, params);
+      const nBase = Math.max(0, ...comps.map((c) => largoCurva(curvas, c.curva)));
+      for (const c of comps) {
+        const curva = curvas[c.curva] || {};
+        const nC = largoCurva(curvas, c.curva);
+        const nNuevo = largoComponente(nC, nBase, p.duracion);
+        for (const esp of Object.keys(curva)) {
+          let factores = curva[esp];
+          if (nNuevo !== nC) factores = reescalar(factores.concat(new Array(nC - factores.length).fill(0)), nNuevo);
+          factores.forEach((f, k) => {
+            if (f === 0) return;
+            filas.push({
+              proyectoId: p.id, proyecto: p.proyecto, tipoCliente: p.tipoCliente,
+              componente: c.componente, curva: c.curva, mes: inicio + k, mesCurva: k + 1, especialidad: esp,
+              factor: f, hhComponente: c.hh, hh: c.hh * f * solap,
+            });
+          });
+        }
+      }
+    }
+    return filas;
+  }
+
+  function capacidadMes(cap, mes, esp) {
+    let personas = cap.dotacion[esp] || 0;
+    for (const ev of cap.eventos || []) {
+      if (ev.especialidad !== esp) continue;
+      if (mes < mesIdx(ev.desde)) continue;
+      if (ev.hasta && mes > mesIdx(ev.hasta)) continue;
+      personas += ev.delta;
+    }
+    personas = Math.max(0, personas);
+    return personas * cap.hhMesPersona * cap.eficiencia + ((cap.subcontratoHH || {})[esp] || 0);
+  }
+
+  const ocupacion = (d, c) => (c > 0 ? d / c : d > 0 ? Infinity : 0);
+
+  function calcular(datos, escenario) {
+    const { proyectos, cap } = aplicarEscenario(datos, escenario);
+    const esps = datos.especialidades;
+    const filas = forecast(proyectos, datos.curvas, datos.parametros);
+    const m0 = mesIdx(datos.horizonte.desde), n = datos.horizonte.meses;
+    const meses = Array.from({ length: n }, (_, i) => m0 + i);
+    const pos = new Map(meses.map((m, i) => [m, i]));
+    const ei = new Map(esps.map((e, i) => [e, i]));
+
+    const dem = meses.map(() => esps.map(() => 0));
+    const demTipo = meses.map(() => TIPOS_CLIENTE.map(() => 0));
+    const demTipoEsp = meses.map(() => esps.map(() => TIPOS_CLIENTE.map(() => 0)));
+    const porProy = new Map(), porTipo = {}, porComp = {};
+    for (const f of filas) {
+      porProy.set(f.proyecto, (porProy.get(f.proyecto) || 0) + f.hh);
+      porTipo[f.tipoCliente] = (porTipo[f.tipoCliente] || 0) + f.hh;
+      porComp[f.componente] = (porComp[f.componente] || 0) + f.hh;
+      const i = pos.get(f.mes);
+      if (i === undefined) continue;
+      const j = ei.get(f.especialidad), t = TIPOS_CLIENTE.indexOf(f.tipoCliente);
+      dem[i][j] += f.hh;
+      demTipo[i][t] += f.hh;
+      demTipoEsp[i][j][t] += f.hh;
+    }
+    const capm = meses.map((m) => esps.map((e) => capacidadMes(cap, m, e)));
+    const ocup = meses.map((_, i) => esps.map((_, j) => ocupacion(dem[i][j], capm[i][j])));
+
+    let maxOcup = { valor: 0, mes: null, especialidad: null };
+    let primerCritico = null, hhExc = 0;
+    const cuellos = {};
+    for (const e of esps) cuellos[e] = { mesesCriticos: 0, hhExcedidas: 0, maxOcupacion: 0,
+      mesPico: null, maxExceso: 0, primerMesCritico: null };
+    meses.forEach((m, i) => {
+      const criticas = [];
+      esps.forEach((e, j) => {
+        const o = ocup[i][j], exc = Math.max(0, dem[i][j] - capm[i][j]);
+        hhExc += exc;
+        const cu = cuellos[e];
+        cu.hhExcedidas += exc;
+        cu.maxExceso = Math.max(cu.maxExceso, exc);
+        if (o > cu.maxOcupacion) { cu.maxOcupacion = o; cu.mesPico = mesStr(m); }
+        if (o > 1) {
+          cu.mesesCriticos++;
+          criticas.push(e);
+          if (cu.primerMesCritico === null) cu.primerMesCritico = mesStr(m);
+        }
+        if (o > maxOcup.valor) maxOcup = { valor: o, mes: mesStr(m), especialidad: e };
+      });
+      if (criticas.length && primerCritico === null) primerCritico = { mes: mesStr(m), especialidades: criticas };
+    });
+    const hhPersona = cap.hhMesPersona * cap.eficiencia;
+    for (const cu of Object.values(cuellos)) {
+      cu.personasAdicionales = hhPersona ? Math.ceil(Math.round(cu.maxExceso / hhPersona * 1e6) / 1e6) : null;
+    }
+
+    const total = [...porProy.values()].reduce((a, b) => a + b, 0);
+    let acum = 0;
+    const pareto = [...porProy.entries()]
+      .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
+      .map(([proyecto, hh]) => {
+        acum += hh;
+        return { proyecto, hh, pct: total ? hh / total : 0, pctAcum: total ? acum / total : 0 };
+      });
+
+    const mixTipoCliente = {};
+    for (const t of TIPOS_CLIENTE) mixTipoCliente[t] = porTipo[t] || 0;
+
+    return {
+      meses: meses.map(mesStr), especialidades: esps,
+      demanda: dem, capacidad: capm, ocupacion: ocup,
+      demandaPorTipo: demTipo, demandaPorTipoEsp: demTipoEsp,
+      kpis: {
+        maxOcupacion: maxOcup, primerMesCritico: primerCritico, hhExcedidas: hhExc,
+        hhForecastHorizonte: dem.reduce((a, r) => a + r.reduce((x, y) => x + y, 0), 0),
+        hhForecastTotal: total,
+      },
+      cuellos, pareto, mixTipoCliente, mixComponente: porComp,
+      proyectos, filas,
+    };
+  }
+
+  function detalle(res, mes, especialidad) {
+    const m = mesIdx(mes), agg = new Map();
+    for (const f of res.filas) {
+      if (f.mes !== m || f.especialidad !== especialidad) continue;
+      const k = f.proyecto + '\u0000' + f.componente;
+      agg.set(k, (agg.get(k) || 0) + f.hh);
+    }
+    return [...agg.entries()].map(([k, hh]) => {
+      const [proyecto, componente] = k.split('\u0000');
+      return { proyecto, componente, hh };
+    }).sort((a, b) => b.hh - a.hh);
+  }
+
+  function mejorInicio(datos, escenario, proyectoId, desde = -3, hasta = 12) {
+    const esc = JSON.parse(JSON.stringify(escenario || {}));
+    esc.proyectos = esc.proyectos || {};
+    const clave = String(proyectoId), base = esc.proyectos[clave] || {};
+    const pruebas = [];
+    for (let d = desde; d <= hasta; d++) {
+      esc.proyectos[clave] = Object.assign({}, base, { desplazamiento: d });
+      const k = calcular(datos, esc).kpis;
+      pruebas.push({ desplazamiento: d, hhExcedidas: k.hhExcedidas, maxOcupacion: k.maxOcupacion.valor });
+    }
+    const r6 = (x) => Math.round(x * 1e6) / 1e6;
+    const mejor = pruebas.reduce((a, b) => {
+      const da = r6(a.hhExcedidas), db = r6(b.hhExcedidas);
+      if (db < da) return b;
+      if (db === da && Math.abs(b.desplazamiento) < Math.abs(a.desplazamiento)) return b;
+      return a;
+    });
+    return { mejor, pruebas };
+  }
+
+  /* Personas mínimas a sumar por especialidad para que ningún mes supere el
+     umbral (búsqueda incremental; el resultado respeta eventos y subcontratos). */
+  function dotacionMinima(datos, escenario, umbral = 1) {
+    const esc = JSON.parse(JSON.stringify(escenario || {}));
+    esc.capacidad = esc.capacidad || {};
+    const dot = Object.assign({}, datos.capacidad.dotacion, esc.capacidad.dotacion || {});
+    const res = {};
+    for (let j = 0; j < datos.especialidades.length; j++) {
+      const e = datos.especialidades[j];
+      let extra = 0;
+      for (; extra <= 50; extra++) {
+        esc.capacidad.dotacion = Object.assign({}, dot, { [e]: dot[e] + extra });
+        const r = calcular(datos, esc);
+        if (r.ocupacion.every((fila) => fila[j] <= umbral)) break;
+      }
+      res[e] = extra;
+    }
+    return res;
+  }
+
+  return { TIPOS_CLIENTE, TAMANOS, tamano, mesIdx, mesStr, interpolar, componentes, aplicarEscenario, forecast,
+    largoCurva, duracionBase, reescalar, largoComponente,
+    capacidadMes, calcular, detalle, mejorInicio, dotacionMinima };
+});
+
+</script>
+<script>
+(function(){
+"use strict";
+window.addEventListener("error",function(ev){
+  var b=document.getElementById("errbar");if(!b)return;
+  b.className="on";b.textContent="Error: "+(ev.message||"")+" (línea "+ev.lineno+")";
+});
+
+/* ===================== constantes ===================== */
+var E=window.CapEngine;
+var KEY="capacidad-ing-v1";
+var MES=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+var TIPOS=[
+  {k:"DPI",n:"DPI",d:"Dirección de Proyectos",c:"var(--t-dpi)",hex:"#9DC3E6"},
+  {k:"DNN",n:"DNN",d:"Desarrollo de Nuevos Negocios",c:"var(--t-dnn)",hex:"#F4B183"},
+  {k:"O&M",n:"O&M",d:"Operación y Mantenimiento",c:"var(--t-om)",hex:"#A9D18E"}
+];
+var TIPO={};TIPOS.forEach(function(t){TIPO[t.k]=t;});
+var TECNOS=["Solar","Bess","Eólico","Termico"];
+var ABREV={"Civiles":"Civ.","Coordinadores":"Coord.","Eléctricos":"Eléc.","Electrónicos":"Electrón.","Mecánicos":"Mec."};
+var TAMANOS=["Chico","Mediano","Grande","Muy Grande"];
+var ESTADOS=["No Iniciado","En Proceso","Finalizado"];
+var NF0=new Intl.NumberFormat("es-AR",{maximumFractionDigits:0});
+var NF2=new Intl.NumberFormat("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2});
+var NFP=new Intl.NumberFormat("es-AR",{style:"percent",maximumFractionDigits:0});
+
+/* ===================== utilidades ===================== */
+function clone(o){return JSON.parse(JSON.stringify(o));}
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+function px(n){return n+"px";}
+function hh(n){return NF0.format(Math.round(n));}
+function hhK(n){if(n<0.5)return "";if(n>=9950)return (n/1000).toFixed(0)+"k";if(n>=1000)return (n/1000).toFixed(1).replace(".",",")+"k";return String(Math.round(n));}
+function oc(v){return v===Infinity?"∞":NF2.format(v);}
+function sem(v){return v>=1?"crit":v>=0.8?"warn":"ok";}
+function semTxt(v){return v>=1?"rojo":v>=0.8?"amarillo":"verde";}
+function mlabel(ym){if(!ym)return "—";var p=ym.split("-");return MES[+p[1]-1]+"-"+p[0].slice(2);}
+function nextId(){var m=0;S.datos.proyectos.forEach(function(p){m=Math.max(m,+p.id||0);});return m+1;}
+function findP(id){for(var i=0;i<S.datos.proyectos.length;i++)if(String(S.datos.proyectos[i].id)===String(id))return S.datos.proyectos[i];return null;}
+function todayYM(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");}
+
+/* ===================== estado ===================== */
+/* S.datos = dataset de trabajo (equivale a DIM_Proyecto + DIM_Curvas + Capacidad).
+   S.base  = foto de referencia contra la que se muestran los deltas. */
+var S=null,R=null,RB=null,sel=null,undoStack=[],redoStack=[],downloads=null,dlg,ed;
+function nuevoWS(){
+  var d=clone(window.SAMPLE_DATA);
+  return {version:versionDatos(),title:"Plan de capacidad · Ingeniería",nombre:"Base",datos:d,base:clone(d),baseNombre:"Base",
+    cw:46,filtro:"",espChart:"",q:""};
+}
+function versionDatos(){return (window.SAMPLE_DATA.meta&&window.SAMPLE_DATA.meta.version)||"1";}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+function load(){
+  var raw=null;try{raw=localStorage.getItem(KEY);}catch(e){}
+  if(raw){try{
+    var o=JSON.parse(raw);
+    /* si cambió el dataset publicado (p. ej. nueva lista de proyectos) se arranca de cero;
+       los escenarios guardados siguen disponibles en «Escenarios» */
+    if(o&&o.datos&&o.datos.proyectos&&o.version===versionDatos())return o;
+    if(o&&o.datos)setTimeout(function(){toast("Se cargó la lista de proyectos actualizada");},600);
+  }catch(e){}}
+  return nuevoWS();
+}
+function snap(){return clone({datos:S.datos,nombre:S.nombre});}
+function push(){undoStack.push(snap());if(undoStack.length>60)undoStack.shift();redoStack=[];updUndo();}
+function undo(){if(!undoStack.length)return;redoStack.push(snap());var p=undoStack.pop();S.datos=p.datos;S.nombre=p.nombre;recalc();render();save();refreshParam();toast("Deshecho");}
+function redo(){if(!redoStack.length)return;undoStack.push(snap());var p=redoStack.pop();S.datos=p.datos;S.nombre=p.nombre;recalc();render();save();refreshParam();}
+function updUndo(){document.getElementById("undo").disabled=!undoStack.length;}
+
+/* ===================== cálculo ===================== */
+/* El filtro por tipo de cliente actúa como un segmentador de Power BI:
+   la demanda se limita a ese tipo, la capacidad no cambia. */
+function datosVista(d){
+  if(!S.filtro)return d;
+  var v=Object.assign({},d);
+  v.proyectos=d.proyectos.map(function(p){return p.tipoCliente===S.filtro?p:Object.assign({},p,{incluir:false});});
+  return v;
+}
+function recalc(){R=E.calcular(datosVista(S.datos));RB=E.calcular(datosVista(S.base));}
+function mIdx(ym){return E.mesIdx(ym)-E.mesIdx(S.datos.horizonte.desde);}
+/* span de un proyecto: inicio y duración en meses (componente más largo) */
+function spanOf(p){
+  var comps=E.componentes(p,S.datos.parametros),base=0,dur=0,parts=[];
+  comps.forEach(function(c){base=Math.max(base,E.largoCurva(S.datos.curvas,c.curva));});
+  comps.forEach(function(c){
+    var nc=E.largoCurva(S.datos.curvas,c.curva),n=E.largoComponente(nc,base,p.duracion);
+    parts.push({c:c,n:n,n0:nc});dur=Math.max(dur,n);
+  });
+  return {start:mIdx(p.fechaInicio)+(+p.desplazamiento||0),dur:dur,base:base,comps:comps,parts:parts};
+}
+function durMod(p){return p.duracion!=null&&p.duracion!=="";}
+/* fija la duración; si coincide con la de las curvas vuelve a "automática" */
+function setDur(p,n){var b=spanOf(Object.assign({},p,{duracion:null})).base;n=Math.max(1,Math.min(60,Math.round(n)));p.duracion=(n===b)?null:n;}
+/* HH mensuales de un proyecto (todas las especialidades) */
+function hhMensual(p){
+  var f=E.forecast([Object.assign({incluir:true},p)],S.datos.curvas,S.datos.parametros),m0=E.mesIdx(S.datos.horizonte.desde),out={};
+  f.forEach(function(r){var i=r.mes-m0;out[i]=(out[i]||0)+r.hh;});
+  return out;
+}
+function totalP(p){var t=0;E.componentes(p,S.datos.parametros).forEach(function(c){t+=c.hh;});return t*(p.factorSolapamiento==null||p.factorSolapamiento===""?1:+p.factorSolapamiento);}
+
+/* ===================== render: cabecera ===================== */
+function renderHead(){
+  var h=document.getElementById("head"),n=R.meses.length,cw=S.cw,years=[],cur=null,i;
+  R.meses.forEach(function(ym){var y=ym.slice(0,4);if(!cur||cur.y!==y){cur={y:y,n:0};years.push(cur);}cur.n++;});
+  var yb='<div class="lrow"><div class="hhead" style="height:22px;border-bottom:1px solid var(--rule)">Tipo · Proyecto</div><div class="yband">';
+  years.forEach(function(g){yb+='<div class="ycell" style="width:'+px(g.n*cw)+'">'+g.y+'</div>';});
+  var mb='<div class="lrow"><div class="hhead" style="height:22px;border-bottom:1px solid var(--rule)"></div><div class="mband">';
+  var nb='<div class="lrow"><div class="hhead" style="height:22px;border-bottom:1px solid var(--rule);font-weight:500;font-size:11px;opacity:.85">HH forecast del mes</div><div class="nband">';
+  for(i=0;i<n;i++){
+    var tot=R.demanda[i].reduce(function(a,b){return a+b;},0);
+    mb+='<div class="mcell" style="width:'+px(cw)+'">'+MES[+R.meses[i].slice(5)-1]+'</div>';
+    nb+='<div class="ncell" style="width:'+px(cw)+'">'+hhK(tot)+'</div>';
+  }
+  h.innerHTML=yb+'</div></div>'+mb+'</div></div>'+nb+'</div></div>';
+}
+
+/* ===================== render: proyectos (Gantt) ===================== */
+function renderRows(){
+  var box=document.getElementById("rows"),w=R.meses.length*S.cw,html="";
+  TIPOS.forEach(function(t){
+    var items=S.datos.proyectos.filter(function(p){return p.tipoCliente===t.k;});
+    if(!items.length)return;
+    var names="",tls="";
+    items.forEach(function(p){
+      var hit=!S.q||(p.proyecto+" "+(p.nombre||"")+" "+p.tecnologia).toLowerCase().indexOf(S.q)>=0;
+      var excl=p.incluir===false,isSel=sel&&sel.p===String(p.id);
+      var tot=totalP(p);
+      names+='<div class="tname'+(isSel?" sel":"")+(excl?" excl":"")+(hit?"":" off")+'" data-p="'+esc(p.id)+'">'
+        +'<input type="checkbox" data-inc="'+esc(p.id)+'"'+(excl?"":" checked")+' title="Incluir en el cálculo" aria-label="Incluir '+esc(p.proyecto)+'">'
+        +'<span class="nm" title="'+esc(p.proyecto+(p.nombre?" · "+p.nombre:"")+(p.estado?" · "+p.estado:""))+'">'+esc(p.proyecto)+(p.nombre?' <small style="color:var(--ink-soft)">'+esc(p.nombre)+'</small>':'')+'</span>'
+        +'<span class="fl hide-s">'+esc(p.tecnologia)+' '+NF0.format(+p.potencia||0)+' MW</span>'
+        +'<span class="fl">'+hhK(tot)+'</span>'
+        +(durMod(p)?'<span class="fl warn" title="Duración modificada: '+spanOf(p).base+' meses según curvas">'+p.duracion+' m</span>':'')
+        +(p.simulable?'':'<span class="fl lock" title="Proyecto no simulable: fecha fija">fijo</span>')
+        +'</div>';
+      tls+=barHTML(p,w,hit);
+    });
+    html+='<div class="lrow"><div class="lcell"><div class="area"><i style="background:'+t.c+'"></i>'+t.n+'<small>'+t.d+'</small></div>'
+      +'<div style="flex:1;min-width:0">'+names+'</div></div><div>'+tls+'</div></div>';
+  });
+  box.innerHTML=html;
+}
+function barHTML(p,w,hit){
+  var sp=spanOf(p),cw=S.cw,m=hhMensual(p),t=TIPO[p.tipoCliente]||TIPOS[0];
+  var cls="seg"+(p.simulable?" mov":"")+(sel&&sel.p===String(p.id)?" sel":"")+(p.incluir===false?" excl":"")
+    +(S.filtro&&S.filtro!==p.tipoCliente?" dim":"");
+  var cells="";
+  for(var k=0;k<sp.dur;k++){cells+='<div class="c">'+(cw>=38?hhK(m[sp.start+k]||0):"")+'</div>';}
+  var g="";
+  sp.parts.forEach(function(pt){
+    if(pt.c.componente==="ET")g+='<div class="ghost et" style="left:'+px(sp.start*cw+2)+';width:'+px(pt.n*cw-4)+'" title="ET"></div>';
+    if(pt.c.componente==="Línea")g+='<div class="ghost ln" style="left:'+px(sp.start*cw+2)+';width:'+px(pt.n*cw-4)+';bottom:0"></div>';
+  });
+  var hd=p.simulable?'<div class="h l" data-h="l" title="Arrastrá para cambiar el inicio y la duración"></div><div class="h r" data-h="r" title="Arrastrá para cambiar la duración"></div>':'';
+  return '<div class="tl'+(hit?"":" off")+'" style="width:'+px(w)+'">'
+    +'<div class="'+cls+'" data-seg="'+esc(p.id)+'" style="left:'+px(sp.start*cw)+';width:'+px(sp.dur*cw)
+    +';background:'+t.c+';grid-template-columns:repeat('+sp.dur+',1fr)">'+cells+hd+'</div>'+g+'</div>';
+}
+
+/* ===================== render: capacidad / ocupación ===================== */
+function renderCap(){
+  var box=document.getElementById("cap"),n=R.meses.length,cw=S.cw,w=n*cw,html="";
+  var cap=S.datos.capacidad,hp=cap.hhMesPersona*cap.eficiencia;
+  html+='<div class="lrow secrow"><div class="hhead">Ocupación por especialidad <small>HH forecast ÷ capacidad · '+NF0.format(hp)+' HH/persona·mes</small></div><div class="band" style="width:'+px(w)+'"></div></div>';
+  R.especialidades.forEach(function(e,j){
+    var cu=R.cuellos[e],pers=cap.dotacion[e]||0,isSel=sel&&sel.e===e&&!sel.m;
+    var tag=cu.mesesCriticos?'<span class="fl crit" title="Meses con ocupación &gt; 1">'+cu.mesesCriticos+' m &gt;1</span>':'<span class="fl ok">sin exceso</span>';
+    html+='<div class="lrow"><div class="lcell"><div class="tname'+(isSel?" sel":"")+'" data-e="'+esc(e)+'" style="padding-left:12px">'
+      +'<span class="nm"><b>'+esc(e)+'</b></span>'+tag
+      +'<span class="stepper" title="Personas asignadas"><button data-dot="'+esc(e)+'" data-d="-1" aria-label="Quitar una persona en '+esc(e)+'">−</button><span>'+pers+'</span><button data-dot="'+esc(e)+'" data-d="1" aria-label="Sumar una persona en '+esc(e)+'">+</button></span>'
+      +'</div></div><div class="tl" style="width:'+px(w)+'">';
+    for(var i=0;i<n;i++){
+      var v=R.ocupacion[i][j],d=R.demanda[i][j];
+      var c=(d<0.5&&v<0.005)?"zero":sem(v);
+      var isC=sel&&sel.e===e&&sel.m===R.meses[i];
+      html+='<div class="occ '+c+(isC?" sel":"")+'" data-cell="'+i+'|'+j+'" style="left:'+px(i*cw)+';width:'+px(cw)+'">'+(c==="zero"?"·":(cw>=36?oc(v):""))+'</div>';
+    }
+    html+='</div></div>';
+  });
+  /* fila total */
+  html+='<div class="lrow"><div class="lcell"><div class="tname" style="padding-left:12px;cursor:default"><span class="nm"><b>Total área</b></span><span class="fl">'+NF0.format(totPersonas())+' pers.</span></div></div><div class="tl" style="width:'+px(w)+'">';
+  for(var i2=0;i2<n;i2++){
+    var dd=R.demanda[i2].reduce(function(a,b){return a+b;},0),cc=R.capacidad[i2].reduce(function(a,b){return a+b;},0),vv=cc?dd/cc:0;
+    var c2=dd<0.5?"zero":sem(vv);
+    html+='<div class="occ '+c2+'" data-tot="'+i2+'" style="left:'+px(i2*cw)+';width:'+px(cw)+';cursor:default">'+(c2==="zero"?"·":(cw>=36?oc(vv):""))+'</div>';
+  }
+  html+='</div></div>';
+  /* gráfico demanda vs capacidad alineado a la línea de tiempo */
+  var opts='<option value="">Todas las especialidades</option>'+R.especialidades.map(function(e){return '<option'+(S.espChart===e?" selected":"")+'>'+esc(e)+'</option>';}).join("");
+  html+='<div class="lrow secrow"><div class="hhead">Demanda vs capacidad <small>HH por mes</small></div><div class="band" style="width:'+px(w)+'"></div></div>';
+  html+='<div class="lrow"><div class="lcell"><div class="chartlbl"><select id="espChart" aria-label="Especialidad del gráfico">'+opts+'</select>'
+    +'<div class="legs">'+TIPOS.map(function(t){return '<span class="leg"><i style="background:'+t.c+'"></i>'+t.n+'</span>';}).join("")
+    +'<span class="leg"><i class="line"></i>Capacidad</span></div></div></div>'
+    +'<div class="tl chart" style="width:'+px(w)+'">'+chartSVG(w)+'</div></div>';
+  box.innerHTML=html;
+}
+function totPersonas(){var t=0,d=S.datos.capacidad.dotacion;Object.keys(d).forEach(function(k){t+=d[k];});return t;}
+function serieChart(){
+  var j=S.espChart?R.especialidades.indexOf(S.espChart):-1;
+  return R.meses.map(function(_,i){
+    var tipos=j<0?R.demandaPorTipo[i]:R.demandaPorTipoEsp[i][j];
+    var cap=j<0?R.capacidad[i].reduce(function(a,b){return a+b;},0):R.capacidad[i][j];
+    return {tipos:tipos,dem:tipos.reduce(function(a,b){return a+b;},0),cap:cap};
+  });
+}
+function niceMax(v){if(v<=0)return 1;var p=Math.pow(10,Math.floor(Math.log10(v))),f=v/p;return (f<=1?1:f<=2?2:f<=2.5?2.5:f<=5?5:10)*p;}
+function chartSVG(w){
+  var H=150,top=12,bot=16,cw=S.cw,s=serieChart();
+  var mx=niceMax(Math.max.apply(null,s.map(function(r){return Math.max(r.dem,r.cap);}))*1.05);
+  var y=function(v){return top+(H-top-bot)*(1-v/mx);};
+  var g='<svg width="'+w+'" height="'+H+'" role="img" aria-label="Demanda por tipo de cliente y capacidad por mes">';
+  [0.5,1].forEach(function(f){var yy=y(mx*f);g+='<line x1="0" x2="'+w+'" y1="'+yy+'" y2="'+yy+'" stroke="var(--rule-soft)" stroke-width="1"/><text x="4" y="'+(yy-3)+'">'+hhK(mx*f)+'</text>';});
+  var path="";
+  s.forEach(function(r,i){
+    var x=i*cw+4,bw=Math.max(2,cw-8),acc=0;
+    r.tipos.forEach(function(v,t){
+      if(v<=0)return;
+      var y1=y(acc+v),y0=y(acc),hgt=Math.max(0,y0-y1-(acc>0?2:0));
+      g+='<rect x="'+x+'" y="'+y1+'" width="'+bw+'" height="'+hgt+'" fill="'+TIPOS[t].c+'" rx="'+(acc+v>=r.dem-0.01?2:0)+'"/>';
+      acc+=v;
+    });
+    if(r.dem>r.cap&&r.cap>0){g+='<rect x="'+x+'" y="'+y(r.dem)+'" width="'+bw+'" height="'+Math.max(1,y(r.cap)-y(r.dem))+'" fill="none" stroke="var(--danger)" stroke-width="1.5"/>';}
+    var yc=y(r.cap);
+    path+=(i===0?"M":"L")+(i*cw)+" "+yc+" L"+((i+1)*cw)+" "+yc+" ";
+    g+='<rect x="'+(i*cw)+'" y="0" width="'+cw+'" height="'+H+'" fill="transparent" data-bar="'+i+'"/>';
+  });
+  g+='<path d="'+path+'" fill="none" stroke="var(--ink)" stroke-width="2"/>';
+  g+='<line x1="0" x2="'+w+'" y1="'+y(0)+'" y2="'+y(0)+'" stroke="var(--rule)" stroke-width="1"/>';
+  return g+'</svg>';
+}
+
+/* ===================== render: líneas verticales ===================== */
+function renderOverlay(){
+  var o=document.getElementById("overlay"),cw=S.cw,html="",t=mIdx(todayYM());
+  if(t>=0&&t<R.meses.length)html+='<div class="vline today" style="left:'+px(t*cw)+'"><span class="lbl">hoy</span></div>';
+  var pc=R.kpis.primerMesCritico;
+  if(pc){var i=R.meses.indexOf(pc.mes);if(i>=0)html+='<div class="vline dashed" style="left:'+px(i*cw)+'"><span class="lbl">1.er mes crítico · '+mlabel(pc.mes)+'</span></div>';}
+  o.innerHTML=html;
+}
+
+/* ===================== render: KPIs ===================== */
+function dchip(a,b,menorEsMejor,fmt){
+  var d=a-b;if(Math.abs(d)<0.005)return '<span class="delta same" title="Igual que '+esc(S.baseNombre)+'">= base</span>';
+  var mejor=menorEsMejor?d<0:d>0;
+  return '<span class="delta '+(mejor?"early":"late")+'" title="Diferencia contra '+esc(S.baseNombre)+'">'+(d>0?"+":"−")+fmt(Math.abs(d))+'</span>';
+}
+function renderKPIs(){
+  var k=R.kpis,kb=RB.kpis,mo=k.maxOcupacion,pc=k.primerMesCritico,pcb=kb.primerMesCritico;
+  var mixT=R.mixTipoCliente,tot=k.hhForecastTotal||1;
+  var etl=(R.mixComponente["ET"]||0)+(R.mixComponente["Línea"]||0);
+  var pcD="";
+  if(pc&&pcb){var dm=E.mesIdx(pc.mes)-E.mesIdx(pcb.mes);pcD=dm===0?'<span class="delta same">= base</span>':'<span class="delta '+(dm>0?"early":"late")+'">'+(dm>0?"+":"−")+Math.abs(dm)+' m</span>';}
+  else if(!pc&&pcb)pcD='<span class="delta early">sin crítico</span>';
+  else if(pc&&!pcb)pcD='<span class="delta late">nuevo</span>';
+  var html=''
+   +kpi("Máxima ocupación",oc(mo.valor),dchip(mo.valor,kb.maxOcupacion.valor,true,function(v){return NF2.format(v);}),mo.especialidad?esc(mo.especialidad)+" · "+mlabel(mo.mes):"—",mo.valor>=1)
+   +kpi("Primer mes crítico",pc?mlabel(pc.mes):"ninguno",pcD,pc?esc(pc.especialidades.join(", ")):"Ningún mes supera 1,00",!!pc)
+   +kpi("HH excedidas",hh(k.hhExcedidas),dchip(k.hhExcedidas,kb.hhExcedidas,true,hh),"Demanda por encima de la capacidad",k.hhExcedidas>0.5)
+   +kpi("HH forecast",hh(k.hhForecastHorizonte),dchip(k.hhForecastHorizonte,kb.hhForecastHorizonte,true,hh),"En el horizonte · "+mlabel(R.meses[0])+" a "+mlabel(R.meses[R.meses.length-1]),false)
+   +'<div class="kpi"><span class="k">DPI · DNN · O&amp;M</span><span class="v" style="font:600 12.5px/1.3 var(--f-num)">'
+     +TIPOS.map(function(t){return t.n+" "+NFP.format((mixT[t.k]||0)/tot);}).join(" · ")+'</span>'
+     +'<div class="mix">'+TIPOS.map(function(t){var f=(mixT[t.k]||0)/tot;return f>0?'<i style="width:'+(f*100)+'%;background:'+t.c+'" title="'+t.n+': '+hh(mixT[t.k]||0)+' HH"></i>':"";}).join("")+'</div></div>'
+   +kpi("ET + Líneas",hh(etl),"",NFP.format(etl/tot)+" de la demanda total",false);
+  document.getElementById("kpis").innerHTML=html;
+  document.getElementById("escName").textContent=S.nombre+(S.filtro?" · solo "+S.filtro:"");
+}
+function kpi(k,v,d,s,crit){return '<div class="kpi'+(crit?" crit":"")+'"><span class="k">'+k+'</span><span class="v"><b>'+v+'</b>'+(d||"")+'</span><span class="s">'+s+'</span></div>';}
+
+/* ===================== render: pie ===================== */
+function renderFooter(){
+  var f=document.getElementById("legend"),cnt={};
+  S.datos.proyectos.forEach(function(p){cnt[p.tipoCliente]=(cnt[p.tipoCliente]||0)+1;});
+  var html='<span class="leg"><b>Ver demanda de:</b></span><button class="fchip'+(S.filtro?"":" on")+'" data-f="">Todos</button>';
+  TIPOS.forEach(function(t){
+    if(!cnt[t.k])return;
+    html+='<button class="fchip'+(S.filtro===t.k?" on":"")+'" data-f="'+t.k+'" title="'+t.d+'"><i style="background:'+t.c+'"></i>'+t.n+' <b>'+cnt[t.k]+'</b></button>';
+  });
+  html+='<span class="sep"></span><span class="sem">Semáforo <i class="fl ok">&lt; 0,80</i><i class="fl warn">&lt; 1,00</i><i class="fl crit">≥ 1,00</i></span>'
+    +'<span class="sep"></span><span class="leg">Base de comparación: <b style="color:var(--ink)">'+esc(S.baseNombre)+'</b></span>'
+    +'<span class="leg">Barra gris fina: ET · barra oscura: Línea · bordes de la barra: duración</span>';
+  f.innerHTML=html;
+}
+
+function render(){
+  document.documentElement.style.setProperty("--cw",px(S.cw));
+  renderHead();renderRows();renderCap();renderOverlay();renderKPIs();renderFooter();renderEditor();updUndo();
+}
+/* re-render liviano durante el arrastre: no toca las filas de proyectos */
+function renderLive(){renderHead();renderCap();renderOverlay();renderKPIs();}
+
+/* ===================== editor lateral ===================== */
+function renderEditor(){
+  if(sel&&sel.p&&findP(sel.p))return edProyecto(findP(sel.p));
+  if(sel&&sel.e&&sel.m)return edCelda(sel.e,sel.m);
+  if(sel&&sel.e)return edEsp(sel.e);
+  edResumen();
+}
+function edResumen(){
+  var html='<h3>Resumen del escenario</h3><div class="sub">Elegí un proyecto, una especialidad o una celda de la matriz para ver el detalle.</div>';
+  html+='<h4>Cuellos de botella</h4>';
+  var lista=R.especialidades.map(function(e){return {e:e,c:R.cuellos[e]};}).sort(function(a,b){return b.c.hhExcedidas-a.c.hhExcedidas||b.c.maxOcupacion-a.c.maxOcupacion;});
+  lista.forEach(function(x){
+    var c=x.c;
+    html+='<div class="cuello"><span><b>'+esc(x.e)+'</b> <span class="fl '+sem(c.maxOcupacion)+'">'+oc(c.maxOcupacion)+'</span></span>'
+      +(c.personasAdicionales>0?'<button class="btn sm" data-apl="'+esc(x.e)+'" data-n="'+c.personasAdicionales+'" title="Suma personas desde el primer mes crítico">+'+c.personasAdicionales+' pers.</button>':'<span class="fl ok">ok</span>')
+      +'<small>'+(c.mesesCriticos?c.mesesCriticos+' meses críticos desde '+mlabel(c.primerMesCritico)+' · '+hh(c.hhExcedidas)+' HH excedidas':'Pico '+mlabel(c.mesPico))+'</small></div>';
+  });
+  html+='<h4>Pareto de proyectos · HH forecast</h4><div class="hbar">';
+  var mx=R.pareto.length?R.pareto[0].hh:1;
+  R.pareto.slice(0,10).forEach(function(r){
+    var p=S.datos.proyectos.filter(function(q){return q.proyecto===r.proyecto;})[0],t=p?TIPO[p.tipoCliente]:TIPOS[0];
+    html+='<span class="t" data-goto="'+esc(p?p.id:"")+'" title="'+esc(r.proyecto)+'">'+esc(r.proyecto)+'</span><span class="v">'+hh(r.hh)+'</span>'
+      +'<div class="b" title="'+NFP.format(r.pct)+' del total · acumulado '+NFP.format(r.pctAcum)+'"><i style="width:'+(r.hh/mx*100)+'%;background:'+t.c+'"></i></div>';
+  });
+  html+='</div>';
+  if(R.pareto.length>10)html+='<div class="hint">'+(R.pareto.length-10)+' proyectos más fuera del top 10. Los 10 primeros suman '+NFP.format(R.pareto[9].pctAcum)+' de la demanda.</div>';
+  html+='<h4>Demanda por componente</h4><table class="pk"><tr><th>Componente</th><th class="r">HH</th><th class="r">%</th></tr>';
+  var tot=R.kpis.hhForecastTotal||1;
+  ["Parque","ET","Línea","DNN","O&M"].forEach(function(c){var v=R.mixComponente[c]||0;if(v)html+='<tr><td>'+c+'</td><td class="calc">'+hh(v)+'</td><td class="calc">'+NFP.format(v/tot)+'</td></tr>';});
+  html+='</table>';
+  ed.innerHTML=html;
+}
+function sel_(o){sel=o;render();}
+
+function edProyecto(p){
+  var sp=spanOf(p),tipo=p.tipoCliente,tot=0;
+  sp.comps.forEach(function(c){tot+=c.hh;});
+  var solap=(p.factorSolapamiento==null||p.factorSolapamiento==="")?1:+p.factorSolapamiento;
+  var opt=function(list,v,blank){if(v&&list.indexOf(v)<0)list=list.concat([v]);return (blank?'<option value="">—</option>':'')+list.map(function(x){return '<option'+(String(x)===String(v)?" selected":"")+'>'+esc(x)+'</option>';}).join("");};
+  var html='<h3>'+esc(p.proyecto)+(p.nombre?' · '+esc(p.nombre):'')+'</h3><div class="sub">'+esc(TIPO[tipo]?TIPO[tipo].d:tipo)+(p.estado?' · '+esc(p.estado):'')+(p.tensionPOE?' · POE '+NF0.format(p.tensionPOE)+' kV':'')+' · '+mlabel(p.fechaInicio)+' → '+mlabel(R&&E.mesStr(E.mesIdx(p.fechaInicio)+sp.dur-1))+' · '+sp.dur+' meses</div>';
+  if(!p.simulable)html+='<div class="holg">Calendario fijo (no simulable): inicio y duración no se mueven. Desmarcá «Calendario Fijo» (marcá Simulable) para arrastrarlo o buscarle el mejor inicio y duración.</div>';
+  html+='<div class="two"><div class="f"><label for="edName">Proyecto (código)</label><input type="text" id="edName" value="'+esc(p.proyecto)+'"></div>'
+    +'<div class="f"><label for="edNom">Nombre</label><input type="text" id="edNom" value="'+esc(p.nombre||"")+'"></div></div>'
+    +'<div class="two"><div class="f"><label for="edTipo">Tipo cliente</label><select id="edTipo">'+opt(["DPI","DNN","O&M"],tipo)+'</select></div>'
+    +'<div class="f"><label for="edEstado">Estado</label><select id="edEstado">'+opt(ESTADOS,p.estado)+'</select></div></div>'
+    +'<div class="two"><div class="f"><label for="edTec">Tecnología</label><select id="edTec">'+opt(TECNOS,p.tecnologia)+'</select></div>'
+    +'<div class="f"><label for="edMW">Potencia (MW)</label><input type="number" id="edMW" min="0" step="10" value="'+esc(p.potencia)+'"></div></div>'
+    +'<div class="two"><div class="f"><label for="edTam">Tamaño</label><select id="edTam"><option value=""'+(p.tamano?"":" selected")+'>Auto por potencia ('+E.tamano(Object.assign({},p,{tamano:null}),S.datos.parametros)+')</option>'+TAMANOS.map(function(x){return '<option'+(x===p.tamano?" selected":"")+'>'+x+'</option>';}).join("")+'</select></div>'
+    +'<div class="f"><label for="edIni">Fecha inicio</label><input type="month" id="edIni" value="'+esc(p.fechaInicio)+'"></div></div>'
+    +'<div class="two"><div class="f"><label for="edDur">Duración (meses)</label><input type="number" id="edDur" min="1" max="60" step="1" value="'+sp.dur+'"></div>'
+    +'<div class="f"><label>Fin</label><div class="holg" style="margin:0;padding:6px 8px">'+mlabel(E.mesStr(E.mesIdx(p.fechaInicio)+sp.dur-1))+(durMod(p)?' · curvas: '+sp.base+' m <button class="btn sm" id="edDurReset" style="padding:0 6px" title="Volver a la duración de las curvas">auto</button>':' · según curvas')+'</div></div></div>';
+  if(tipo==="DPI"){
+    html+='<div class="two"><div class="f"><label for="edEt">Est. transformadora</label><select id="edEt">'+opt(["ET Nueva","Ampliación ET"],p.est,true)+'</select></div>'
+      +'<div class="f"><label for="edLn">Línea</label><select id="edLn">'+opt(["Línea AT","Línea MT"],p.linea,true)+'</select></div></div>';
+  }
+  if(tipo==="DNN")html+='<div class="f"><label for="edDnn">Nivel DNN</label><select id="edDnn">'+opt(["DNN Cat1","DNN Cat2"],p.nivelDNN)+'</select></div>';
+  html+='<div class="two"><div class="f"><label for="edSol">Factor solapamiento</label><input type="number" id="edSol" min="0" max="1" step="0.05" value="'+solap+'"></div>'
+    +'<div class="f"><label for="edHH">HH manual '+(tipo==="DPI"?"parque":"proyecto")+'</label><input type="number" id="edHH" min="0" step="100" placeholder="auto" value="'+esc(tipo==="DPI"?(p.hhParque==null?"":p.hhParque):(p.hhProy==null?"":p.hhProy))+'"></div></div>'
+    +'<div class="row-actions"><label class="chk"><input type="checkbox" id="edSim"'+(p.simulable?" checked":"")+'> Simulable <span style="color:var(--ink-soft)">(Calendario Fijo = No)</span></label>'
+    +'<label class="chk"><input type="checkbox" id="edInc"'+(p.incluir===false?"":" checked")+'> Incluir en el cálculo</label></div>';
+  html+='<h4>Componentes · Forecast_Componentes</h4><table class="pk"><tr><th>Componente</th><th>Curva</th><th class="r">HH</th><th class="r">Meses</th></tr>';
+  sp.parts.forEach(function(pt){html+='<tr><td>'+esc(pt.c.componente)+'</td><td>'+esc(pt.c.curva)+'</td><td class="calc">'+hh(pt.c.hh)+'</td><td class="calc">'+(pt.n!==pt.n0?'<span title="Curva original: '+pt.n0+' meses">'+pt.n0+' → '+pt.n+'</span>':pt.n)+'</td></tr>';});
+  html+='<tr><td><b>Total</b></td><td>× '+NF2.format(solap)+'</td><td class="calc">'+hh(tot*solap)+'</td><td></td></tr></table>';
+  if(durMod(p))html+='<div class="hint">Duración modificada: cada curva se reescala en el tiempo y conserva sus HH totales. Acortar concentra la demanda (más HH por mes); alargar la diluye.</div>';
+  if(solap<1)html+='<div class="hint">El factor de solapamiento descuenta '+NFP.format(1-solap)+' de las HH por ejecución simultánea con proyectos similares.</div>';
+  html+='<h4>Mover inicio</h4><div class="row-actions">'
+    +'<button class="btn sm" data-mv="-3"'+(p.simulable?"":" disabled")+'>−3 m</button><button class="btn sm" data-mv="-1"'+(p.simulable?"":" disabled")+'>−1 m</button>'
+    +'<button class="btn sm" data-mv="1"'+(p.simulable?"":" disabled")+'>+1 m</button><button class="btn sm" data-mv="3"'+(p.simulable?"":" disabled")+'>+3 m</button>'
+    +'<button class="btn sm primary" id="bestBtn"'+(p.simulable?"":" disabled")+' title="Prueba de −3 a +12 meses y elige el que menos HH excede">Mejor inicio</button></div><div id="bestBox"></div>'
+    +'<h4>Duración</h4><div class="row-actions">'
+    +'<button class="btn sm" data-du="-3"'+(p.simulable?"":" disabled")+'>−3 m</button><button class="btn sm" data-du="-1"'+(p.simulable?"":" disabled")+'>−1 m</button>'
+    +'<button class="btn sm" data-du="1"'+(p.simulable?"":" disabled")+'>+1 m</button><button class="btn sm" data-du="3"'+(p.simulable?"":" disabled")+'>+3 m</button>'
+    +'<button class="btn sm primary" id="bestDurBtn"'+(p.simulable?"":" disabled")+' title="Prueba duraciones de 50 % a 200 % y elige la que menos HH excede">Mejor duración</button></div><div id="bestDurBox"></div>';
+  html+='<div class="row-actions" style="margin-top:16px"><button class="btn sm" id="dupBtn">Duplicar</button><button class="btn sm" id="delBtn" style="color:var(--danger)">Eliminar</button></div>';
+  ed.innerHTML=html;
+
+  var ge=function(id){return document.getElementById(id);};
+  var set=function(fn){push();fn();recalc();render();save();};
+  ge("edName").onchange=function(){var v=this.value.trim();if(v)set(function(){p.proyecto=v;});};
+  ge("edNom").onchange=function(){var v=this.value.trim();set(function(){p.nombre=v||null;});};
+  ge("edTipo").onchange=function(){var v=this.value;set(function(){p.tipoCliente=v;if(v==="DNN"&&!p.nivelDNN)p.nivelDNN="DNN Cat1";});};
+  ge("edEstado").onchange=function(){var v=this.value;set(function(){p.estado=v;});};
+  ge("edTec").onchange=function(){var v=this.value;set(function(){p.tecnologia=v;});};
+  ge("edMW").onchange=function(){var v=+this.value;set(function(){p.potencia=v;});};
+  ge("edTam").onchange=function(){var v=this.value||null;set(function(){p.tamano=v;});};
+  ge("edIni").onchange=function(){var v=this.value;if(/^\d{4}-\d{2}$/.test(v))set(function(){p.fechaInicio=v;});};
+  if(ge("edEt"))ge("edEt").onchange=function(){var v=this.value||null;set(function(){p.est=v;});};
+  if(ge("edLn"))ge("edLn").onchange=function(){var v=this.value||null;set(function(){p.linea=v;});};
+  if(ge("edDnn"))ge("edDnn").onchange=function(){var v=this.value;set(function(){p.nivelDNN=v;});};
+  ge("edSol").onchange=function(){var v=Math.max(0,Math.min(1,+this.value||0));set(function(){p.factorSolapamiento=v;});};
+  ge("edHH").onchange=function(){var v=this.value===""?null:+this.value;set(function(){if(tipo==="DPI")p.hhParque=v;else p.hhProy=v;});};
+  ge("edSim").onchange=function(){var v=this.checked;set(function(){p.simulable=v;});};
+  ge("edInc").onchange=function(){var v=this.checked;set(function(){p.incluir=v;});};
+  ed.querySelectorAll("[data-mv]").forEach(function(b){b.onclick=function(){moverP(p,+b.dataset.mv);};});
+  ed.querySelectorAll("[data-du]").forEach(function(b){b.onclick=function(){durP(p,+b.dataset.du);};});
+  ge("edDur").onchange=function(){var v=Math.round(+this.value);if(v>=1)set(function(){setDur(p,v);});};
+  if(ge("edDurReset"))ge("edDurReset").onclick=function(){set(function(){p.duracion=null;});};
+  ge("bestDurBtn").onclick=function(){mejorDuracion(p);};
+  ge("bestBtn").onclick=function(){mejorInicio(p);};
+  ge("dupBtn").onclick=function(){set(function(){var q=clone(p);q.id=nextId();q.proyecto=p.proyecto+" (copia)";S.datos.proyectos.push(q);sel={p:String(q.id)};});toast("Proyecto duplicado");};
+  ge("delBtn").onclick=function(){set(function(){S.datos.proyectos=S.datos.proyectos.filter(function(q){return q!==p;});sel=null;});toast("Proyecto eliminado · Ctrl+Z para deshacer");};
+}
+function moverP(p,k){
+  if(!p.simulable){toast("Proyecto no simulable");return;}
+  push();p.fechaInicio=E.mesStr(E.mesIdx(p.fechaInicio)+k);recalc();render();save();
+}
+function durP(p,k){
+  if(!p.simulable){toast("Proyecto no simulable");return;}
+  var d=spanOf(p).dur;if(d+k<1)return;
+  push();setDur(p,d+k);recalc();render();save();
+}
+/* Barre duraciones y muestra las HH excedidas de cada una (misma idea que «Mejor inicio») */
+function mejorDuracion(p){
+  var base=spanOf(Object.assign({},p,{duracion:null})).base,actual=spanOf(p).dur,dv=datosVista(S.datos);
+  var lo=Math.max(1,Math.ceil(base*0.5)),hi=Math.min(60,Math.floor(base*2)),pr=[];
+  for(var n=lo;n<=hi;n++){
+    var cambios={proyectos:{}};cambios.proyectos[String(p.id)]={duracion:n};
+    pr.push({n:n,exc:E.calcular(dv,cambios).kpis.hhExcedidas});
+  }
+  var best=pr.reduce(function(a,b){var ra=Math.round(a.exc*1e6),rb=Math.round(b.exc*1e6);return rb<ra||(rb===ra&&Math.abs(b.n-actual)<Math.abs(a.n-actual))?b:a;});
+  var cur=pr.filter(function(x){return x.n===actual;})[0]||{exc:R.kpis.hhExcedidas};
+  var mx=Math.max.apply(null,pr.map(function(x){return x.exc;}))||1,W=320,H=70,bw=W/pr.length;
+  var svg='<svg class="spark" viewBox="0 0 '+W+' '+(H+14)+'" preserveAspectRatio="none" role="img" aria-label="HH excedidas según duración">';
+  pr.forEach(function(x,i){
+    var h=Math.max(1,(x.exc/mx)*(H-6)),isB=x.n===best.n,isA=x.n===actual;
+    svg+='<rect x="'+(i*bw+1)+'" y="'+(H-h)+'" width="'+Math.max(1,bw-2)+'" height="'+h+'" rx="1.5" fill="'+(isB?"var(--focus)":isA?"var(--ink-soft)":"var(--rule)")+'"><title>'+x.n+' meses: '+hh(x.exc)+' HH excedidas</title></rect>';
+    if(x.n%3===0)svg+='<text x="'+(i*bw+bw/2)+'" y="'+(H+11)+'" text-anchor="middle">'+x.n+'</text>';
+  });
+  svg+='</svg>';
+  var box=document.getElementById("bestDurBox");
+  box.innerHTML='<div class="hint">HH excedidas del área según la duración del proyecto, de '+lo+' a '+hi+' meses (las HH del proyecto no cambian):</div>'+svg
+    +'<div class="holg'+(best.n===actual?"":" crit")+'">'+(best.n===actual?'La duración actual ('+actual+' meses) ya es la mejor del rango probado.'
+      :'Con <b>'+best.n+' meses</b> (hoy '+actual+') las HH excedidas bajan de '+hh(cur.exc)+' a '+hh(best.exc)+'.')+'</div>'
+    +(best.n===actual?'':'<button class="btn sm primary" id="bestDurApply">Aplicar '+best.n+' meses</button>');
+  var a=document.getElementById("bestDurApply");
+  if(a)a.onclick=function(){push();setDur(p,best.n);recalc();render();save();toast("Duración: "+best.n+" meses");};
+}
+function mejorInicio(p){
+  var r=E.mejorInicio(datosVista(S.datos),{},p.id,-3,12),box=document.getElementById("bestBox");
+  var mx=Math.max.apply(null,r.pruebas.map(function(x){return x.hhExcedidas;}))||1,W=320,H=70,bw=W/r.pruebas.length;
+  var svg='<svg class="spark" viewBox="0 0 '+W+' '+(H+14)+'" preserveAspectRatio="none" role="img" aria-label="HH excedidas según desplazamiento">';
+  r.pruebas.forEach(function(x,i){
+    var h=Math.max(1,(x.hhExcedidas/mx)*(H-6)),isB=x.desplazamiento===r.mejor.desplazamiento,is0=x.desplazamiento===0;
+    svg+='<rect x="'+(i*bw+1)+'" y="'+(H-h)+'" width="'+(bw-2)+'" height="'+h+'" rx="1.5" fill="'+(isB?"var(--focus)":is0?"var(--ink-soft)":"var(--rule)")+'"><title>'+(x.desplazamiento>0?"+":"")+x.desplazamiento+' m: '+hh(x.hhExcedidas)+' HH excedidas</title></rect>';
+    if(x.desplazamiento%3===0)svg+='<text x="'+(i*bw+bw/2)+'" y="'+(H+11)+'" text-anchor="middle">'+(x.desplazamiento>0?"+":"")+x.desplazamiento+'</text>';
+  });
+  svg+='</svg>';
+  var actual=r.pruebas.filter(function(x){return x.desplazamiento===0;})[0];
+  var d=r.mejor.desplazamiento;
+  box.innerHTML='<div class="hint">HH excedidas del área según cuántos meses se mueva el inicio:</div>'+svg
+    +'<div class="holg'+(d===0?"":" crit")+'">'+(d===0?'El inicio actual ya es el mejor del rango probado ('+hh(actual.hhExcedidas)+' HH excedidas).'
+      :'Mover <b>'+(d>0?"+":"")+d+' meses</b> (a '+mlabel(E.mesStr(E.mesIdx(p.fechaInicio)+d))+') baja las HH excedidas de '+hh(actual.hhExcedidas)+' a '+hh(r.mejor.hhExcedidas)+'.')+'</div>'
+    +(d===0?'':'<button class="btn sm primary" id="bestApply">Aplicar '+(d>0?"+":"")+d+' m</button>');
+  var a=document.getElementById("bestApply");if(a)a.onclick=function(){moverP(p,d);toast("Inicio movido "+(d>0?"+":"")+d+" meses");};
+}
+
+function edEsp(e){
+  var cap=S.datos.capacidad,cu=R.cuellos[e],hp=cap.hhMesPersona*cap.eficiencia;
+  var evs=(cap.eventos||[]).map(function(ev,i){return {ev:ev,i:i};}).filter(function(x){return x.ev.especialidad===e;});
+  var html='<h3>'+esc(e)+'</h3><div class="sub">'+(cap.dotacion[e]||0)+' personas · '+hh((cap.dotacion[e]||0)*hp)+' HH/mes + subcontrato</div>';
+  html+='<div class="holg'+(cu.mesesCriticos?" crit":"")+'">'+(cu.mesesCriticos?cu.mesesCriticos+' meses por encima de la capacidad, desde '+mlabel(cu.primerMesCritico)+'. Pico '+oc(cu.maxOcupacion)+' en '+mlabel(cu.mesPico)+'. Faltan '+cu.personasAdicionales+' persona(s) en el peor mes.'
+    :'Sin meses críticos. Pico '+oc(cu.maxOcupacion)+' en '+mlabel(cu.mesPico)+'.')+'</div>';
+  html+='<div class="two"><div class="f"><label for="esDot">Personas (dotación base)</label><input type="number" id="esDot" min="0" step="1" value="'+(cap.dotacion[e]||0)+'"></div>'
+    +'<div class="f"><label for="esSub">Subcontrato (HH/mes)</label><input type="number" id="esSub" min="0" step="20" value="'+((cap.subcontratoHH||{})[e]||0)+'"></div></div>';
+  html+='<h4>Altas y bajas programadas</h4><table class="pk"><tr><th>Desde</th><th>Hasta</th><th class="r">Δ pers.</th><th></th></tr>';
+  evs.forEach(function(x){html+='<tr><td>'+mlabel(x.ev.desde)+'</td><td>'+(x.ev.hasta?mlabel(x.ev.hasta):"—")+'</td><td class="calc">'+(x.ev.delta>0?"+":"")+x.ev.delta+'</td><td class="x"><button data-delev="'+x.i+'" title="Quitar">✕</button></td></tr>'+(x.ev.nota?'<tr><td colspan="4" style="color:var(--ink-soft);font-size:11.5px">'+esc(x.ev.nota)+'</td></tr>':'');});
+  if(!evs.length)html+='<tr><td colspan="4" style="color:var(--ink-soft)">Sin movimientos programados.</td></tr>';
+  html+='</table><div class="two" style="margin-top:8px"><div class="f"><label for="evDesde">Desde</label><input type="month" id="evDesde" value="'+esc(cu.primerMesCritico||R.meses[0])+'"></div>'
+    +'<div class="f"><label for="evHasta">Hasta (opcional)</label><input type="month" id="evHasta"></div></div>'
+    +'<div class="two"><div class="f"><label for="evDelta">Personas (+ alta / − baja)</label><input type="number" id="evDelta" step="1" value="1"></div>'
+    +'<div class="f"><label>&nbsp;</label><button class="btn primary" id="evAdd" style="width:100%">Agregar movimiento</button></div></div>';
+  html+='<h4>Ocupación mensual</h4><table class="pk"><tr><th>Mes</th><th class="r">Demanda</th><th class="r">Capacidad</th><th class="r">Ocup.</th></tr>';
+  var j=R.especialidades.indexOf(e);
+  R.meses.forEach(function(m,i){
+    var d=R.demanda[i][j];if(d<0.5)return;
+    html+='<tr class="click" data-cm="'+m+'"><td>'+mlabel(m)+'</td><td class="calc">'+hh(d)+'</td><td class="calc">'+hh(R.capacidad[i][j])+'</td><td class="calc"><span class="fl '+sem(R.ocupacion[i][j])+'">'+oc(R.ocupacion[i][j])+'</span></td></tr>';
+  });
+  html+='</table>';
+  ed.innerHTML=html;
+  var ge=function(id){return document.getElementById(id);};
+  ge("esDot").onchange=function(){var v=Math.max(0,Math.round(+this.value||0));push();cap.dotacion[e]=v;recalc();render();save();};
+  ge("esSub").onchange=function(){var v=Math.max(0,+this.value||0);push();cap.subcontratoHH=cap.subcontratoHH||{};cap.subcontratoHH[e]=v;recalc();render();save();};
+  ge("evAdd").onclick=function(){
+    var d=ge("evDesde").value,h=ge("evHasta").value||null,n=Math.round(+ge("evDelta").value||0);
+    if(!/^\d{4}-\d{2}$/.test(d)||!n){toast("Indicá mes de inicio y una cantidad distinta de cero");return;}
+    push();cap.eventos=cap.eventos||[];cap.eventos.push({especialidad:e,desde:d,hasta:h,delta:n,nota:n>0?"Alta simulada":"Baja simulada"});
+    recalc();render();save();toast((n>0?"Alta":"Baja")+" agregada en "+e);
+  };
+  ed.querySelectorAll("[data-delev]").forEach(function(b){b.onclick=function(){push();cap.eventos.splice(+b.dataset.delev,1);recalc();render();save();};});
+  ed.querySelectorAll("[data-cm]").forEach(function(tr){tr.onclick=function(){sel_({e:e,m:tr.dataset.cm});};});
+}
+function edCelda(e,m){
+  var i=R.meses.indexOf(m),j=R.especialidades.indexOf(e);
+  if(i<0||j<0){sel=null;return edResumen();}
+  var d=R.demanda[i][j],c=R.capacidad[i][j],v=R.ocupacion[i][j],det=E.detalle(R,m,e);
+  var html='<h3>'+esc(e)+' · '+mlabel(m)+'</h3><div class="sub">Qué proyectos explican la demanda de esta celda</div>'
+    +'<div class="holg'+(v>=1?" crit":"")+'">Demanda <b class="num">'+hh(d)+'</b> HH · capacidad <b class="num">'+hh(c)+'</b> HH · ocupación <b class="num">'+oc(v)+'</b> ('+semTxt(v)+')'
+    +(d>c?'. Exceso de '+hh(d-c)+' HH, equivalente a '+NF2.format((d-c)/(S.datos.capacidad.hhMesPersona*S.datos.capacidad.eficiencia))+' personas.':'.')+'</div>';
+  html+='<table class="pk"><tr><th>Proyecto</th><th>Comp.</th><th class="r">HH</th><th class="r">%</th></tr>';
+  det.forEach(function(r){
+    var p=S.datos.proyectos.filter(function(q){return q.proyecto===r.proyecto;})[0];
+    html+='<tr class="click" data-goto="'+esc(p?p.id:"")+'"><td>'+esc(r.proyecto)+'</td><td>'+esc(r.componente)+'</td><td class="calc">'+hh(r.hh)+'</td><td class="calc">'+NFP.format(d?r.hh/d:0)+'</td></tr>';
+  });
+  if(!det.length)html+='<tr><td colspan="4" style="color:var(--ink-soft)">Sin demanda en este mes.</td></tr>';
+  html+='</table><div class="row-actions" style="margin-top:12px"><button class="btn sm" id="toEsp">Ver '+esc(e)+'</button></div>';
+  ed.innerHTML=html;
+  document.getElementById("toEsp").onclick=function(){sel_({e:e});};
+}
+
+/* ===================== arrastre de barras ===================== */
+var drag=null;
+function wireDrag(){
+  var rows=document.getElementById("rows");
+  rows.addEventListener("pointerdown",function(e){
+    var b=e.target.closest(".seg");if(!b)return;
+    var p=findP(b.dataset.seg);if(!p)return;
+    if(!p.simulable){sel_({p:String(p.id)});toast("Proyecto no simulable: fecha y duración fijas");return;}
+    var h=e.target.closest(".h"),sp=spanOf(p);
+    drag={el:b,p:p,mode:h?h.dataset.h:"m",x0:e.clientX,k:0,orig:p.fechaInicio,origDur:p.duracion==null?null:p.duracion,
+      dur0:sp.dur,left:parseFloat(b.style.left),width:parseFloat(b.style.width)};
+    b.setPointerCapture(e.pointerId);b.classList.add(h?"resizing":"dragging");
+    e.preventDefault();
+  });
+  rows.addEventListener("pointermove",function(e){
+    if(!drag)return;
+    var d=drag,dx=e.clientX-d.x0,cw=S.cw,k=Math.round(dx/cw);
+    if(d.mode==="r"){k=Math.max(1-d.dur0,k);d.el.style.width=px(Math.max(cw,d.width+dx));}
+    else if(d.mode==="l"){k=Math.min(d.dur0-1,k);var dd=Math.min(dx,d.width-cw);d.el.style.left=px(d.left+dd);d.el.style.width=px(d.width-dd);}
+    else d.el.style.left=px(d.left+dx);
+    if(k===d.k)return;
+    d.k=k;
+    var txt;
+    if(d.mode==="m"){d.p.fechaInicio=E.mesStr(E.mesIdx(d.orig)+k);txt=(k>0?"+":"")+k+" m · "+mlabel(d.p.fechaInicio);}
+    else{
+      d.p.duracion=d.origDur;
+      if(d.mode==="l")d.p.fechaInicio=E.mesStr(E.mesIdx(d.orig)+k);
+      setDur(d.p,d.dur0+(d.mode==="r"?k:-k));
+      txt=d.dur0+" → "+spanOf(d.p).dur+" meses"+(d.mode==="l"?" · inicio "+mlabel(d.p.fechaInicio):"");
+    }
+    recalc();renderLive();
+    var tag=document.querySelector(".dragtag");
+    if(!tag){tag=document.createElement("div");tag.className="dragtag";d.el.parentNode.appendChild(tag);}
+    tag.style.left=px(d.mode==="r"?d.left:d.left+k*cw);
+    tag.textContent=txt;
+  });
+  function end(){
+    if(!drag)return;
+    var d=drag;drag=null;
+    if(d.k!==0){
+      var fin=d.p.fechaInicio,durFin=d.p.duracion==null?null:d.p.duracion;
+      d.p.fechaInicio=d.orig;d.p.duracion=d.origDur;push();d.p.fechaInicio=fin;d.p.duracion=durFin;
+      if(d.mode==="m")toast(d.p.proyecto+" "+(d.k>0?"+":"")+d.k+" meses");
+      else toast(d.p.proyecto+": "+spanOf(d.p).dur+" meses de duración");
+    }
+    sel={p:String(d.p.id)};recalc();render();save();
+  }
+  rows.addEventListener("pointerup",end);
+  rows.addEventListener("pointercancel",end);
+}
+
+/* ===================== clics y tooltip ===================== */
+function wireClicks(){
+  var grid=document.getElementById("grid");
+  grid.addEventListener("click",function(e){
+    var t=e.target;
+    var inc=t.closest("[data-inc]");
+    if(inc){var p=findP(inc.dataset.inc);push();p.incluir=inc.checked;recalc();render();save();return;}
+    var dot=t.closest("[data-dot]");
+    if(dot){var es=dot.dataset.dot,c=S.datos.capacidad;push();c.dotacion[es]=Math.max(0,(c.dotacion[es]||0)+(+dot.dataset.d));recalc();render();save();return;}
+    var cell=t.closest("[data-cell]");
+    if(cell){var ij=cell.dataset.cell.split("|");sel_({e:R.especialidades[+ij[1]],m:R.meses[+ij[0]]});return;}
+    var tn=t.closest(".tname");
+    if(tn&&tn.dataset.p){sel_({p:tn.dataset.p});return;}
+    if(tn&&tn.dataset.e){sel_({e:tn.dataset.e});return;}
+  });
+  grid.addEventListener("change",function(e){
+    if(e.target.id==="espChart"){S.espChart=e.target.value;renderCap();save();}
+  });
+  ed.addEventListener("click",function(e){
+    var g=e.target.closest("[data-goto]");if(g&&g.dataset.goto){sel_({p:g.dataset.goto});return;}
+    var a=e.target.closest("[data-apl]");
+    if(a){
+      var es=a.dataset.apl,n=+a.dataset.n,cu=R.cuellos[es];
+      push();S.datos.capacidad.eventos=S.datos.capacidad.eventos||[];
+      S.datos.capacidad.eventos.push({especialidad:es,desde:cu.primerMesCritico||R.meses[0],hasta:null,delta:n,nota:"Refuerzo sugerido"});
+      recalc();render();save();toast("+"+n+" en "+es+" desde "+mlabel(cu.primerMesCritico));
+    }
+  });
+  var tip=document.getElementById("tip");
+  grid.addEventListener("pointermove",function(e){
+    if(drag){tip.className="";return;}
+    var t=e.target,h="";
+    var cell=t.closest&&t.closest("[data-cell]");
+    if(cell){
+      var ij=cell.dataset.cell.split("|"),i=+ij[0],j=+ij[1];
+      h='<div>'+esc(R.especialidades[j])+' · '+mlabel(R.meses[i])+'</div>Demanda <b>'+hh(R.demanda[i][j])+'</b> HH<br>Capacidad <b>'+hh(R.capacidad[i][j])+'</b> HH<br>Ocupación <b>'+oc(R.ocupacion[i][j])+'</b> · '+semTxt(R.ocupacion[i][j]);
+    }
+    var bar=t.getAttribute&&t.getAttribute("data-bar");
+    if(bar!==null&&bar!==undefined&&t.tagName==="rect"){
+      var s=serieChart()[+bar];
+      h='<div>'+mlabel(R.meses[+bar])+(S.espChart?" · "+esc(S.espChart):"")+'</div>'
+        +TIPOS.map(function(tp,k){return tp.n+' <b>'+hh(s.tipos[k])+'</b>';}).join(" · ")
+        +'<br>Demanda <b>'+hh(s.dem)+'</b> · capacidad <b>'+hh(s.cap)+'</b>'+(s.dem>s.cap?'<br>Exceso <b>'+hh(s.dem-s.cap)+'</b> HH':'');
+    }
+    var seg=t.closest&&t.closest(".seg");
+    if(seg){
+      var p=findP(seg.dataset.seg),sp=spanOf(p),r=seg.getBoundingClientRect(),k=Math.floor((e.clientX-r.left)/S.cw),m=hhMensual(p);
+      h='<div><b style="font-family:inherit">'+esc(p.proyecto)+'</b></div>'+mlabel(E.mesStr(E.mesIdx(R.meses[0])+sp.start+k))+': <b>'+hh(m[sp.start+k]||0)+'</b> HH<br>Total <b>'+hh(totalP(p))+'</b> HH'+'<br>Duración <b>'+sp.dur+'</b> meses'+(durMod(p)?' (curvas: '+sp.base+')':'')+(p.simulable?'<br>Arrastrá para mover · bordes para la duración':'<br>Fecha y duración fijas');
+    }
+    if(!h){tip.className="";return;}
+    tip.innerHTML=h;tip.className="on";
+    var x=e.clientX+14,y=e.clientY+14,w=tip.offsetWidth,hh2=tip.offsetHeight;
+    if(x+w>window.innerWidth-8)x=e.clientX-w-14;
+    if(y+hh2>window.innerHeight-8)y=e.clientY-hh2-14;
+    tip.style.left=px(x);tip.style.top=px(y);
+  });
+  grid.addEventListener("pointerleave",function(){tip.className="";});
+  document.getElementById("legend").onclick=function(e){
+    var b=e.target.closest(".fchip");if(!b)return;
+    S.filtro=(S.filtro===b.dataset.f||b.dataset.f==="")?"":b.dataset.f;
+    recalc();render();save();
+  };
+}
+
+/* ===================== diálogo ===================== */
+var dlgPos=null;
+function openDlg(wide){
+  dlg.className=wide?"wide":"";
+  if(!dlg.open){if(dlg.show)dlg.show();else dlg.setAttribute("open","");}
+  var t=dlg.querySelector("#dlgBody h3");document.getElementById("dlgTitle").textContent=t?t.textContent:"";
+  if(dlgPos){dlg.style.left=dlgPos.x+"px";dlg.style.top=dlgPos.y+"px";dlg.style.transform="none";}
+}
+function wireDlgDrag(){
+  var dd=null,bar=document.getElementById("dlgBar");
+  bar.addEventListener("pointerdown",function(e){
+    if(e.target.closest("button"))return;
+    var r=dlg.getBoundingClientRect();dd={dx:e.clientX-r.left,dy:e.clientY-r.top,w:r.width};
+    dlg.style.transform="none";dlg.style.left=r.left+"px";dlg.style.top=r.top+"px";dlg.classList.add("moving");
+    bar.setPointerCapture(e.pointerId);e.preventDefault();
+  });
+  bar.addEventListener("pointermove",function(e){
+    if(!dd)return;
+    var x=Math.max(60-dd.w,Math.min(window.innerWidth-60,e.clientX-dd.dx)),y=Math.max(4,Math.min(window.innerHeight-44,e.clientY-dd.dy));
+    dlg.style.left=x+"px";dlg.style.top=y+"px";dlgPos={x:x,y:y};
+  });
+  var up=function(){if(dd){dd=null;dlg.classList.remove("moving");}};
+  bar.addEventListener("pointerup",up);bar.addEventListener("pointercancel",up);
+  bar.ondblclick=function(){dlgPos=null;dlg.style.left="";dlg.style.top="";dlg.style.transform="";};
+}
+
+/* ===================== recursos (edición masiva) ===================== */
+function openRecursos(){
+  var cap=S.datos.capacidad,h=S.datos.horizonte;
+  var html='<h3>Recursos del área</h3><div class="sub" style="color:var(--ink-soft);font-size:12px;margin-bottom:10px">Capacidad = personas × HH por persona × eficiencia + subcontrato.</div>'
+    +'<div class="two"><div class="f"><label for="rsHH">HH por persona por mes</label><input type="number" id="rsHH" min="1" step="4" value="'+cap.hhMesPersona+'"></div>'
+    +'<div class="f"><label for="rsEf">Eficiencia (0–1)</label><input type="number" id="rsEf" min="0.1" max="1" step="0.05" value="'+cap.eficiencia+'"></div></div>'
+    +'<div class="two"><div class="f"><label for="rsDesde">Horizonte desde</label><input type="month" id="rsDesde" value="'+h.desde+'"></div>'
+    +'<div class="f"><label for="rsMeses">Meses</label><input type="number" id="rsMeses" min="6" max="60" step="1" value="'+h.meses+'"></div></div>'
+    +'<div class="tablewrap"><table class="pk"><tr><th>Especialidad</th><th class="r">Personas</th><th class="r">Subcontrato HH/mes</th><th class="r">HH/mes</th></tr>';
+  R.especialidades.forEach(function(e){
+    html+='<tr><td>'+esc(e)+'</td><td><input type="number" min="0" step="1" data-rd="'+esc(e)+'" value="'+(cap.dotacion[e]||0)+'" aria-label="Personas '+esc(e)+'"></td>'
+      +'<td><input type="number" min="0" step="20" data-rs="'+esc(e)+'" value="'+((cap.subcontratoHH||{})[e]||0)+'" aria-label="Subcontrato '+esc(e)+'"></td>'
+      +'<td class="calc">'+hh((cap.dotacion[e]||0)*cap.hhMesPersona*cap.eficiencia+((cap.subcontratoHH||{})[e]||0))+'</td></tr>';
+  });
+  html+='</table></div><div class="row-actions" style="justify-content:flex-end;margin-top:10px"><button class="btn primary" id="rsOk">Aplicar</button></div>';
+  document.getElementById("dlgBody").innerHTML=html;openDlg(false);
+  document.getElementById("rsOk").onclick=function(){
+    push();
+    cap.hhMesPersona=Math.max(1,+document.getElementById("rsHH").value||cap.hhMesPersona);
+    cap.eficiencia=Math.max(0.1,Math.min(1,+document.getElementById("rsEf").value||cap.eficiencia));
+    var d=document.getElementById("rsDesde").value;if(/^\d{4}-\d{2}$/.test(d))h.desde=d;
+    h.meses=Math.max(6,Math.min(60,Math.round(+document.getElementById("rsMeses").value||h.meses)));
+    document.querySelectorAll("[data-rd]").forEach(function(i){cap.dotacion[i.dataset.rd]=Math.max(0,Math.round(+i.value||0));});
+    cap.subcontratoHH=cap.subcontratoHH||{};
+    document.querySelectorAll("[data-rs]").forEach(function(i){cap.subcontratoHH[i.dataset.rs]=Math.max(0,+i.value||0);});
+    recalc();render();save();openRecursos();toast("Recursos actualizados");
+  };
+}
+function openNivelar(){
+  var sug=E.dotacionMinima(datosVista(S.datos),{},1),cap=S.datos.capacidad,any=false;
+  var html='<h3>Nivelar capacidad</h3><div class="sub" style="color:var(--ink-soft);font-size:12px;margin-bottom:10px">Personas a sumar en cada especialidad, durante todo el horizonte, para que ningún mes supere 1,00. Tiene en cuenta altas, bajas y subcontratos cargados.</div>'
+    +'<table class="pk"><tr><th>Especialidad</th><th class="r">Hoy</th><th class="r">A sumar</th><th class="r">Pico actual</th></tr>';
+  R.especialidades.forEach(function(e){
+    if(sug[e])any=true;
+    html+='<tr><td>'+esc(e)+'</td><td class="calc">'+(cap.dotacion[e]||0)+'</td><td class="calc">'+(sug[e]?"+"+sug[e]:"—")+'</td><td class="calc"><span class="fl '+sem(R.cuellos[e].maxOcupacion)+'">'+oc(R.cuellos[e].maxOcupacion)+'</span></td></tr>';
+  });
+  html+='</table><div class="hint">Alternativa más barata: mover proyectos simulables con «Mejor inicio» o reforzar solo los meses críticos desde el editor de cada especialidad.</div>'
+    +'<div class="row-actions" style="justify-content:flex-end;margin-top:10px">'+(any?'<button class="btn primary" id="nvOk">Aplicar a la dotación</button>':'<span class="fl ok">Ya no hay meses por encima de 1,00</span>')+'</div>';
+  document.getElementById("dlgBody").innerHTML=html;openDlg(false);
+  var b=document.getElementById("nvOk");
+  if(b)b.onclick=function(){push();Object.keys(sug).forEach(function(e){cap.dotacion[e]=(cap.dotacion[e]||0)+sug[e];});recalc();render();save();dlg.close();toast("Dotación nivelada");};
+}
+
+/* ===================== parámetros del modelo ===================== */
+/* Edita S.datos.parametros y S.datos.curvas (≙ tablas param_parque, param_valor y DIM_Curvas).
+   Cada cambio entra en la pila de deshacer y recalcula todo al instante. */
+var PTAB="parque",PTEC="Solar",PCUR="Solar";
+var PTABS=[["parque","HH Parque"],["etl","ET y Línea"],["dnn","DNN y O&M"],["curvas","Curvas"]];
+var NFX=new Intl.NumberFormat("es-AR",{maximumFractionDigits:2});
+function pct(v){return Math.round(v*10000)/100;}
+function numIn(attr,val,extra){return '<input type="number" '+attr+' value="'+val+'" min="0" step="any"'+(extra||"")+'>';}
+function openParametros(){renderParam();openDlg(true);}
+function refreshParam(){if(document.getElementById("parBox"))renderParam();}
+function usaCurva(nombre){
+  var P=S.datos.parametros;
+  return S.datos.proyectos.filter(function(p){return E.componentes(p,P).some(function(c){return c.curva===nombre;});});
+}
+function renderParam(){
+  var P=S.datos.parametros,top=dlg.scrollTop;
+  var html='<h3>Parámetros del modelo</h3><div id="parBox"><div class="psub">Definen cuántas HH requiere cada proyecto y cómo se reparten en el tiempo. Cada cambio recalcula la herramienta al instante, se deshace con Ctrl+Z y se guarda junto con el escenario.</div>'
+    +'<div class="ptabs">'+PTABS.map(function(t){return '<button class="btn sm'+(PTAB===t[0]?" on":"")+'" data-ptab="'+t[0]+'">'+t[1]+'</button>';}).join("")+'</div>';
+  if(PTAB==="parque")html+=tabParque(P);
+  else if(PTAB==="etl")html+=tabETL(P);
+  else if(PTAB==="dnn")html+=tabDNN(P);
+  else html+=tabCurvas();
+  html+='<div class="row-actions" style="margin-top:14px"><button class="btn sm" data-preset="1">Restablecer '+(PTAB==="parque"?PTEC:PTAB==="curvas"?"la curva "+esc(PCUR):"esta pestaña")+' a los valores de ejemplo</button></div></div>';
+  document.getElementById("dlgBody").innerHTML=html;
+  document.getElementById("dlgTitle").textContent="Parámetros del modelo";
+  dlg.scrollTop=top;
+  wireParam();
+}
+function tabParque(P){
+  var html='<div class="chip">'+TECNOS.map(function(t){return '<button class="fchip'+(PTEC===t?" on":"")+'" data-ptec="'+t+'">'+t+'</button>';}).join("")+'</div>'
+    +'<div class="pgrid" style="margin-top:12px"><div><div class="psub" style="margin-bottom:8px">HH del parque según la potencia. Entre dos puntos se interpola en línea recta; fuera del rango se extiende el tramo más cercano.</div>'
+    +'<table class="pk"><tr><th>Tamaño</th><th class="r">MW</th><th class="r">HH</th><th class="r">HH/MW</th><th></th></tr>';
+  TAMANOS.forEach(function(tam){
+    var pts=P.parque[PTEC+"|"+tam]||[];
+    pts.forEach(function(pt,i){
+      html+='<tr'+(i===0?' class="grp"':'')+'>'+(i===0?'<td class="tam" rowspan="'+(pts.length+1)+'">'+tam+'</td>':'')
+        +'<td>'+numIn('data-pp="'+tam+'|'+i+'|0" aria-label="MW, '+tam+', punto '+(i+1)+'"',pt[0])+'</td>'
+        +'<td>'+numIn('data-pp="'+tam+'|'+i+'|1" aria-label="HH, '+tam+', punto '+(i+1)+'"',pt[1])+'</td>'
+        +'<td class="calc">'+(pt[0]>0?NF0.format(pt[1]/pt[0]):"—")+'</td>'
+        +'<td class="x"><button data-pdel="'+tam+'|'+i+'" title="Quitar punto"'+(pts.length<2?" disabled":"")+'>✕</button></td></tr>';
+    });
+    var addBtn='<td colspan="4"><button class="btn sm" data-padd="'+tam+'">+ punto</button></td></tr>';
+    html+=pts.length?'<tr>'+addBtn:'<tr class="grp"><td class="tam">'+tam+'</td>'+addBtn;
+  });
+  html+='</table></div><div><h4 style="margin-top:0">Proyectos '+PTEC+' con estos valores</h4>';
+  var ps=S.datos.proyectos.filter(function(p){return p.tecnologia===PTEC;});
+  if(!ps.length)html+='<div class="psub">Ningún proyecto usa esta tecnología.</div>';
+  else{
+    html+='<table class="pk"><tr><th>Proyecto</th><th>Tamaño</th><th class="r">MW</th><th class="r">HH parque</th><th class="r">HH usadas</th></tr>';
+    ps.forEach(function(p){
+      var pts=P.parque[PTEC+"|"+p.tamano],base=pts?E.interpolar(pts,+p.potencia||0):0,c=E.componentes(p,P)[0];
+      var man=(p.tipoCliente==="DPI"&&p.hhParque!=null&&p.hhParque!=="")||(p.tipoCliente!=="DPI"&&p.hhProy!=null&&p.hhProy!=="");
+      html+='<tr class="click" data-goto="'+esc(p.id)+'"><td>'+esc(p.proyecto)+' <span class="fl">'+esc(p.tipoCliente)+'</span></td><td>'+esc(p.tamano)+'</td><td class="calc">'+NF0.format(+p.potencia||0)+'</td><td class="calc">'+hh(base)+'</td><td class="calc">'+(man?'<span class="fl warn" title="Valor manual del proyecto: no usa esta tabla">manual</span> ':'')+hh(c.hh)+'</td></tr>';
+    });
+    html+='</table><div class="psub" style="margin-top:6px">«HH usadas» es lo que entra al cálculo: igual a la tabla en DPI, multiplicado por el factor en DNN y O&amp;M, o el valor manual si el proyecto lo tiene.</div>';
+  }
+  return html+'</div></div>';
+}
+function tabETL(P){
+  var html='<div class="pgrid"><div><table class="pk"><tr><th>Tamaño</th><th class="r">ET Nueva</th><th class="r">Ampliación ET</th><th class="r">Línea AT</th><th class="r">Línea MT</th></tr>';
+  TAMANOS.forEach(function(t){
+    html+='<tr><td>'+t+'</td><td>'+numIn('data-et="'+t+'" aria-label="HH ET Nueva '+t+'"',P.et[t]||0)+'</td><td class="calc">'+hh((P.et[t]||0)*P.factorAmpliacionET)+'</td>'
+      +'<td>'+numIn('data-ln="'+t+'" aria-label="HH Línea AT '+t+'"',P.linea[t]||0)+'</td><td class="calc">'+hh((P.linea[t]||0)*P.factorLineaMT)+'</td></tr>';
+  });
+  html+='</table><div class="psub" style="margin-top:6px">HH por componente según el tamaño del proyecto. Ampliación ET y Línea MT se calculan con los porcentajes de la derecha.</div></div>'
+    +'<div><div class="f"><label for="fxAmp">Ampliación ET (% de una ET Nueva)</label>'+numIn('id="fxAmp" data-fx="factorAmpliacionET" class="pct"',pct(P.factorAmpliacionET))+'</div>'
+    +'<div class="f"><label for="fxMT">Línea MT (% de una Línea AT)</label>'+numIn('id="fxMT" data-fx="factorLineaMT" class="pct"',pct(P.factorLineaMT))+'</div>'
+    +'<h4>Proyectos con ET o Línea</h4><table class="pk"><tr><th>Proyecto</th><th class="r">ET</th><th class="r">Línea</th></tr>';
+  S.datos.proyectos.forEach(function(p){
+    var cs=E.componentes(p,P),et=cs.filter(function(c){return c.componente==="ET";})[0],ln=cs.filter(function(c){return c.componente==="Línea";})[0];
+    if(et||ln)html+='<tr class="click" data-goto="'+esc(p.id)+'"><td>'+esc(p.proyecto)+'</td><td class="calc">'+(et?hh(et.hh):"—")+'</td><td class="calc">'+(ln?hh(ln.hh):"—")+'</td></tr>';
+  });
+  return html+'</table></div></div>';
+}
+function tabDNN(P){
+  var html='<div class="pgrid"><div><div class="psub" style="margin-bottom:10px">DNN y O&amp;M no tienen tabla propia: usan las HH de parque equivalentes (tecnología, tamaño y MW) multiplicadas por estos porcentajes. Si el proyecto tiene «HH Estimadas Proy» cargadas, se usa ese valor.</div>'
+    +'<div class="two"><div class="f"><label for="fxC1">DNN Cat1 (% · 3 meses)</label>'+numIn('id="fxC1" data-fdnn="DNN Cat1" class="pct"',pct(P.factorDNN["DNN Cat1"]||0))+'</div>'
+    +'<div class="f"><label for="fxC2">DNN Cat2 (% · 9 meses)</label>'+numIn('id="fxC2" data-fdnn="DNN Cat2" class="pct"',pct(P.factorDNN["DNN Cat2"]||0))+'</div></div>'
+    +'<div class="f"><label for="fxOM">O&amp;M (% · 12 meses)</label>'+numIn('id="fxOM" data-fx="factorOM" class="pct"',pct(P.factorOM))+'</div></div>'
+    +'<div><table class="pk"><tr><th>Proyecto</th><th>Curva</th><th class="r">HH</th></tr>';
+  S.datos.proyectos.forEach(function(p){
+    if(p.tipoCliente==="DPI")return;
+    var c=E.componentes(p,P)[0],man=p.hhProy!=null&&p.hhProy!=="";
+    html+='<tr class="click" data-goto="'+esc(p.id)+'"><td>'+esc(p.proyecto)+'</td><td>'+esc(c.curva||"—")+'</td><td class="calc">'+(man?'<span class="fl warn" title="HH Estimadas Proy cargadas en el proyecto">manual</span> ':'')+hh(c.hh)+'</td></tr>';
+  });
+  return html+'</table></div></div>';
+}
+function tabCurvas(){
+  var C=S.datos.curvas,names=Object.keys(C);
+  if(!C[PCUR])PCUR=names[0];
+  var cur=C[PCUR],esps=R.especialidades,n=E.largoCurva(C,PCUR),tot=0,col=[];
+  for(var k=0;k<n;k++)col.push(0);
+  esps.forEach(function(e){(cur[e]||[]).forEach(function(f,k){col[k]+=f;tot+=f;});});
+  var mx=Math.max.apply(null,col.concat([1e-9])),usos=usaCurva(PCUR);
+  var ok=Math.abs(tot-1)<=0.005;
+  var html='<div class="row-actions" style="align-items:center;margin-top:0"><label for="pcurSel" style="font-size:12px;color:var(--ink-soft)">Curva</label>'
+    +'<select id="pcurSel" style="border:1px solid var(--rule);border-radius:6px;padding:5px 8px;background:var(--chip)">'+names.map(function(c){return '<option'+(c===PCUR?" selected":"")+'>'+esc(c)+'</option>';}).join("")+'</select>'
+    +'<span class="fl">'+n+' meses</span><span class="fl '+(ok?"ok":"crit")+'" title="Suma de todos los factores">total '+NFX.format(pct(tot))+' %</span>'
+    +'<span class="psub">'+(usos.length?'Usada por '+usos.length+' proyecto(s): '+usos.slice(0,4).map(function(p){return esc(p.proyecto);}).join(", ")+(usos.length>4?"…":""):"Ningún proyecto la usa")+'</span></div>'
+    +'<div class="psub" style="margin:8px 0">Porcentaje de las HH del componente que cae en cada mes y especialidad. El total debería dar 100 %; si no, la demanda se infla o se achica en la misma proporción.</div>'
+    +'<div class="tablewrap"><table class="pk cm"><thead><tr><th>Especialidad</th>';
+  for(k=0;k<n;k++)html+='<th>M'+(k+1)+'</th>';
+  html+='<th>Total</th></tr></thead><tbody>';
+  esps.forEach(function(e){
+    var f=cur[e]||[],se=0;
+    html+='<tr><td>'+esc(e)+'</td>';
+    for(var k=0;k<n;k++){var v=f[k]||0;se+=v;html+='<td>'+numIn('data-cf="'+esc(e)+'|'+k+'" aria-label="'+esc(e)+' mes '+(k+1)+' (%)"',pct(v))+'</td>';}
+    html+='<td class="calc">'+NFX.format(pct(se))+' %</td></tr>';
+  });
+  html+='</tbody><tfoot><tr><td>Total mes</td>';
+  col.forEach(function(v){html+='<td><div class="mb" title="'+NFX.format(pct(v))+' %"><i style="height:'+(v/mx*100)+'%"></i></div>'+NFX.format(pct(v))+'</td>';});
+  html+='<td>'+NFX.format(pct(tot))+' %</td></tr></tfoot></table></div>'
+    +'<div class="row-actions"><button class="btn sm" data-cact="add">+ mes al final</button><button class="btn sm" data-cact="del"'+(n<2?" disabled":"")+'>Quitar último mes</button>'
+    +'<button class="btn sm primary" data-cact="norm"'+(ok||tot<=0?" disabled":"")+' title="Escala todos los factores para que sumen 100 %">Normalizar a 100 %</button></div>';
+  return html;
+}
+function keyOf(el){
+  if(!el||!el.attributes)return null;
+  for(var i=0;i<el.attributes.length;i++){var a=el.attributes[i];if(/^data-(pp|et|ln|fx|fdnn|cf|pdel|padd|cact|ptab|ptec|preset)$/.test(a.name))return '['+a.name+'="'+a.value.replace(/"/g,'\\"')+'"]';}
+  return el.id==="pcurSel"?"#pcurSel":null;
+}
+function wireParam(){
+  var box=document.getElementById("parBox");
+  box.onclick=function(e){
+    var b=e.target.closest("button,[data-goto]");if(!b)return;
+    var P=S.datos.parametros,C=S.datos.curvas,d=b.dataset;
+    if(d.goto){sel_({p:d.goto});return;}
+    if(d.ptab){PTAB=d.ptab;renderParam();return;}
+    if(d.ptec){PTEC=d.ptec;renderParam();return;}
+    if(d.padd){
+      push();var key=PTEC+"|"+d.padd,pts=P.parque[key]=P.parque[key]||[];
+      var last=pts[pts.length-1];pts.push(last?[Math.round(last[0]*1.5),Math.round(last[1]*1.3)]:[100,1000]);
+      aplicarParam();return;
+    }
+    if(d.pdel){var a=d.pdel.split("|"),pts2=P.parque[PTEC+"|"+a[0]];if(pts2.length<2)return;push();pts2.splice(+a[1],1);aplicarParam();return;}
+    if(d.cact){
+      var cur=C[PCUR],n=E.largoCurva(C,PCUR);
+      push();
+      R.especialidades.forEach(function(e){var f=cur[e]=cur[e]||[];while(f.length<n)f.push(0);});
+      if(d.cact==="add")Object.keys(cur).forEach(function(e){cur[e].push(0);});
+      if(d.cact==="del")Object.keys(cur).forEach(function(e){cur[e].pop();});
+      if(d.cact==="norm"){
+        var t=0;Object.keys(cur).forEach(function(e){cur[e].forEach(function(f){t+=f;});});
+        if(t>0)Object.keys(cur).forEach(function(e){cur[e]=cur[e].map(function(f){return Math.round(f/t*1e6)/1e6;});});
+      }
+      aplicarParam();toast(d.cact==="norm"?"Curva normalizada a 100 %":"Curva "+PCUR+": "+E.largoCurva(C,PCUR)+" meses");return;
+    }
+    if(d.preset){
+      var M=window.SAMPLE_DATA.parametros;push();
+      if(PTAB==="parque")TAMANOS.forEach(function(t){var k=PTEC+"|"+t;if(M.parque[k])P.parque[k]=clone(M.parque[k]);else delete P.parque[k];});
+      if(PTAB==="etl"){P.et=clone(M.et);P.linea=clone(M.linea);P.factorAmpliacionET=M.factorAmpliacionET;P.factorLineaMT=M.factorLineaMT;}
+      if(PTAB==="dnn"){P.factorDNN=clone(M.factorDNN);P.factorOM=M.factorOM;}
+      if(PTAB==="curvas"&&window.SAMPLE_DATA.curvas[PCUR])C[PCUR]=clone(window.SAMPLE_DATA.curvas[PCUR]);
+      aplicarParam();toast("Valores de ejemplo restaurados · Ctrl+Z para deshacer");
+    }
+  };
+  box.onchange=function(e){
+    var t=e.target;
+    if(t.id==="pcurSel"){PCUR=t.value;renderParam();return;}
+    var d0=t.dataset;if(!(d0.pp||d0.et||d0.ln||d0.fx||d0.fdnn||d0.cf))return;
+    var v=parseFloat(String(t.value).replace(",","."));
+    if(isNaN(v)||v<0){toast("Ingresá un número mayor o igual a cero");renderParam();return;}
+    var P=S.datos.parametros,C=S.datos.curvas,d=t.dataset;
+    push();
+    if(d.pp){var a=d.pp.split("|"),pts=P.parque[PTEC+"|"+a[0]];pts[+a[1]][+a[2]]=v;pts.sort(function(x,y){return x[0]-y[0];});}
+    else if(d.et)P.et[d.et]=v;
+    else if(d.ln)P.linea[d.ln]=v;
+    else if(d.fx)P[d.fx]=v/100;
+    else if(d.fdnn)P.factorDNN[d.fdnn]=v/100;
+    else if(d.cf){var b=d.cf.split("|"),f=C[PCUR][b[0]]=C[PCUR][b[0]]||[];while(f.length<=+b[1])f.push(0);f[+b[1]]=Math.round(v*1e4)/1e6;}
+    aplicarParam();
+  };
+}
+/* recalcula, y re-dibuja el diálogo conservando el campo que tenía el foco */
+function aplicarParam(){
+  recalc();render();save();
+  setTimeout(function(){
+    var k=keyOf(document.activeElement);
+    renderParam();
+    if(k){var el=document.querySelector("#parBox "+k);if(el){el.focus();if(el.select)el.select();}}
+  },0);
+}
+
+/* ===================== escenarios ===================== */
+function scenList(){try{return JSON.parse(localStorage.getItem(KEY+"-sc")||"[]");}catch(e){return [];}}
+function scenSet(a){try{localStorage.setItem(KEY+"-sc",JSON.stringify(a));}catch(e){toast("No se pudo guardar en este navegador");}}
+function openScen(){
+  var html='<h3>Escenarios</h3><div style="color:var(--ink-soft);font-size:12px;margin-bottom:10px">Una foto completa de proyectos, fechas y recursos. La base de comparación define los deltas de la franja de KPIs.</div>'
+    +'<div class="row-actions"><input type="text" id="scName" placeholder="Nombre (ej. +2 eléctricos desde mar-27)" style="flex:1;min-width:0;border:1px solid var(--rule);border-radius:6px;padding:6px 8px;background:var(--chip)" aria-label="Nombre del escenario">'
+    +'<button class="btn primary" id="scSave">Guardar actual</button></div>'
+    +'<div class="row-actions"><button class="btn sm" id="scBase">Usar el actual como base</button><button class="btn sm" id="scReset">Volver a los datos de ejemplo</button></div><div id="scList" style="margin-top:12px"></div>';
+  document.getElementById("dlgBody").innerHTML=html;openDlg(false);
+  var list=scenList(),el=document.getElementById("scList");
+  if(!list.length)el.innerHTML='<div style="color:var(--ink-soft);font-size:13px">Todavía no guardaste ninguno.</div>';
+  else el.innerHTML=list.map(function(r){
+    var k=E.calcular(datosVista(r.datos)).kpis;
+    return '<div class="sc"><div><b>'+esc(r.name)+'</b><br><small>'+new Date(r.ts).toLocaleString("es-AR")+' · máx '+oc(k.maxOcupacion.valor)+' · '+hh(k.hhExcedidas)+' HH exc.</small></div>'
+      +'<div class="row-actions" style="margin:0"><button class="btn sm" data-load="'+r.id+'">Abrir</button><button class="btn sm" data-base="'+r.id+'">Base</button><button class="btn sm" data-del="'+r.id+'">Borrar</button></div></div>';
+  }).join("");
+  document.getElementById("scSave").onclick=function(){
+    var n=document.getElementById("scName").value.trim()||("Escenario "+new Date().toLocaleDateString("es-AR"));
+    var a=scenList();a.unshift({id:Math.random().toString(36).slice(2,9),name:n,ts:Date.now(),datos:clone(S.datos)});scenSet(a.slice(0,20));
+    S.nombre=n;save();renderKPIs();openScen();toast("Escenario guardado");
+  };
+  document.getElementById("scBase").onclick=function(){S.base=clone(S.datos);S.baseNombre=S.nombre;recalc();render();save();toast("Base de comparación: "+S.nombre);};
+  document.getElementById("scReset").onclick=function(){push();var w=nuevoWS();S.datos=w.datos;S.base=w.base;S.baseNombre="Base";S.nombre="Base";sel=null;recalc();render();save();toast("Datos de ejemplo restaurados · Ctrl+Z para deshacer");};
+  el.onclick=function(e){
+    var b=e.target.closest("button");if(!b)return;
+    var a=scenList(),rec=a.filter(function(r){return r.id===(b.dataset.load||b.dataset.base||b.dataset.del);})[0];
+    if(!rec)return;
+    if(b.dataset.load){push();S.datos=clone(rec.datos);S.nombre=rec.name;sel=null;recalc();render();save();dlg.close();toast("Escenario abierto");}
+    if(b.dataset.base){S.base=clone(rec.datos);S.baseNombre=rec.name;recalc();render();save();toast("Base de comparación: "+rec.name);}
+    if(b.dataset.del){scenSet(a.filter(function(r){return r!==rec;}));openScen();}
+  };
+}
+function openComparar(){
+  var filas=[{name:S.nombre+" (abierto)",datos:S.datos},{name:S.baseNombre+" (base)",datos:S.base}].concat(scenList().map(function(r){return {name:r.name,datos:r.datos};}));
+  var html='<h3>Comparar escenarios</h3><div style="color:var(--ink-soft);font-size:12px;margin-bottom:10px">Mismo motor, mismas curvas: cambia solo lo que difiere entre escenarios.'+(S.filtro?' Filtro activo: solo '+S.filtro+'.':'')+'</div>'
+    +'<div class="tablewrap"><table class="pk"><tr><th>Escenario</th><th class="r">Máx. ocup.</th><th>Dónde</th><th>1.er crítico</th><th class="r">HH excedidas</th><th class="r">HH forecast</th><th class="r">Personas</th>'
+    +R.especialidades.map(function(e){return '<th class="r" title="Ocupación pico de '+esc(e)+'">'+esc(ABREV[e]||e)+'</th>';}).join("")+'</tr>';
+  filas.forEach(function(f){
+    var r=E.calcular(datosVista(f.datos)),k=r.kpis,pers=0;Object.keys(f.datos.capacidad.dotacion).forEach(function(x){pers+=f.datos.capacidad.dotacion[x];});
+    html+='<tr><td><b>'+esc(f.name)+'</b></td><td class="calc"><span class="fl '+sem(k.maxOcupacion.valor)+'">'+oc(k.maxOcupacion.valor)+'</span></td><td>'+esc(k.maxOcupacion.especialidad||"—")+' '+mlabel(k.maxOcupacion.mes)+'</td>'
+      +'<td>'+(k.primerMesCritico?mlabel(k.primerMesCritico.mes):"ninguno")+'</td><td class="calc">'+hh(k.hhExcedidas)+'</td><td class="calc">'+hh(k.hhForecastHorizonte)+'</td><td class="calc">'+pers+'</td>'
+      +r.especialidades.map(function(e){return '<td class="calc">'+oc(r.cuellos[e].maxOcupacion)+'</td>';}).join("")+'</tr>';
+  });
+  html+='</table></div>';
+  if(filas.length<=2)html+='<div class="hint">Guardá escenarios desde «Escenarios» para sumarlos a esta tabla.</div>';
+  document.getElementById("dlgBody").innerHTML=html;openDlg(true);
+}
+
+/* ===================== exportar / importar ===================== */
+function csv(rows){return rows.map(function(r){return r.map(function(c){var s=typeof c==="number"?String(Math.round(c*100)/100).replace(".",","):String(c==null?"":c);return /[";\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}).join(";");}).join("\n");}
+function csvForecast(){
+  /* misma forma que Forecast_Mes_V4 */
+  var rows=[["Proyecto","Tipo Cliente","Componente","TipoCurva","Mes","Especialidad","Factor","HHComponente","HH Forecast","Fecha Forecast"]];
+  R.filas.forEach(function(f){rows.push([f.proyecto,f.tipoCliente,f.componente,f.curva,f.mesCurva,f.especialidad,f.factor,f.hhComponente,f.hh,E.mesStr(f.mes)+"-01"]);});
+  return csv(rows);
+}
+function csvMatriz(){
+  var rows=[["Mes"].concat(R.especialidades.map(function(e){return e+" demanda";}),R.especialidades.map(function(e){return e+" capacidad";}),R.especialidades.map(function(e){return e+" ocupación";}))];
+  R.meses.forEach(function(m,i){rows.push([m].concat(R.demanda[i],R.capacidad[i],R.ocupacion[i].map(function(v){return v===Infinity?"inf":v;})));});
+  return csv(rows);
+}
+function slug(){return (S.nombre||"capacidad").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40)||"capacidad";}
+function offer(filename,data){
+  if(downloads){downloads.save({filename:filename,data:data}).then(function(){toast("Archivo guardado");},function(err){if(err&&err.code!=="declined")toast("No se pudo guardar el archivo");});return;}
+  try{
+    var blob=data instanceof Blob?data:new Blob([data],{type:"application/octet-stream"});
+    var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;
+    document.body.appendChild(a);a.click();a.remove();
+  }catch(e){toast("No se pudo descargar acá");}
+}
+function openExport(){
+  document.getElementById("dlgBody").innerHTML='<h3>Exportar</h3><div class="row-actions">'
+    +'<button class="btn" id="exF">Forecast mensual (CSV)</button><button class="btn" id="exM">Matriz de ocupación (CSV)</button>'
+    +'<button class="btn" id="exJ">Escenario (JSON)</button><button class="btn" id="exT">Copiar matriz</button></div>'
+    +'<div class="hint">El forecast mensual tiene la misma forma que Forecast_Mes_V4 (una fila por proyecto, componente, mes y especialidad). Los CSV usan punto y coma y coma decimal.</div>';
+  openDlg(false);
+  document.getElementById("exF").onclick=function(){offer(slug()+"-forecast.csv","﻿"+csvForecast());};
+  document.getElementById("exM").onclick=function(){offer(slug()+"-ocupacion.csv","﻿"+csvMatriz());};
+  document.getElementById("exJ").onclick=function(){offer(slug()+".json",JSON.stringify({escenario:S.nombre,datos:S.datos},null,1));};
+  document.getElementById("exT").onclick=function(){
+    var tsv=csvMatriz().split("\n").map(function(l){return l.split(";").join("\t");}).join("\n");
+    navigator.clipboard.writeText(tsv).then(function(){toast("Matriz copiada");},function(){toast("El navegador bloqueó el portapapeles");});
+  };
+}
+/* ---- CSV exportado de la lista SharePoint DIM_Proyecto (mismo mapeo que backend/app/importar_csv.py) ---- */
+function parseCSV(t){
+  t=t.replace(/^\ufeff/,"");
+  var sep=(t.split("\n")[0].split(";").length>t.split("\n")[0].split(",").length)?";":",";
+  var rows=[],row=[],f="",q=false;
+  for(var i=0;i<t.length;i++){
+    var c=t[i];
+    if(q){if(c==='"'){if(t[i+1]==='"'){f+='"';i++;}else q=false;}else f+=c;}
+    else if(c==='"')q=true;
+    else if(c===sep){row.push(f);f="";}
+    else if(c==="\n"||c==="\r"){if(c==="\r"&&t[i+1]==="\n")i++;row.push(f);rows.push(row);row=[];f="";}
+    else f+=c;
+  }
+  if(f!==""||row.length){row.push(f);rows.push(row);}
+  return rows.filter(function(r){return r.some(function(x){return x.trim()!=="";});});
+}
+function proyectosDesdeCSV(texto){
+  var rows=parseCSV(texto),h=rows.shift().map(function(x){return x.trim();}),out=[],av=[];
+  var col=function(r){var names=[].slice.call(arguments,1);for(var i=0;i<names.length;i++){var k=h.indexOf(names[i]);if(k>=0)return r[k];}return "";};
+  var tx=function(v){v=(v||"").trim();return /^(|n\/a|na|-|none)$/i.test(v)?null:v;};
+  var nm=function(v){v=tx(v);if(v===null)return null;if((v.match(/,/g)||[]).length===1&&v.indexOf(".")>=0)v=v.replace(/\./g,"");return +v.replace(",",".");};
+  var mes=function(v){v=tx(v);if(!v)return null;var d=v.split(" ")[0];if(d.indexOf("/")>=0){var a=d.split("/");return a[2]+"-"+String(+a[1]).padStart(2,"0");}return d.slice(0,7);};
+  var TEC={bess:"Bess",solar:"Solar","eólico":"Eólico",eolico:"Eólico",termico:"Termico","térmico":"Termico"};
+  rows.forEach(function(r,i){
+    var cod=tx(col(r,"Proyectos","Proyecto"));if(!cod)return;
+    var tipo=tx(col(r,"Tipo Cliente")),est=tx(col(r,"Est Transformadora")),ln=tx(col(r,"Linea","Línea")),niv=tx(col(r,"Nivel DNN"));
+    var tec=tx(col(r,"Tecnología","Tecnologia"));
+    var p={id:i+1,proyecto:cod,nombre:tx(col(r,"Nombre")),tipoCliente:tipo,tecnologia:TEC[(tec||"").toLowerCase()]||tec,
+      potencia:nm(col(r,"Potencia")),tamano:tx(col(r,"Tamaño")),
+      nivelDNN:(tipo==="DNN"&&niv)?("DNN Cat"+niv.replace(/\D/g,"")):null,estado:tx(col(r,"Estado")),fechaInicio:mes(col(r,"Fecha Inicio")),
+      est:est?(/nueva/i.test(est)?"ET Nueva":/ampl/i.test(est)?"Ampliación ET":est):null,
+      linea:ln?(/\bAT$/i.test(ln)?"Línea AT":/\bMT$/i.test(ln)?"Línea MT":ln):null,
+      simulable:!/^(si|sí|yes|true|1)$/i.test(tx(col(r,"Calendario Fijo"))||"no"),
+      hhParque:null,hhEt:null,hhLinea:null,hhProy:null,factorSolapamiento:nm(col(r,"Factor Solapa","Factor Solapamiento"))||1,
+      duracion:null,tensionPOE:nm(col(r,"Tensión POE")),avance:nm(col(r,"% Avance"))};
+    if(["DPI","DNN","O&M"].indexOf(tipo)<0)av.push(cod+": Tipo Cliente desconocido ("+tipo+")");
+    if(!p.fechaInicio)av.push(cod+": sin Fecha Inicio");
+    if(tipo==="DNN"&&["DNN Cat1","DNN Cat2"].indexOf(p.nivelDNN)<0)av.push(cod+": DNN sin Nivel DNN válido");
+    if(tipo==="O&M"&&niv)av.push(cod+": es O&M y tiene Nivel DNN «"+niv+"» (se ignora)");
+    if(tipo!=="DPI"&&(p.est||p.linea))av.push(cod+": ET/Línea cargadas en un proyecto "+tipo+" (no se usan)");
+    out.push(p);
+  });
+  return {proyectos:out,avisos:av};
+}
+function importar(file){
+  var r=new FileReader();
+  if(/\.csv$/i.test(file.name)){
+    r.onload=function(){
+      try{
+        var res=proyectosDesdeCSV(r.result);
+        if(!res.proyectos.length)throw 0;
+        push();S.datos.proyectos=res.proyectos;sel=null;recalc();render();save();
+        var tot=0;res.proyectos.forEach(function(p){tot+=totalP(p);});
+        document.getElementById("dlgBody").innerHTML='<h3>Proyectos importados</h3><div class="psub" style="margin-bottom:10px">'+res.proyectos.length+' proyectos de «'+esc(file.name)+'» reemplazan la lista anterior ('+hh(tot)+' HH estimadas). Parámetros, curvas y recursos no cambian. Ctrl+Z deshace la importación.</div>'
+          +(res.avisos.length?'<div class="holg crit">'+res.avisos.map(esc).join("<br>")+'</div>':'<div class="holg">Sin avisos.</div>')
+          +'<div class="tablewrap"><table class="pk"><tr><th>Proyecto</th><th>Tipo</th><th>Tecnología</th><th class="r">MW</th><th>Tamaño</th><th>Inicio</th><th class="r">Solap.</th><th class="r">HH</th></tr>'
+          +res.proyectos.map(function(p){return '<tr><td><b>'+esc(p.proyecto)+'</b> '+esc(p.nombre||"")+(p.simulable?'':' <span class="fl lock">fijo</span>')+'</td><td>'+esc(p.tipoCliente)+'</td><td>'+esc(p.tecnologia)+'</td><td class="calc">'+NF0.format(p.potencia||0)+'</td><td>'+E.tamano(p,S.datos.parametros)+'</td><td>'+mlabel(p.fechaInicio)+'</td><td class="calc">'+NF2.format(p.factorSolapamiento)+'</td><td class="calc">'+hh(totalP(p))+'</td></tr>';}).join("")
+          +'</table></div>';
+        openDlg(true);
+      }catch(e){toast("No se pudo leer el CSV: revisá que tenga las columnas de DIM_Proyecto");}
+    };
+    r.readAsText(file,"utf-8");
+    return;
+  }
+  r.onload=function(){
+    try{
+      var o=JSON.parse(r.result),d=o.datos||o;
+      if(!d.proyectos||!d.curvas||!d.capacidad)throw 0;
+      push();S.datos=d;S.nombre=o.escenario||file.name.replace(/\.json$/i,"");sel=null;recalc();render();save();
+      toast("Escenario «"+S.nombre+"» importado");
+    }catch(e){toast("Ese archivo no es un escenario válido");}
+  };
+  r.readAsText(file);
+}
+
+/* ===================== reporte PDF ===================== */
+function loadJsPDF(){
+  return new Promise(function(res,rej){
+    if(window.jspdf&&window.jspdf.jsPDF)return res(window.jspdf.jsPDF);
+    var s=document.createElement("script");
+    s.src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+    s.onload=function(){(window.jspdf&&window.jspdf.jsPDF)?res(window.jspdf.jsPDF):rej(new Error("no jspdf"));};
+    s.onerror=function(){rej(new Error("sin red"));};
+    document.head.appendChild(s);
+  });
+}
+function pdfTxt(s){return String(s).replace(/[≥]/g,">=").replace(/[−]/g,"-").replace(/[·]/g,"-").replace(/[→]/g,"->");}
+function openPDF(){
+  toast("Generando reporte…");
+  loadJsPDF().then(function(JsPDF){
+    var doc=new JsPDF({orientation:"landscape",unit:"mm",format:"a3"}),W=420,M=12,k=R.kpis,y;
+    doc.setFillColor(34,53,31);doc.rect(0,0,W,22,"F");
+    doc.setTextColor(242,245,240);doc.setFont("helvetica","bold");doc.setFontSize(16);
+    doc.text(pdfTxt(document.getElementById("title").value||"Plan de capacidad"),M,14);
+    doc.setFont("helvetica","normal");doc.setFontSize(10);
+    doc.text(pdfTxt("Escenario: "+S.nombre+(S.filtro?" (solo "+S.filtro+")":"")+" - Base: "+S.baseNombre+" - "+new Date().toLocaleDateString("es-AR")),W-M,14,{align:"right"});
+    var kp=[["Maxima ocupacion",oc(k.maxOcupacion.valor),(k.maxOcupacion.especialidad||"")+" "+mlabel(k.maxOcupacion.mes)],
+      ["Primer mes critico",k.primerMesCritico?mlabel(k.primerMesCritico.mes):"ninguno",k.primerMesCritico?k.primerMesCritico.especialidades.join(", "):""],
+      ["HH excedidas",hh(k.hhExcedidas),"sobre la capacidad"],["HH forecast",hh(k.hhForecastHorizonte),"en el horizonte"],
+      ["Mix DPI / DNN / O&M",TIPOS.map(function(t){return NFP.format((R.mixTipoCliente[t.k]||0)/(k.hhForecastTotal||1));}).join(" / "),""]];
+    var kw=(W-2*M)/kp.length;y=30;
+    kp.forEach(function(x,i){
+      var x0=M+i*kw;doc.setDrawColor(201,210,204);doc.rect(x0,y,kw-4,20);
+      doc.setTextColor(91,107,98);doc.setFontSize(8);doc.text(pdfTxt(x[0].toUpperCase()),x0+3,y+5);
+      doc.setTextColor(21,32,26);doc.setFont("helvetica","bold");doc.setFontSize(14);doc.text(pdfTxt(x[1]),x0+3,y+13);
+      doc.setFont("helvetica","normal");doc.setFontSize(8);doc.setTextColor(91,107,98);doc.text(pdfTxt(x[2]),x0+3,y+18);
+    });
+    /* matriz de ocupación */
+    y=60;doc.setTextColor(21,32,26);doc.setFontSize(11);doc.setFont("helvetica","bold");doc.text("Ocupacion por especialidad (HH forecast / capacidad)",M,y);
+    var n=R.meses.length,lw=36,cw=(W-2*M-lw)/n,rh=7;y+=4;
+    doc.setFontSize(7);doc.setFont("helvetica","bold");
+    R.meses.forEach(function(m,i){doc.setFillColor(238,241,238);doc.rect(M+lw+i*cw,y,cw,rh,"F");doc.setTextColor(91,107,98);doc.text(mlabel(m),M+lw+i*cw+cw/2,y+4.6,{align:"center"});});
+    y+=rh;
+    var fill={ok:[220,240,216],warn:[255,243,205],crit:[253,224,221],zero:[255,255,255]},ink={ok:[38,92,34],warn:[122,90,6],crit:[140,28,20],zero:[150,160,154]};
+    R.especialidades.forEach(function(e,j){
+      doc.setFont("helvetica","bold");doc.setTextColor(21,32,26);doc.setFontSize(8);doc.text(pdfTxt(e),M+1,y+4.8);
+      doc.setFontSize(7);
+      R.meses.forEach(function(m,i){
+        var v=R.ocupacion[i][j],c=R.demanda[i][j]<0.5?"zero":sem(v);
+        doc.setFillColor.apply(doc,fill[c]);doc.rect(M+lw+i*cw,y,cw-0.4,rh-0.4,"F");
+        doc.setTextColor.apply(doc,ink[c]);doc.text(c==="zero"?"-":oc(v),M+lw+i*cw+cw/2,y+4.6,{align:"center"});
+      });
+      y+=rh;
+    });
+    /* gráfico demanda vs capacidad (total área) */
+    y+=8;doc.setFontSize(11);doc.setFont("helvetica","bold");doc.setTextColor(21,32,26);doc.text("Demanda vs capacidad - total del area (HH/mes)",M,y);
+    var gh=55,gy=y+4,s=R.meses.map(function(_,i){return {t:R.demandaPorTipo[i],c:R.capacidad[i].reduce(function(a,b){return a+b;},0)};});
+    var mx=niceMax(Math.max.apply(null,s.map(function(r){return Math.max(r.c,r.t.reduce(function(a,b){return a+b;},0));})));
+    var yy=function(v){return gy+gh*(1-v/mx);};
+    doc.setDrawColor(229,234,231);[0.5,1].forEach(function(f){doc.line(M+lw,yy(mx*f),W-M,yy(mx*f));doc.setFontSize(7);doc.setTextColor(91,107,98);doc.text(hh(mx*f),M+lw-2,yy(mx*f)+1,{align:"right"});});
+    var col=[[157,195,230],[244,177,131],[169,209,142]];
+    s.forEach(function(r,i){
+      var acc=0,x=M+lw+i*cw+1;
+      r.t.forEach(function(v,t){if(v<=0)return;doc.setFillColor.apply(doc,col[t]);doc.rect(x,yy(acc+v),cw-2,yy(acc)-yy(acc+v),"F");acc+=v;});
+      doc.setDrawColor(21,32,26);doc.setLineWidth(0.6);doc.line(M+lw+i*cw,yy(r.c),M+lw+(i+1)*cw,yy(r.c));doc.setLineWidth(0.2);
+    });
+    TIPOS.forEach(function(t,i){doc.setFillColor.apply(doc,col[i]);doc.rect(M+i*0,gy+8+i*6,4,3,"F");doc.setFontSize(7);doc.setTextColor(21,32,26);doc.text(pdfTxt(t.n),M+6,gy+10.5+i*6);});
+    doc.setDrawColor(21,32,26);doc.setLineWidth(0.6);doc.line(M,gy+28,M+4,gy+28);doc.setLineWidth(0.2);doc.text("Capacidad",M+6,gy+29);
+    /* cuellos y pareto */
+    y=gy+gh+12;
+    doc.setFontSize(11);doc.setFont("helvetica","bold");doc.text("Cuellos de botella",M,y);doc.text("Pareto de proyectos (HH forecast)",W/2,y);
+    doc.setFontSize(8.5);var y2=y+7;
+    R.especialidades.forEach(function(e){
+      var c=R.cuellos[e];doc.setFont("helvetica","bold");doc.text(pdfTxt(e),M,y2);doc.setFont("helvetica","normal");
+      doc.text(pdfTxt("pico "+oc(c.maxOcupacion)+" en "+mlabel(c.mesPico)+" - "+c.mesesCriticos+" meses > 1 - "+hh(c.hhExcedidas)+" HH excedidas - faltan "+c.personasAdicionales+" pers."),M+30,y2);y2+=6;
+    });
+    var y3=y+7,pm=R.pareto.length?R.pareto[0].hh:1;
+    R.pareto.slice(0,12).forEach(function(r){
+      doc.setTextColor(21,32,26);doc.text(pdfTxt(r.proyecto),W/2,y3);
+      doc.setFillColor(157,195,230);doc.rect(W/2+48,y3-3,90*r.hh/pm,3.4,"F");
+      doc.text(pdfTxt(hh(r.hh)+" HH - acum "+NFP.format(r.pctAcum)),W/2+142,y3);y3+=5.5;
+    });
+    doc.setFontSize(7);doc.setTextColor(91,107,98);doc.text("Datos de ejemplo. Semaforo: verde < 0,80 - amarillo < 1,00 - rojo >= 1,00.",M,290);
+    offer(slug()+"-reporte.pdf",doc.output("arraybuffer"));
+  }).catch(function(){toast("No se pudo cargar el generador de PDF (sin conexión)");});
+}
+
+/* ===================== búsqueda, atajos, toast ===================== */
+function abrirBuscar(){var b=document.getElementById("buscar");b.className="on";var i=document.getElementById("buscarInp");i.value=S.q||"";i.focus();i.select();}
+function cerrarBuscar(){document.getElementById("buscar").className="";S.q="";renderRows();}
+function openAtajos(){
+  var A=[["Ctrl+Z / Ctrl+Y","Deshacer / rehacer (también los cambios de parámetros)"],["Ctrl+S","Guardar en este navegador"],["Ctrl+F","Buscar proyecto"],["Ctrl+P","Reporte PDF"],
+    ["↑ / ↓","Proyecto anterior / siguiente"],["← / →","Mover el proyecto elegido 1 mes"],["Ctrl+← / Ctrl+→","Mover 12 meses"],["Shift+← / Shift+→","Acortar / alargar 1 mes"],
+    ["+ / −","Zoom de la línea de tiempo"],["Ctrl+rueda","Zoom con el mouse"],["Esc","Cerrar diálogo o soltar selección"],["F1 o ?","Esta ayuda"]];
+  document.getElementById("dlgBody").innerHTML='<h3>Atajos de teclado</h3><table class="atajos">'+A.map(function(a){return '<tr><td><kbd>'+a[0]+'</kbd></td><td>'+a[1]+'</td></tr>';}).join("")+'</table>'
+    +'<div class="hint">Arrastrá una barra de proyecto simulable para mover su inicio, o tomala de un borde para cambiar su duración: la matriz, el gráfico y los KPIs se recalculan mientras arrastrás.</div>';
+  openDlg(false);
+}
+var tt=null;
+function toast(m){var el=document.getElementById("toast");el.textContent=m;el.classList.add("on");clearTimeout(tt);tt=setTimeout(function(){el.classList.remove("on");},2400);}
+function selRow(d){
+  var ids=[];TIPOS.forEach(function(t){S.datos.proyectos.forEach(function(p){if(p.tipoCliente===t.k)ids.push(String(p.id));});});
+  if(!ids.length)return;
+  var i=sel&&sel.p?ids.indexOf(sel.p):-1;i=i<0?(d>0?0:ids.length-1):Math.max(0,Math.min(ids.length-1,i+d));
+  sel_({p:ids[i]});
+  var el=document.querySelector('.tname[data-p="'+ids[i]+'"]');if(el&&el.scrollIntoView)el.scrollIntoView({block:"nearest"});
+}
+document.addEventListener("keydown",function(e){
+  var mod=e.ctrlKey||e.metaKey,k=e.key,enCampo=/input|textarea|select/i.test(e.target.tagName);
+  if(mod&&(k==="z"||k==="Z")&&!e.shiftKey){e.preventDefault();undo();return;}
+  if(mod&&(k==="y"||k==="Y"||((k==="z"||k==="Z")&&e.shiftKey))){e.preventDefault();redo();return;}
+  if(mod&&(k==="s"||k==="S")){e.preventDefault();save();toast("Guardado en este navegador");return;}
+  if(mod&&(k==="p"||k==="P")){e.preventDefault();openPDF();return;}
+  if(mod&&(k==="f"||k==="F")){e.preventDefault();abrirBuscar();return;}
+  if(k==="Escape"){
+    if(document.getElementById("buscar").className==="on"){cerrarBuscar();return;}
+    if(dlg.open){dlg.close();return;}
+    if(enCampo){e.target.blur();return;}
+    sel_(null);return;
+  }
+  if(enCampo)return;
+  if(k==="F1"||k==="?"){e.preventDefault();openAtajos();return;}
+  if(k==="ArrowUp"||k==="ArrowDown"){e.preventDefault();selRow(k==="ArrowDown"?1:-1);return;}
+  if((k==="ArrowLeft"||k==="ArrowRight")&&sel&&sel.p){
+    e.preventDefault();var p=findP(sel.p);if(!p)return;
+    if(e.shiftKey)durP(p,k==="ArrowRight"?1:-1);else moverP(p,(k==="ArrowRight"?1:-1)*(mod?12:1));
+    return;
+  }
+  if(k==="+"||k==="="){e.preventDefault();zoom(S.cw+6);return;}
+  if(k==="-"||k==="_"){e.preventDefault();zoom(S.cw-6);return;}
+});
+function zoom(v){S.cw=Math.max(26,Math.min(90,v));document.getElementById("zoom").value=Math.max(30,Math.min(80,S.cw));render();save();}
+
+/* ===================== arranque ===================== */
+function boot(){
+  ed=document.getElementById("editor");dlg=document.getElementById("dlg");
+  S=load();
+  document.getElementById("title").value=S.title||"Plan de capacidad · Ingeniería";
+  document.getElementById("zoom").value=S.cw;
+  S.q="";
+  recalc();render();
+  wireDrag();wireClicks();wireDlgDrag();
+  document.getElementById("dlgClose").onclick=function(){dlg.close();};
+  document.getElementById("dlgX").onclick=function(){dlg.close();};
+  document.getElementById("title").onchange=function(){S.title=this.value;save();};
+  document.getElementById("undo").onclick=undo;
+  document.getElementById("addBtn").onclick=function(){
+    push();
+    var ini=E.mesStr(Math.max(E.mesIdx(todayYM()),E.mesIdx(S.datos.horizonte.desde))+3);
+    var p={id:nextId(),proyecto:"Nuevo proyecto",tipoCliente:"DPI",tecnologia:"Solar",potencia:100,nivelDNN:null,
+      nombre:null,estado:"No Iniciado",fechaInicio:ini,tamano:null,est:"ET Nueva",linea:"Línea MT",simulable:true,hhParque:null,hhEt:null,hhLinea:null,hhProy:null,factorSolapamiento:1,duracion:null};
+    S.datos.proyectos.push(p);sel={p:String(p.id)};recalc();render();save();
+    var n=document.getElementById("edName");if(n){n.focus();n.select();}
+  };
+  document.getElementById("resBtn").onclick=openRecursos;
+  document.getElementById("parBtn").onclick=openParametros;
+  document.getElementById("minBtn").onclick=openNivelar;
+  document.getElementById("scenBtn").onclick=openScen;
+  document.getElementById("cmpBtn").onclick=openComparar;
+  document.getElementById("pdfBtn").onclick=openPDF;
+  document.getElementById("exportBtn").onclick=openExport;
+  document.getElementById("importBtn").onclick=function(){document.getElementById("file").click();};
+  document.getElementById("file").onchange=function(){if(this.files[0])importar(this.files[0]);this.value="";};
+  document.getElementById("kbdBtn").onclick=openAtajos;
+  document.getElementById("zoom").oninput=function(){S.cw=+this.value;render();save();};
+  document.getElementById("theme").onclick=function(){
+    var r=document.documentElement,c=r.getAttribute("data-theme");
+    var dark=c?c==="dark":window.matchMedia("(prefers-color-scheme: dark)").matches;
+    r.setAttribute("data-theme",dark?"light":"dark");
+  };
+  document.getElementById("buscarInp").oninput=function(){S.q=this.value.trim().toLowerCase();renderRows();};
+  document.getElementById("buscarX").onclick=cerrarBuscar;
+  document.getElementById("wrap").addEventListener("wheel",function(e){
+    if(!(e.ctrlKey||e.metaKey))return;e.preventDefault();zoom(S.cw+(e.deltaY<0?4:-4));
+  },{passive:false});
+  if(window.claude&&window.claude.use){
+    window.claude.use("downloads").then(function(d){downloads=d;}).catch(function(){});
+  }
+}
+if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot);else boot();
+})();
+</script>
+</body>
+</html>
