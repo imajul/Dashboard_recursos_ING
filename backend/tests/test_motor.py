@@ -100,6 +100,18 @@ class ReglasDeNegocio(unittest.TestCase):
         self.assertGreaterEqual(r["kpis"]["primerMesCritico"]["mes"], "2026-10")
         self.assertLessEqual(r["kpis"]["hhExcedidas"], todo["kpis"]["hhExcedidas"])
 
+    def test_horizonte_se_extiende(self):
+        base = motor.calcular(self.d)
+        self.assertEqual(len(base["meses"]), self.d["horizonte"]["meses"])
+        # PSSDV (id 1, 12 meses desde feb-27) movido 30 meses: arranca ago-29 y termina jul-30
+        r = motor.calcular(self.d, {"proyectos": {"1": {"desplazamiento": 30}}})
+        self.assertEqual(r["meses"][-1], "2030-07")
+        self.assertAlmostEqual(r["kpis"]["hhForecastTotal"], base["kpis"]["hhForecastTotal"])
+        self.assertAlmostEqual(sum(map(sum, r["demanda"])), sum(map(sum, base["demanda"])))
+        d = dataset()
+        d["horizonte"]["extender"] = False
+        self.assertEqual(len(motor.calcular(d, {"proyectos": {"1": {"desplazamiento": 30}}})["meses"]), d["horizonte"]["meses"])
+
     def test_escenario_sumar_electricos_baja_exceso(self):
         base = motor.calcular(self.d)["cuellos"]["Eléctricos"]["hhExcedidas"]
         esc = {"capacidad": {"dotacion": {"Eléctricos": 9}}}
@@ -217,7 +229,7 @@ class ParidadJavaScript(unittest.TestCase):
     def test_paridad_escenario(self):
         self._comparar({
             "proyectos": {"8": {"desplazamiento": 4}, "3": {"incluir": False},
-                          "1": {"duracion": 7}, "2": {"duracion": 20}, "9": {"duracion": 4}},
+                          "1": {"duracion": 7, "desplazamiento": 26}, "2": {"duracion": 20}, "9": {"duracion": 4}},
             "capacidad": {"dotacion": {"Eléctricos": 16}, "eficiencia": 0.8,
                           "eventos": [{"especialidad": "Civiles", "desde": "2027-01", "hasta": "2027-09", "delta": 2}]},
         })

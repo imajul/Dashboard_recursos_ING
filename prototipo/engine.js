@@ -10,6 +10,7 @@
   'use strict';
 
   const TIPOS_CLIENTE = ['DPI', 'DNN', 'O&M'];
+  const MAX_MESES = 120; // tope del horizonte extendido automáticamente (10 años)
 
   const mesIdx = (ym) => { const [y, m] = ym.split('-').map(Number); return y * 12 + (m - 1); };
   const mesStr = (i) => `${Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}`;
@@ -174,7 +175,14 @@
     const { proyectos, cap } = aplicarEscenario(datos, escenario);
     const esps = datos.especialidades;
     const filas = forecast(proyectos, datos.curvas, datos.parametros);
-    const m0 = mesIdx(datos.horizonte.desde), n = datos.horizonte.meses;
+    const m0 = mesIdx(datos.horizonte.desde);
+    let n = datos.horizonte.meses;
+    // Si algún proyecto termina después del horizonte configurado, se extiende hasta su último mes.
+    if (datos.horizonte.extender !== false && filas.length) {
+      let ultimo = -Infinity;
+      for (const f of filas) if (f.mes > ultimo) ultimo = f.mes;
+      n = Math.max(n, Math.min(ultimo - m0 + 1, MAX_MESES));
+    }
     const meses = Array.from({ length: n }, (_, i) => m0 + i);
     // Los indicadores miran hacia adelante: desde kpiDesde (p. ej. el mes actual).
     const kpi0 = datos.horizonte.kpiDesde ? mesIdx(datos.horizonte.kpiDesde) : m0;

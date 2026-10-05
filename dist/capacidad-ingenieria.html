@@ -1676,6 +1676,7 @@ window.SAMPLE_DATA = {
   'use strict';
 
   const TIPOS_CLIENTE = ['DPI', 'DNN', 'O&M'];
+  const MAX_MESES = 120; // tope del horizonte extendido automáticamente (10 años)
 
   const mesIdx = (ym) => { const [y, m] = ym.split('-').map(Number); return y * 12 + (m - 1); };
   const mesStr = (i) => `${Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}`;
@@ -1840,7 +1841,14 @@ window.SAMPLE_DATA = {
     const { proyectos, cap } = aplicarEscenario(datos, escenario);
     const esps = datos.especialidades;
     const filas = forecast(proyectos, datos.curvas, datos.parametros);
-    const m0 = mesIdx(datos.horizonte.desde), n = datos.horizonte.meses;
+    const m0 = mesIdx(datos.horizonte.desde);
+    let n = datos.horizonte.meses;
+    // Si algún proyecto termina después del horizonte configurado, se extiende hasta su último mes.
+    if (datos.horizonte.extender !== false && filas.length) {
+      let ultimo = -Infinity;
+      for (const f of filas) if (f.mes > ultimo) ultimo = f.mes;
+      n = Math.max(n, Math.min(ultimo - m0 + 1, MAX_MESES));
+    }
     const meses = Array.from({ length: n }, (_, i) => m0 + i);
     // Los indicadores miran hacia adelante: desde kpiDesde (p. ej. el mes actual).
     const kpi0 = datos.horizonte.kpiDesde ? mesIdx(datos.horizonte.kpiDesde) : m0;
@@ -2089,7 +2097,7 @@ function renderHead(){
   var yb='<div class="lrow"><div class="hhead" style="height:22px;border-bottom:1px solid var(--rule)">Tipo · Proyecto</div><div class="yband">';
   years.forEach(function(g){yb+='<div class="ycell" style="width:'+px(g.n*cw)+'">'+g.y+'</div>';});
   var mb='<div class="lrow"><div class="hhead" style="height:22px;border-bottom:1px solid var(--rule)"></div><div class="mband">';
-  var nb='<div class="lrow"><div class="hhead" style="height:22px;border-bottom:1px solid var(--rule);font-weight:500;font-size:11px;opacity:.85">HH forecast del mes</div><div class="nband">';
+  var nb='<div class="lrow"><div class="hhead" style="height:22px;border-bottom:1px solid var(--rule);font-weight:500;font-size:11px;color:color-mix(in srgb,var(--band-ink) 85%,var(--band))">HH forecast del mes</div><div class="nband">';
   for(i=0;i<n;i++){
     var tot=R.demanda[i].reduce(function(a,b){return a+b;},0);
     var pas=R.meses[i]<R.kpiDesde?" past":"";
@@ -2272,7 +2280,12 @@ function render(){
   renderHead();renderRows();renderCap();renderOverlay();renderKPIs();renderFooter();renderEditor();updUndo();
 }
 /* re-render liviano durante el arrastre: no toca las filas de proyectos */
-function renderLive(){renderHead();renderCap();renderOverlay();renderKPIs();}
+function renderLive(){
+  renderHead();renderCap();renderOverlay();renderKPIs();
+  /* el horizonte puede haber crecido (proyecto movido más allá del final): ensancha las filas */
+  var w=px(R.meses.length*S.cw);
+  document.querySelectorAll("#rows .tl").forEach(function(t){t.style.width=w;});
+}
 
 /* ===================== editor lateral ===================== */
 function renderEditor(){
@@ -2493,13 +2506,17 @@ function wireDrag(){
     if(!p.simulable){sel_({p:String(p.id)});toast("Proyecto no simulable: fecha y duración fijas");return;}
     var h=e.target.closest(".h"),sp=spanOf(p);
     drag={el:b,p:p,mode:h?h.dataset.h:"m",x0:e.clientX,k:0,orig:p.fechaInicio,origDur:p.duracion==null?null:p.duracion,
-      dur0:sp.dur,left:parseFloat(b.style.left),width:parseFloat(b.style.width)};
+      dur0:sp.dur,left:parseFloat(b.style.left),width:parseFloat(b.style.width),s0:document.getElementById("wrap").scrollLeft};
     b.setPointerCapture(e.pointerId);b.classList.add(h?"resizing":"dragging");
     e.preventDefault();
   });
   rows.addEventListener("pointermove",function(e){
     if(!drag)return;
-    var d=drag,dx=e.clientX-d.x0,cw=S.cw,k=Math.round(dx/cw);
+    /* desplazamiento automático al acercarse a los bordes de la grilla */
+    var wrap=document.getElementById("wrap"),wr=wrap.getBoundingClientRect(),lw=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--labelw"))||0;
+    if(e.clientX>wr.right-48)wrap.scrollLeft+=S.cw/2;
+    else if(e.clientX<wr.left+lw+32)wrap.scrollLeft-=S.cw/2;
+    var d=drag,dx=e.clientX-d.x0+(wrap.scrollLeft-d.s0),cw=S.cw,k=Math.round(dx/cw);
     if(d.mode==="r"){k=Math.max(1-d.dur0,k);d.el.style.width=px(Math.max(cw,d.width+dx));}
     else if(d.mode==="l"){k=Math.min(d.dur0-1,k);var dd=Math.min(dx,d.width-cw);d.el.style.left=px(d.left+dd);d.el.style.width=px(d.width-dd);}
     else d.el.style.left=px(d.left+dx);

@@ -20,6 +20,7 @@ import math
 from collections import defaultdict
 
 TIPOS_CLIENTE = ["DPI", "DNN", "O&M"]
+MAX_MESES = 120  # tope del horizonte extendido automáticamente (10 años)
 
 
 # ---------------------------------------------------------------- utilidades
@@ -249,6 +250,10 @@ def calcular(datos: dict, escenario: dict | None = None) -> dict:
 
     m0 = mes_idx(datos["horizonte"]["desde"])
     n = datos["horizonte"]["meses"]
+    # Si algún proyecto termina después del horizonte configurado, se extiende hasta
+    # su último mes (salvo horizonte.extender = False) para no perder demanda.
+    if datos["horizonte"].get("extender", True) and filas:
+        n = max(n, min(max(f["mes"] for f in filas) - m0 + 1, MAX_MESES))
     meses = list(range(m0, m0 + n))
     # Los indicadores miran hacia adelante: desde kpiDesde (p. ej. el mes actual).
     # Los meses anteriores se muestran en la matriz pero no cuentan como exceso.
