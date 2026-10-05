@@ -43,11 +43,23 @@ def _forma(n: int, centro: float, plana: bool) -> list[float]:
     return [0.15 + math.exp(-((((i + 0.5) / n) - centro) ** 2) / 0.06) for i in range(n)]
 
 
+def enteros_a_100(curva: dict) -> dict:
+    """Redondea una curva a porcentajes enteros que suman exactamente 100 (método del mayor resto)."""
+    celdas = [(e, k, f) for e, fs in curva.items() for k, f in enumerate(fs)]
+    total = sum(f for _, _, f in celdas)
+    exactos = [(e, k, f / total * 100) for e, k, f in celdas]
+    enteros = {(e, k): int(x) for e, k, x in exactos}
+    faltan = 100 - sum(enteros.values())
+    for e, k, x in sorted(exactos, key=lambda c: -(c[2] - int(c[2])))[:faltan]:
+        enteros[(e, k)] += 1
+    return {e: [enteros[(e, k)] / 100 for k in range(len(fs))] for e, fs in curva.items()}
+
+
 def generar_curvas() -> dict:
     """Devuelve {curva: {especialidad: [factor_mes_1, ..., factor_mes_n]}}.
 
-    La suma de todos los factores de una curva es ~1 (redondeo a 4 decimales),
-    igual que en DIM_Curvas.
+    Cada factor es un porcentaje entero (0,07 = 7 %) y la suma de la curva es
+    exactamente 1.
     """
     curvas: dict = {}
     for nombre, (n, reparto) in CURVAS_DEF.items():
@@ -56,7 +68,8 @@ def generar_curvas() -> dict:
         for esp, peso, centro in zip(ESPECIALIDADES, reparto, CENTRO_ESP):
             forma = _forma(n, centro, plana)
             total = sum(forma)
-            curvas[nombre][esp] = [round(peso * f / total, 4) for f in forma]
+            curvas[nombre][esp] = [peso * f / total for f in forma]
+        curvas[nombre] = enteros_a_100(curvas[nombre])  # se cargan como % enteros
     return curvas
 
 
