@@ -168,6 +168,7 @@
     if (staff.length) {
       let total = 0;
       for (const s of staff) {
+        if (s.simulado === false) continue; // destildado en la nómina: sus horas no cuentan
         if (s.especialidad === esp && personaActiva(s, mes)) total += vacio(s.dedicacion) ? 1 : Number(s.dedicacion);
       }
       return total;

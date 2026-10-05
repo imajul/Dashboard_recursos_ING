@@ -71,8 +71,12 @@ STAFF DE INGENIERÍA (RECURSOS)
   - La cantidad de personas de cada especialidad, mes a mes, sale de esta
     lista: cuenta a quienes están activos ese mes según su dedicación
     (50 % = media persona). Así se reflejan ingresos, egresos y licencias.
+  - Columna "Simulado": tildado = sus horas suman a la capacidad;
+    destildado = la persona queda en la lista pero no suma (útil para probar
+    "qué pasa si no está"). El casillero del encabezado tilda o destilda a
+    todos los de la especialidad filtrada.
   - "Pegar desde Excel": copiar columnas Nombre, Especialidad, Dedicación %,
-    Ingreso, Egreso y pegarlas. "Crear lista desde la dotación" arma filas
+    Ingreso, Egreso (y opcionalmente Simulado Si/No) y pegarlas. "Crear lista desde la dotación" arma filas
     para completar los nombres.
   - "Nivelar" agrega vacantes con nombre ("Vacante Eléctricos 1") que se
     pueden renombrar cuando se cubran.

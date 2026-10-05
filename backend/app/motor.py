@@ -238,12 +238,15 @@ def personas_base(cap: dict, mes: int, esp: str) -> float:
 
     Con nómina (capacidad.staff = [{nombre, especialidad, dedicacion, desde, hasta}])
     se cuentan las personas activas ese mes, ponderadas por su dedicación (0,5 = media
-    jornada). Sin nómina se usa la dotación numérica (capacidad.dotacion).
+    jornada). Las personas con simulado = False figuran en la lista pero no suman.
+    Sin nómina se usa la dotación numérica (capacidad.dotacion).
     """
     staff = cap.get("staff") or []
     if staff:
         total = 0.0
         for s in staff:
+            if s.get("simulado") is False:  # destildado en la nómina: sus horas no cuentan
+                continue
             if s.get("especialidad") == esp and persona_activa(s, mes):
                 total += 1.0 if _vacio(s.get("dedicacion")) else float(s["dedicacion"])
         return total

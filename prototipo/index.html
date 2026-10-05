@@ -719,6 +719,11 @@ function renderOverlay(){
 
 /* ===================== render: KPIs ===================== */
 function dchip(a,b,menorEsMejor,fmt){
+  /* capacidad 0 con demanda = ocupación infinita: no se puede restar */
+  if(!isFinite(a)||!isFinite(b)){
+    if(a===b)return '<span class="delta same" title="Igual que '+esc(S.baseNombre)+'">= base</span>';
+    return '<span class="delta '+(isFinite(a)===menorEsMejor?"early":"late")+'" title="Hay una especialidad con demanda y sin capacidad">'+(isFinite(a)?"con capacidad":"sin capacidad")+'</span>';
+  }
   var d=a-b;if(Math.abs(d)<0.005)return '<span class="delta same" title="Igual que '+esc(S.baseNombre)+'">= base</span>';
   var mejor=menorEsMejor?d<0:d>0;
   return '<span class="delta '+(mejor?"early":"late")+'" title="Diferencia contra '+esc(S.baseNombre)+'">'+(d>0?"+":"−")+fmt(Math.abs(d))+'</span>';
@@ -732,7 +737,7 @@ function renderKPIs(){
   else if(!pc&&pcb)pcD='<span class="delta early">sin crítico</span>';
   else if(pc&&!pcb)pcD='<span class="delta late">nuevo</span>';
   var html=''
-   +kpi("Máxima ocupación",oc(mo.valor),dchip(mo.valor,kb.maxOcupacion.valor,true,function(v){return Math.round(v*100)+" pp";}),mo.especialidad?esc(mo.especialidad)+" · "+mlabel(mo.mes):"—",mo.valor>=1)
+   +kpi("Máxima ocupación",mo.valor===Infinity?"sin capacidad":oc(mo.valor),dchip(mo.valor,kb.maxOcupacion.valor,true,function(v){return Math.round(v*100)+" pp";}),mo.especialidad?esc(mo.especialidad)+" · "+mlabel(mo.mes):"—",mo.valor>=1)
    +kpi("Primer mes crítico",pc?mlabel(pc.mes):"ninguno",pcD,pc?esc(pc.especialidades.join(", ")):"Ningún mes supera el 100% desde "+mlabel(R.kpiDesde),!!pc)
    +kpi("HH excedidas",hh(k.hhExcedidas),dchip(k.hhExcedidas,kb.hhExcedidas,true,hh),"Demanda por encima de la capacidad",k.hhExcedidas>0.5)
    +kpi("HH forecast",hh(k.hhForecastHorizonte),dchip(k.hhForecastHorizonte,kb.hhForecastHorizonte,true,hh),"Desde "+mlabel(R.kpiDesde)+" a "+mlabel(R.meses[R.meses.length-1]),false)
@@ -973,7 +978,7 @@ function edEsp(e){
   if(nom){
     var lst=staffDe(e);
     html+='<h4>Staff ('+lst.length+')</h4><table class="pk">'+(lst.length?lst.map(function(x){
-      return '<tr><td>'+esc(x.nombre||"(sin nombre)")+'</td><td class="calc">'+NFP.format(x.dedicacion==null?1:x.dedicacion)+'</td><td style="color:var(--ink-soft);font-size:11.5px">'
+      return '<tr'+(cuenta(x)?'':' style="opacity:.55" title="No suma horas (Simulado destildado)"')+'><td>'+esc(x.nombre||"(sin nombre)")+(cuenta(x)?'':' <span class="fl">no suma</span>')+'</td><td class="calc">'+NFP.format(x.dedicacion==null?1:x.dedicacion)+'</td><td style="color:var(--ink-soft);font-size:11.5px">'
         +(x.desde?'desde '+mlabel(x.desde):'')+(x.hasta?' hasta '+mlabel(x.hasta):'')+'</td></tr>';}).join(""):'<tr><td style="color:var(--ink-soft)">Nadie en la nómina para esta especialidad.</td></tr>')
       +'</table><div class="row-actions"><button class="btn sm" id="esNom">Editar nómina</button></div>';
   }
@@ -1182,7 +1187,8 @@ function wireDlgDrag(){
 }
 
 /* ===================== recursos (edición masiva) ===================== */
-var STAFF_CAMPOS=[{k:"nombre",n:"Nombre"},{k:"especialidad",n:"Especialidad"},{k:"dedicacion",n:"Dedicación"},{k:"desde",n:"Ingreso"},{k:"hasta",n:"Egreso"},{k:"nota",n:"Nota"}];
+var STAFF_CAMPOS=[{k:"nombre",n:"Nombre"},{k:"especialidad",n:"Especialidad"},{k:"dedicacion",n:"Dedicación"},{k:"desde",n:"Ingreso"},{k:"hasta",n:"Egreso"},{k:"nota",n:"Nota"},{k:"simulado",n:"Simulado"}];
+function cuenta(x){return x.simulado!==false;}   /* tildado «Simulado» = sus horas suman a la capacidad */
 function openRecursos(){
   var cap=S.datos.capacidad,h=S.datos.horizonte,top=dlg.open?dlg.scrollTop:0,esps=R.especialidades,nom=modoNomina(cap),mr=mesRef();
   cap.staff=cap.staff||[];
@@ -1202,26 +1208,29 @@ function openRecursos(){
     +esps.map(function(e){var n=staffDe(e).length;return '<button class="fchip'+(fil===e?" on":"")+'" data-rsf="'+esc(e)+'">'+esc(e)+' <b>'+n+'</b></button>';}).join("")
     +'<span style="flex:1"></span><button class="btn sm primary" id="stAdd">+ Persona</button><button class="btn sm" id="stPaste">Pegar desde Excel</button>'
     +(!nom?'<button class="btn sm" id="stGen" title="Crea una fila por persona de la dotación actual, para completar los nombres">Crear lista desde la dotación</button>':'')+'</div>'
-    +'<div id="stPasteBox" hidden><div class="psub">Pegá filas copiadas de Excel con las columnas: <b>Nombre · Especialidad · Dedicación % (opcional) · Ingreso (opcional) · Egreso (opcional)</b>.</div>'
+    +'<div id="stPasteBox" hidden><div class="psub">Pegá filas copiadas de Excel con las columnas: <b>Nombre · Especialidad · Dedicación % (opcional) · Ingreso (opcional) · Egreso (opcional) · Simulado Si/No (opcional)</b>.</div>'
     +'<textarea id="stPasteTxt" rows="5" style="width:100%;border:1px solid var(--rule);border-radius:6px;padding:6px 8px;background:var(--chip);font:500 12px/1.4 var(--f-num)" placeholder="Ana Pérez&#9;Eléctricos&#9;100&#10;Luis Gómez&#9;Civiles&#9;50&#9;2027-03"></textarea>'
     +'<div class="row-actions"><button class="btn sm primary" id="stPasteOk">Agregar a la lista</button></div></div>';
   var lista=cap.staff.filter(function(x){return !fil||x.especialidad===fil;});
   var nombres={};cap.staff.forEach(function(x){var k=(x.nombre||"").trim().toLowerCase();if(k)nombres[k]=(nombres[k]||0)+1;});
-  html+='<div class="tablewrap" style="max-height:44vh;overflow:auto"><table class="pk lp"><thead><tr><th></th><th>Nombre</th><th>Especialidad</th><th class="r">Dedicación %</th><th>Ingreso</th><th>Egreso</th><th>Nota</th><th>Hoy</th><th></th></tr></thead><tbody>';
-  if(!lista.length)html+='<tr><td></td><td colspan="8" style="color:var(--ink-soft);padding:10px 4px">'+(fil?'Nadie cargado en '+esc(fil)+'.':'La lista está vacía.')+'</td></tr>';
+  html+='<div class="tablewrap" style="max-height:44vh;overflow:auto"><table class="pk lp"><thead><tr><th></th><th>Nombre</th><th>Especialidad</th><th class="r">Dedicación %</th><th>Ingreso</th><th>Egreso</th><th>Nota</th>'
+    +'<th class="c" title="Tildado: sus horas suman a la capacidad. Destildado: queda en la lista pero no suma.">Simulado<br><input type="checkbox" id="stAll" aria-label="Tildar o destildar a todos los de la lista"'
+    +(lista.length&&lista.every(cuenta)?" checked":"")+'></th><th>Hoy</th><th></th></tr></thead><tbody>';
+  if(!lista.length)html+='<tr><td></td><td colspan="9" style="color:var(--ink-soft);padding:10px 4px">'+(fil?'Nadie cargado en '+esc(fil)+'.':'La lista está vacía.')+'</td></tr>';
   lista.forEach(function(x){
     var a=function(k){return 'data-st="'+esc(x.id)+'|'+k+'" aria-label="'+k+' '+esc(x.nombre||"")+'"';};
     var av=[];if(!(x.nombre||"").trim())av.push("Falta el nombre");else if(nombres[(x.nombre||"").trim().toLowerCase()]>1)av.push("Nombre repetido");
     if(x.desde&&x.hasta&&x.hasta<x.desde)av.push("El egreso es anterior al ingreso");
-    var act=E.personaActiva(x,mr);
-    html+='<tr'+(av.length?' class="mal"':'')+'><td'+(av.length?' class="warn" title="'+esc(av.join(" · "))+'">!':'>')+'</td>'
+    var act=E.personaActiva(x,mr),sim=cuenta(x);
+    html+='<tr'+(av.length?' class="mal"':'')+(sim?'':' style="opacity:.55"')+'><td'+(av.length?' class="warn" title="'+esc(av.join(" · "))+'">!':'>')+'</td>'
       +'<td><input type="text" '+a("nombre")+' value="'+esc(x.nombre||"")+'" style="width:170px"></td>'
       +'<td><select '+a("especialidad")+' style="width:130px">'+esps.map(function(e){return '<option'+(e===x.especialidad?" selected":"")+'>'+esc(e)+'</option>';}).join("")+'</select></td>'
       +'<td><input type="number" min="0" max="100" step="10" '+a("dedicacion")+' value="'+Math.round((x.dedicacion==null?1:x.dedicacion)*100)+'"></td>'
       +'<td><input type="month" '+a("desde")+' value="'+esc(x.desde||"")+'"></td>'
       +'<td><input type="month" '+a("hasta")+' value="'+esc(x.hasta||"")+'"></td>'
       +'<td><input type="text" '+a("nota")+' value="'+esc(x.nota||"")+'" style="width:160px" placeholder="licencia, part-time…"></td>'
-      +'<td class="c">'+(act?'<span class="fl ok">activo</span>':'<span class="fl">'+(x.desde&&E.mesIdx(x.desde)>mr?'ingresa':'egresó')+'</span>')+'</td>'
+      +'<td class="c"><input type="checkbox" '+a("simulado")+(sim?" checked":"")+' title="'+(sim?"Sus horas suman a la capacidad":"No suma horas")+'"></td>'
+      +'<td class="c">'+(!sim?'<span class="fl">no suma</span>':act?'<span class="fl ok">activo</span>':'<span class="fl">'+(x.desde&&E.mesIdx(x.desde)>mr?'ingresa':'egresó')+'</span>')+'</td>'
       +'<td class="x"><button data-stdel="'+esc(x.id)+'" title="Quitar a '+esc(x.nombre||"")+'">✕</button></td></tr>';
   });
   html+='</tbody></table></div>';
@@ -1251,6 +1260,11 @@ function wireRecursos(){
   };
   box.onclick=function(e){
     var f=e.target.closest("[data-rsf]");if(f){S.rsEsp=f.dataset.rsf;openRecursos();return;}
+    if(e.target.id==="stAll"){
+      var vis=cap.staff.filter(function(y){return !S.rsEsp||y.especialidad===S.rsEsp;}),on=e.target.checked;
+      push();vis.forEach(function(y){y.simulado=on;});refrescar();
+      toast((on?"Tildadas":"Destildadas")+" "+vis.length+" persona(s)"+(S.rsEsp?" de "+S.rsEsp:"")+" · Ctrl+Z para deshacer");return;
+    }
     var d=e.target.closest("[data-stdel]");
     if(d){var x=cap.staff.filter(function(y){return y.id===d.dataset.stdel;})[0];push();cap.staff=cap.staff.filter(function(y){return y!==x;});refrescar();toast((x.nombre||"Persona")+" quitada de la nómina · Ctrl+Z para deshacer");}
   };
@@ -1271,7 +1285,8 @@ function wireRecursos(){
       var i=t.dataset.st.lastIndexOf("|"),id=t.dataset.st.slice(0,i),k2=t.dataset.st.slice(i+1);
       var x=cap.staff.filter(function(y){return y.id===id;})[0];if(!x)return;
       push();
-      if(k2==="dedicacion"){var n=parseFloat(String(v).replace(",","."));x.dedicacion=isNaN(n)?1:Math.max(0,Math.min(100,n))/100;}
+      if(k2==="simulado")x.simulado=t.checked;
+      else if(k2==="dedicacion"){var n=parseFloat(String(v).replace(",","."));x.dedicacion=isNaN(n)?1:Math.max(0,Math.min(100,n))/100;}
       else if(k2==="desde"||k2==="hasta")x[k2]=/^\d{4}-\d{2}$/.test(v)?v:null;
       else x[k2]=String(v).trim()||(k2==="especialidad"?x.especialidad:null);
       refrescar();
@@ -1317,7 +1332,8 @@ function staffDesdeTexto(t){
     var ded=parseFloat(String(c[2]||"").replace("%","").replace(",","."));ded=isNaN(ded)?1:(ded>1?ded/100:ded);
     var d=mes(c[3]),h=mes(c[4]);
     if(d===undefined||h===undefined){err.push("fila "+(i+1)+": fecha no reconocida");return;}
-    ok.push({id:idStaff(),nombre:nombre,especialidad:esp,dedicacion:Math.max(0,Math.min(1,ded)),desde:d,hasta:h,nota:null});
+    ok.push({id:idStaff(),nombre:nombre,especialidad:esp,dedicacion:Math.max(0,Math.min(1,ded)),desde:d,hasta:h,nota:null,
+      simulado:!/^(no|false|0)$/i.test(String(c[5]||"").trim())});
   });
   return {ok:ok,err:err};
 }
@@ -1741,7 +1757,7 @@ function diffDatos(a,b){
   sb.forEach(function(x){
     var y=SA[x.id];
     if(!y){out.push({t:"staffAlta",p:x.nombre,e:x.especialidad});return;}
-    var cs=[];STAFF_CAMPOS.forEach(function(c){var u=y[c.k]==null?"":y[c.k],v=x[c.k]==null?"":x[c.k];if(String(u)!==String(v))cs.push({c:c.n,k:c.k,a:u,b:v});});
+    var cs=[];STAFF_CAMPOS.forEach(function(c){var u=c.k==="simulado"?cuenta(y):(y[c.k]==null?"":y[c.k]),v=c.k==="simulado"?cuenta(x):(x[c.k]==null?"":x[c.k]);if(String(u)!==String(v))cs.push({c:c.n,k:c.k,a:u,b:v});});
     if(cs.length)out.push({t:"staffCambio",p:x.nombre,c:cs});
   });
   sa.forEach(function(y){if(!SB[y.id])out.push({t:"staffBaja",p:y.nombre,e:y.especialidad});});
@@ -1758,7 +1774,7 @@ function textoCambio(x){
   if(x.t==="staffAlta")return "Ingresa a la nómina <b>"+esc(x.p||"(sin nombre)")+"</b> ("+esc(x.e)+")";
   if(x.t==="staffBaja")return "Sale de la nómina <b>"+esc(x.p||"(sin nombre)")+"</b> ("+esc(x.e)+")";
   if(x.t==="staffCambio")return "Nómina · <b>"+esc(x.p||"(sin nombre)")+"</b>: "+x.c.map(function(c){
-    var f=function(v){return v===""?"—":c.k==="dedicacion"?NFP.format(+v):(c.k==="desde"||c.k==="hasta")?mlabel(v):String(v);};
+    var f=function(v){return v===""?"—":c.k==="simulado"?(v?"sí":"no"):c.k==="dedicacion"?NFP.format(+v):(c.k==="desde"||c.k==="hasta")?mlabel(v):String(v);};
     return esc(c.c)+' <span>'+esc(f(c.a))+' →</span> '+esc(f(c.b));}).join(", ");
   if(x.t==="recursos")return "Recursos (dotación, altas/bajas, subcontratos o HH por persona)";
   if(x.t==="parametros")return "Parámetros de HH";
