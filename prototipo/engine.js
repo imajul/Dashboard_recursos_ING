@@ -94,6 +94,7 @@
       dotacion: Object.assign({}, base.dotacion, cc.dotacion || {}),
       subcontratoHH: Object.assign({}, base.subcontratoHH || {}, cc.subcontratoHH || {}),
       eventos: (base.eventos || []).concat(cc.eventos || []),
+      staff: 'staff' in cc ? cc.staff : (base.staff || []),
     };
     return { proyectos, cap };
   }
@@ -157,8 +158,25 @@
     return filas;
   }
 
+  const personaActiva = (s, mes) =>
+    (vacio(s.desde) || mes >= mesIdx(s.desde)) && (vacio(s.hasta) || mes <= mesIdx(s.hasta));
+
+  // Con nómina (cap.staff) cuenta las personas activas en el mes ponderadas por dedicación;
+  // sin nómina usa la dotación numérica.
+  function personasBase(cap, mes, esp) {
+    const staff = cap.staff || [];
+    if (staff.length) {
+      let total = 0;
+      for (const s of staff) {
+        if (s.especialidad === esp && personaActiva(s, mes)) total += vacio(s.dedicacion) ? 1 : Number(s.dedicacion);
+      }
+      return total;
+    }
+    return cap.dotacion[esp] || 0;
+  }
+
   function capacidadMes(cap, mes, esp) {
-    let personas = cap.dotacion[esp] || 0;
+    let personas = personasBase(cap, mes, esp);
     for (const ev of cap.eventos || []) {
       if (ev.especialidad !== esp) continue;
       if (mes < mesIdx(ev.desde)) continue;
@@ -300,13 +318,14 @@
   function dotacionMinima(datos, escenario, umbral = 1) {
     const esc = JSON.parse(JSON.stringify(escenario || {}));
     esc.capacidad = esc.capacidad || {};
-    const dot = Object.assign({}, datos.capacidad.dotacion, esc.capacidad.dotacion || {});
+    // Suma personas como altas desde el inicio del horizonte: sirve con dotación y con nómina.
+    const evBase = esc.capacidad.eventos || [];
     const res = {};
     for (let j = 0; j < datos.especialidades.length; j++) {
       const e = datos.especialidades[j];
       let extra = 0;
       for (; extra <= 50; extra++) {
-        esc.capacidad.dotacion = Object.assign({}, dot, { [e]: dot[e] + extra });
+        esc.capacidad.eventos = extra ? evBase.concat([{ especialidad: e, desde: datos.horizonte.desde, hasta: null, delta: extra }]) : evBase;
         const r = calcular(datos, esc);
         const i0 = Math.max(0, mesIdx(r.kpiDesde) - mesIdx(r.meses[0]));
         if (r.ocupacion.every((fila, i) => i < i0 || fila[j] <= umbral)) break;
@@ -317,6 +336,6 @@
   }
 
   return { TIPOS_CLIENTE, TAMANOS, tamano, mesIdx, mesStr, interpolar, componentes, aplicarEscenario, forecast,
-    largoCurva, duracionBase, reescalar, largoComponente,
+    personasBase, personaActiva, largoCurva, duracionBase, reescalar, largoComponente,
     capacidadMes, calcular, detalle, mejorInicio, dotacionMinima };
 });

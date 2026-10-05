@@ -112,6 +112,23 @@ class ReglasDeNegocio(unittest.TestCase):
         d["horizonte"]["extender"] = False
         self.assertEqual(len(motor.calcular(d, {"proyectos": {"1": {"desplazamiento": 30}}})["meses"]), d["horizonte"]["meses"])
 
+    def test_nomina_define_la_capacidad(self):
+        cap = {"hhMesPersona": 140, "eficiencia": 0.85, "dotacion": {"Eléctricos": 99}, "eventos": [], "staff": [
+            {"nombre": "Ana", "especialidad": "Eléctricos", "dedicacion": 1},
+            {"nombre": "Luis", "especialidad": "Eléctricos", "dedicacion": 0.5},
+            {"nombre": "Eva", "especialidad": "Eléctricos", "desde": "2027-03"},
+            {"nombre": "Juan", "especialidad": "Eléctricos", "hasta": "2026-12"},
+            {"nombre": "Sol", "especialidad": "Civiles"},
+        ]}
+        m = motor.mes_idx
+        self.assertEqual(motor.personas_base(cap, m("2026-11"), "Eléctricos"), 2.5)   # Ana + Luis/2 + Juan; dotación 99 ignorada
+        self.assertEqual(motor.personas_base(cap, m("2027-01"), "Eléctricos"), 1.5)   # Juan ya no está
+        self.assertEqual(motor.personas_base(cap, m("2027-03"), "Eléctricos"), 2.5)   # ingresa Eva
+        cap["eventos"] = [{"especialidad": "Eléctricos", "desde": "2027-01", "hasta": None, "delta": 2}]
+        self.assertAlmostEqual(motor.capacidad_mes(cap, m("2027-01"), "Eléctricos"), 3.5 * 140 * 0.85)
+        cap["staff"] = []
+        self.assertEqual(motor.personas_base(cap, m("2027-01"), "Eléctricos"), 99)        # sin nómina: dotación
+
     def test_escenario_sumar_electricos_baja_exceso(self):
         base = motor.calcular(self.d)["cuellos"]["Eléctricos"]["hhExcedidas"]
         esc = {"capacidad": {"dotacion": {"Eléctricos": 9}}}
@@ -204,7 +221,10 @@ class ParidadJavaScript(unittest.TestCase):
         self.assertEqual(py["kpis"]["primerMesCritico"], js["kpis"]["primerMesCritico"])
         for a, b in zip(py["ocupacion"], js["ocupacion"]):
             for x, y in zip(a, b):
-                self.assertAlmostEqual(x, y, places=9)
+                if y is None:  # JSON no tiene Infinity: JS lo serializa como null
+                    self.assertEqual(x, float("inf"))
+                else:
+                    self.assertAlmostEqual(x, y, places=9)
         self.assertEqual([p["proyecto"] for p in py["pareto"]], [p["proyecto"] for p in js["pareto"]])
         for e in py["cuellos"]:
             self.assertEqual(py["cuellos"][e]["personasAdicionales"], js["cuellos"][e]["personasAdicionales"])
@@ -222,6 +242,13 @@ class ParidadJavaScript(unittest.TestCase):
         self.assertEqual(py["kpis"]["primerMesCritico"], js["kpis"]["primerMesCritico"])
         for e in py["cuellos"]:
             self.assertEqual(py["cuellos"][e]["personasAdicionales"], js["cuellos"][e]["personasAdicionales"])
+
+    def test_paridad_nomina(self):
+        staff = [{"nombre": f"P{i}", "especialidad": e, "dedicacion": 0.5 if i % 3 == 0 else 1,
+                  "desde": "2027-02" if i % 4 == 0 else None, "hasta": "2027-08" if i % 5 == 0 else None}
+                 for i, e in enumerate(["Civiles", "Eléctricos", "Eléctricos", "Coordinadores", "Mecánicos",
+                                        "Electrónicos", "Eléctricos", "Civiles", "Eléctricos", "Civiles"])]
+        self._comparar({"capacidad": {"staff": staff}})
 
     def test_paridad_base(self):
         self._comparar({})

@@ -60,6 +60,9 @@ ni cuentas de Claude o GitHub: alcanza con la cuenta de Microsoft de la empresa 
 - **La herramienta es la base de datos oficial de proyectos.** Botón «Proyectos»: tabla editable con todos
   los campos de DIM_Proyecto (más duración, tamaño, incluir) y validaciones. Importar CSV reemplaza la lista
   (con vista previa de altas, cambios y bajas); Exportar → Lista de proyectos genera el CSV en el mismo formato.
+- **Staff de Ingeniería (Recursos):** nómina con nombre, especialidad, dedicación, ingreso y egreso; la
+  cantidad de personas por especialidad y mes sale de la lista (`capacidad.staff`; sin lista se usa
+  `capacidad.dotacion`). Pegar desde Excel, vacantes desde «Nivelar», cambios en el registro.
 - **HH manuales por proyecto:** en el panel del proyecto, HH por componente (modelo vs. asignadas) con motivo;
   vacío = modelo. Se exportan en las columnas «HH Estimadas …».
 - **Registro de cambios:** cada guardado anota qué cambió (altas, bajas, campos con valor anterior y nuevo,

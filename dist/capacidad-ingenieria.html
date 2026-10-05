@@ -1774,6 +1774,7 @@ window.SAMPLE_DATA = {
       dotacion: Object.assign({}, base.dotacion, cc.dotacion || {}),
       subcontratoHH: Object.assign({}, base.subcontratoHH || {}, cc.subcontratoHH || {}),
       eventos: (base.eventos || []).concat(cc.eventos || []),
+      staff: 'staff' in cc ? cc.staff : (base.staff || []),
     };
     return { proyectos, cap };
   }
@@ -1837,8 +1838,25 @@ window.SAMPLE_DATA = {
     return filas;
   }
 
+  const personaActiva = (s, mes) =>
+    (vacio(s.desde) || mes >= mesIdx(s.desde)) && (vacio(s.hasta) || mes <= mesIdx(s.hasta));
+
+  // Con nómina (cap.staff) cuenta las personas activas en el mes ponderadas por dedicación;
+  // sin nómina usa la dotación numérica.
+  function personasBase(cap, mes, esp) {
+    const staff = cap.staff || [];
+    if (staff.length) {
+      let total = 0;
+      for (const s of staff) {
+        if (s.especialidad === esp && personaActiva(s, mes)) total += vacio(s.dedicacion) ? 1 : Number(s.dedicacion);
+      }
+      return total;
+    }
+    return cap.dotacion[esp] || 0;
+  }
+
   function capacidadMes(cap, mes, esp) {
-    let personas = cap.dotacion[esp] || 0;
+    let personas = personasBase(cap, mes, esp);
     for (const ev of cap.eventos || []) {
       if (ev.especialidad !== esp) continue;
       if (mes < mesIdx(ev.desde)) continue;
@@ -1980,13 +1998,14 @@ window.SAMPLE_DATA = {
   function dotacionMinima(datos, escenario, umbral = 1) {
     const esc = JSON.parse(JSON.stringify(escenario || {}));
     esc.capacidad = esc.capacidad || {};
-    const dot = Object.assign({}, datos.capacidad.dotacion, esc.capacidad.dotacion || {});
+    // Suma personas como altas desde el inicio del horizonte: sirve con dotación y con nómina.
+    const evBase = esc.capacidad.eventos || [];
     const res = {};
     for (let j = 0; j < datos.especialidades.length; j++) {
       const e = datos.especialidades[j];
       let extra = 0;
       for (; extra <= 50; extra++) {
-        esc.capacidad.dotacion = Object.assign({}, dot, { [e]: dot[e] + extra });
+        esc.capacidad.eventos = extra ? evBase.concat([{ especialidad: e, desde: datos.horizonte.desde, hasta: null, delta: extra }]) : evBase;
         const r = calcular(datos, esc);
         const i0 = Math.max(0, mesIdx(r.kpiDesde) - mesIdx(r.meses[0]));
         if (r.ocupacion.every((fila, i) => i < i0 || fila[j] <= umbral)) break;
@@ -1997,7 +2016,7 @@ window.SAMPLE_DATA = {
   }
 
   return { TIPOS_CLIENTE, TAMANOS, tamano, mesIdx, mesStr, interpolar, componentes, aplicarEscenario, forecast,
-    largoCurva, duracionBase, reescalar, largoComponente,
+    personasBase, personaActiva, largoCurva, duracionBase, reescalar, largoComponente,
     capacidadMes, calcular, detalle, mejorInicio, dotacionMinima };
 });
 
@@ -2176,11 +2195,12 @@ function renderCap(){
   var cap=S.datos.capacidad,hp=cap.hhMesPersona*cap.eficiencia;
   html+='<div class="lrow secrow"><div class="hhead">Ocupación por especialidad <small>HH forecast ÷ capacidad · '+NF0.format(hp)+' HH/persona·mes</small></div><div class="band" style="width:'+px(w)+'"></div></div>';
   R.especialidades.forEach(function(e,j){
-    var cu=R.cuellos[e],pers=cap.dotacion[e]||0,isSel=sel&&sel.e===e&&!sel.m;
+    var cu=R.cuellos[e],pers=cap.dotacion[e]||0,isSel=sel&&sel.e===e&&!sel.m,nom=modoNomina(cap);
     var tag=cu.mesesCriticos?'<span class="fl crit" title="Meses con ocupación &gt; 1">'+cu.mesesCriticos+' m &gt;1</span>':'<span class="fl ok">sin exceso</span>';
     html+='<div class="lrow"><div class="lcell"><div class="tname'+(isSel?" sel":"")+'" data-e="'+esc(e)+'" style="padding-left:12px">'
       +'<span class="nm"><b>'+esc(e)+'</b></span>'+tag
-      +'<span class="stepper" title="Personas asignadas"><button data-dot="'+esc(e)+'" data-d="-1" aria-label="Quitar una persona en '+esc(e)+'">−</button><span>'+pers+'</span><button data-dot="'+esc(e)+'" data-d="1" aria-label="Sumar una persona en '+esc(e)+'">+</button></span>'
+      +(nom?'<button class="fl" data-staff="'+esc(e)+'" title="Personas en la nómina en '+mlabel(R.kpiDesde)+' (clic para ver la lista)" style="border:1px solid var(--rule);cursor:pointer">'+fmtPers(personasHoy(e))+' pers.</button>'
+        :'<span class="stepper" title="Personas asignadas"><button data-dot="'+esc(e)+'" data-d="-1" aria-label="Quitar una persona en '+esc(e)+'">−</button><span>'+pers+'</span><button data-dot="'+esc(e)+'" data-d="1" aria-label="Sumar una persona en '+esc(e)+'">+</button></span>')
       +'</div></div><div class="tl" style="width:'+px(w)+'">';
     for(var i=0;i<n;i++){
       var v=R.ocupacion[i][j],d=R.demanda[i][j];
@@ -2191,7 +2211,7 @@ function renderCap(){
     html+='</div></div>';
   });
   /* fila total */
-  html+='<div class="lrow"><div class="lcell"><div class="tname" style="padding-left:12px;cursor:default"><span class="nm"><b>Total área</b></span><span class="fl">'+NF0.format(totPersonas())+' pers.</span></div></div><div class="tl" style="width:'+px(w)+'">';
+  html+='<div class="lrow"><div class="lcell"><div class="tname" style="padding-left:12px;cursor:default"><span class="nm"><b>Total área</b></span><span class="fl">'+fmtPers(totPersonas())+' pers.</span></div></div><div class="tl" style="width:'+px(w)+'">';
   for(var i2=0;i2<n;i2++){
     var dd=R.demanda[i2].reduce(function(a,b){return a+b;},0),cc=R.capacidad[i2].reduce(function(a,b){return a+b;},0),vv=cc?dd/cc:0;
     var c2=dd<0.5?"zero":sem(vv);
@@ -2207,7 +2227,14 @@ function renderCap(){
     +'<div class="tl chart" style="width:'+px(w)+'">'+chartSVG(w)+'</div></div>';
   box.innerHTML=html;
 }
-function totPersonas(){var t=0,d=S.datos.capacidad.dotacion;Object.keys(d).forEach(function(k){t+=d[k];});return t;}
+/* ---- nómina del staff: si hay personas cargadas, la dotación sale de la lista ---- */
+function modoNomina(cap){cap=cap||S.datos.capacidad;return !!(cap.staff&&cap.staff.length);}
+function mesRef(d){return E.mesIdx(kpiDesde(d||S.datos));}
+function personasHoy(e,cap,d){cap=cap||S.datos.capacidad;return E.personasBase(cap,mesRef(d),e);}
+function totPersonas(cap,d){var t=0;(d||S.datos).especialidades.forEach(function(e){t+=personasHoy(e,cap||(d||S.datos).capacidad,d);});return t;}
+function fmtPers(v){return NFX.format(Math.round(v*100)/100);}
+function staffDe(e){return (S.datos.capacidad.staff||[]).filter(function(x){return x.especialidad===e;});}
+function idStaff(){return "s"+Math.random().toString(36).slice(2,9);}
 function serieChart(){
   var j=S.espChart?R.especialidades.indexOf(S.espChart):-1;
   return R.meses.map(function(_,i){
@@ -2488,12 +2515,20 @@ function mejorInicio(p){
 function edEsp(e){
   var cap=S.datos.capacidad,cu=R.cuellos[e],hp=cap.hhMesPersona*cap.eficiencia;
   var evs=(cap.eventos||[]).map(function(ev,i){return {ev:ev,i:i};}).filter(function(x){return x.ev.especialidad===e;});
-  var html='<h3>'+esc(e)+'</h3><div class="sub">'+(cap.dotacion[e]||0)+' personas · '+hh((cap.dotacion[e]||0)*hp)+' HH/mes + subcontrato</div>';
+  var nom=modoNomina(cap),ph=nom?personasHoy(e):(cap.dotacion[e]||0);
+  var html='<h3>'+esc(e)+'</h3><div class="sub">'+fmtPers(ph)+' personas'+(nom?' en la nómina ('+mlabel(R.kpiDesde)+')':'')+' · '+hh(ph*hp)+' HH/mes + subcontrato</div>';
   html+='<div class="holg'+(cu.mesesCriticos?" crit":"")+'">'+(cu.mesesCriticos?cu.mesesCriticos+' meses por encima de la capacidad, desde '+mlabel(cu.primerMesCritico)+'. Pico '+oc(cu.maxOcupacion)+' en '+mlabel(cu.mesPico)+'. Faltan '+cu.personasAdicionales+' persona(s) en el peor mes.'
     :'Sin meses críticos. Pico '+oc(cu.maxOcupacion)+' en '+mlabel(cu.mesPico)+'.')+'</div>';
-  html+='<div class="two"><div class="f"><label for="esDot">Personas (dotación base)</label><input type="number" id="esDot" min="0" step="1" value="'+(cap.dotacion[e]||0)+'"></div>'
+  if(nom){
+    var lst=staffDe(e);
+    html+='<h4>Staff ('+lst.length+')</h4><table class="pk">'+(lst.length?lst.map(function(x){
+      return '<tr><td>'+esc(x.nombre||"(sin nombre)")+'</td><td class="calc">'+NFP.format(x.dedicacion==null?1:x.dedicacion)+'</td><td style="color:var(--ink-soft);font-size:11.5px">'
+        +(x.desde?'desde '+mlabel(x.desde):'')+(x.hasta?' hasta '+mlabel(x.hasta):'')+'</td></tr>';}).join(""):'<tr><td style="color:var(--ink-soft)">Nadie en la nómina para esta especialidad.</td></tr>')
+      +'</table><div class="row-actions"><button class="btn sm" id="esNom">Editar nómina</button></div>';
+  }
+  html+='<div class="two">'+(nom?'':'<div class="f"><label for="esDot">Personas (dotación base)</label><input type="number" id="esDot" min="0" step="1" value="'+(cap.dotacion[e]||0)+'"></div>')
     +'<div class="f"><label for="esSub">Subcontrato (HH/mes)</label><input type="number" id="esSub" min="0" step="20" value="'+((cap.subcontratoHH||{})[e]||0)+'"></div></div>';
-  html+='<h4>Altas y bajas programadas</h4><table class="pk"><tr><th>Desde</th><th>Hasta</th><th class="r">Δ pers.</th><th></th></tr>';
+  html+='<h4>Altas y bajas programadas'+(nom?' (simuladas)':'')+'</h4>'+(nom?'<div class="psub" style="margin-bottom:4px">Para personas reales usá la nómina con fecha de ingreso o egreso; acá van refuerzos o bajas hipotéticas.</div>':'')+'<table class="pk"><tr><th>Desde</th><th>Hasta</th><th class="r">Δ pers.</th><th></th></tr>';
   evs.forEach(function(x){html+='<tr><td>'+mlabel(x.ev.desde)+'</td><td>'+(x.ev.hasta?mlabel(x.ev.hasta):"—")+'</td><td class="calc">'+(x.ev.delta>0?"+":"")+x.ev.delta+'</td><td class="x"><button data-delev="'+x.i+'" title="Quitar">✕</button></td></tr>'+(x.ev.nota?'<tr><td colspan="4" style="color:var(--ink-soft);font-size:11.5px">'+esc(x.ev.nota)+'</td></tr>':'');});
   if(!evs.length)html+='<tr><td colspan="4" style="color:var(--ink-soft)">Sin movimientos programados.</td></tr>';
   html+='</table><div class="two" style="margin-top:8px"><div class="f"><label for="evDesde">Desde</label><input type="month" id="evDesde" value="'+esc(cu.primerMesCritico||R.meses[0])+'"></div>'
@@ -2509,7 +2544,8 @@ function edEsp(e){
   html+='</table>';
   ed.innerHTML=html;
   var ge=function(id){return document.getElementById(id);};
-  ge("esDot").onchange=function(){var v=Math.max(0,Math.round(+this.value||0));push();cap.dotacion[e]=v;recalc();render();save();};
+  if(ge("esNom"))ge("esNom").onclick=function(){S.rsEsp=e;openRecursos();};
+  if(ge("esDot"))ge("esDot").onchange=function(){var v=Math.max(0,Math.round(+this.value||0));push();cap.dotacion[e]=v;recalc();render();save();};
   ge("esSub").onchange=function(){var v=Math.max(0,+this.value||0);push();cap.subcontratoHH=cap.subcontratoHH||{};cap.subcontratoHH[e]=v;recalc();render();save();};
   ge("evAdd").onclick=function(){
     var d=ge("evDesde").value,h=ge("evHasta").value||null,n=Math.round(+ge("evDelta").value||0);
@@ -2600,6 +2636,8 @@ function wireClicks(){
     var t=e.target;
     var inc=t.closest("[data-inc]");
     if(inc){var p=findP(inc.dataset.inc);push();p.incluir=inc.checked;recalc();render();save();return;}
+    var stf=t.closest("[data-staff]");
+    if(stf){S.rsEsp=stf.dataset.staff;openRecursos();return;}
     var dot=t.closest("[data-dot]");
     if(dot){var es=dot.dataset.dot,c=S.datos.capacidad;push();c.dotacion[es]=Math.max(0,(c.dotacion[es]||0)+(+dot.dataset.d));recalc();render();save();return;}
     var cell=t.closest("[data-cell]");
@@ -2684,35 +2722,144 @@ function wireDlgDrag(){
 }
 
 /* ===================== recursos (edición masiva) ===================== */
+var STAFF_CAMPOS=[{k:"nombre",n:"Nombre"},{k:"especialidad",n:"Especialidad"},{k:"dedicacion",n:"Dedicación"},{k:"desde",n:"Ingreso"},{k:"hasta",n:"Egreso"},{k:"nota",n:"Nota"}];
 function openRecursos(){
-  var cap=S.datos.capacidad,h=S.datos.horizonte;
-  var html='<h3>Recursos del área</h3><div class="sub" style="color:var(--ink-soft);font-size:12px;margin-bottom:10px">Capacidad = personas × HH por persona × eficiencia + subcontrato.</div>'
-    +'<div class="two"><div class="f"><label for="rsHH">HH por persona por mes</label><input type="number" id="rsHH" min="1" step="4" value="'+cap.hhMesPersona+'"></div>'
-    +'<div class="f"><label for="rsEf">Eficiencia (0–1)</label><input type="number" id="rsEf" min="0.1" max="1" step="0.05" value="'+cap.eficiencia+'"></div></div>'
-    +'<div class="two"><div class="f"><label for="rsDesde">Horizonte desde</label><input type="month" id="rsDesde" value="'+h.desde+'"></div>'
-    +'<div class="f"><label for="rsMeses">Meses</label><input type="number" id="rsMeses" min="6" max="60" step="1" value="'+h.meses+'"></div></div>'
-    +'<div class="two"><div class="f"><label for="rsKpi">Indicadores desde</label><input type="month" id="rsKpi" value="'+esc(h.kpiDesde||"")+'"></div>'
-    +'<div class="f"><label>&nbsp;</label><div class="psub">Vacío = mes actual ('+mlabel(todayYM())+'). Los meses anteriores se ven sombreados y no cuentan como exceso.</div></div></div>'
-    +'<div class="tablewrap"><table class="pk"><tr><th>Especialidad</th><th class="r">Personas</th><th class="r">Subcontrato HH/mes</th><th class="r">HH/mes</th></tr>';
-  R.especialidades.forEach(function(e){
-    html+='<tr><td>'+esc(e)+'</td><td><input type="number" min="0" step="1" data-rd="'+esc(e)+'" value="'+(cap.dotacion[e]||0)+'" aria-label="Personas '+esc(e)+'"></td>'
-      +'<td><input type="number" min="0" step="20" data-rs="'+esc(e)+'" value="'+((cap.subcontratoHH||{})[e]||0)+'" aria-label="Subcontrato '+esc(e)+'"></td>'
-      +'<td class="calc">'+hh((cap.dotacion[e]||0)*cap.hhMesPersona*cap.eficiencia+((cap.subcontratoHH||{})[e]||0))+'</td></tr>';
+  var cap=S.datos.capacidad,h=S.datos.horizonte,top=dlg.open?dlg.scrollTop:0,esps=R.especialidades,nom=modoNomina(cap),mr=mesRef();
+  cap.staff=cap.staff||[];
+  var fil=S.rsEsp&&esps.indexOf(S.rsEsp)>=0?S.rsEsp:"";
+  var num=function(id,v,attrs){return '<input type="number" id="'+id+'" value="'+v+'" '+attrs+'>';};
+  var html='<h3>Recursos del área</h3><div id="rsBox"><div class="psub">Capacidad = personas × HH por persona × eficiencia + subcontrato. Los cambios se aplican al instante (Ctrl+Z deshace).</div>'
+    +'<div class="pgrid" style="margin-top:10px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px 12px">'
+    +'<div class="f"><label for="rsHH">HH por persona por mes</label>'+num("rsHH",cap.hhMesPersona,'min="1" step="4" data-rp="hhMesPersona"')+'</div>'
+    +'<div class="f"><label for="rsEf">Eficiencia (0–1)</label>'+num("rsEf",cap.eficiencia,'min="0.1" max="1" step="0.05" data-rp="eficiencia"')+'</div>'
+    +'<div class="f"><label for="rsDesde">Horizonte desde</label><input type="month" id="rsDesde" data-rp="desde" value="'+h.desde+'"></div>'
+    +'<div class="f"><label for="rsMeses">Meses (mínimo)</label>'+num("rsMeses",h.meses,'min="6" max="120" step="1" data-rp="meses"')+'</div>'
+    +'<div class="f"><label for="rsKpi">Indicadores desde</label><input type="month" id="rsKpi" data-rp="kpiDesde" value="'+esc(h.kpiDesde||"")+'" title="Vacío = mes actual"></div></div>'
+    +'<h4>Staff de Ingeniería'+(cap.staff.length?' · '+cap.staff.length+' personas':'')+'</h4>'
+    +'<div class="psub">'+(nom?'La cantidad de personas de cada especialidad, mes a mes, sale de esta lista: cuenta a quienes están activos ese mes (entre ingreso y egreso) según su dedicación (50 % = media persona).'
+      :'Cargá acá a las personas del staff: cuando la lista tenga al menos una persona, la cantidad de recursos por especialidad se calcula con ella en lugar de la dotación numérica de abajo.')+'</div>'
+    +'<div class="row-actions" style="margin:8px 0;align-items:center"><button class="fchip'+(fil?"":" on")+'" data-rsf="">Todas <b>'+cap.staff.length+'</b></button>'
+    +esps.map(function(e){var n=staffDe(e).length;return '<button class="fchip'+(fil===e?" on":"")+'" data-rsf="'+esc(e)+'">'+esc(e)+' <b>'+n+'</b></button>';}).join("")
+    +'<span style="flex:1"></span><button class="btn sm primary" id="stAdd">+ Persona</button><button class="btn sm" id="stPaste">Pegar desde Excel</button>'
+    +(!nom?'<button class="btn sm" id="stGen" title="Crea una fila por persona de la dotación actual, para completar los nombres">Crear lista desde la dotación</button>':'')+'</div>'
+    +'<div id="stPasteBox" hidden><div class="psub">Pegá filas copiadas de Excel con las columnas: <b>Nombre · Especialidad · Dedicación % (opcional) · Ingreso (opcional) · Egreso (opcional)</b>.</div>'
+    +'<textarea id="stPasteTxt" rows="5" style="width:100%;border:1px solid var(--rule);border-radius:6px;padding:6px 8px;background:var(--chip);font:500 12px/1.4 var(--f-num)" placeholder="Ana Pérez&#9;Eléctricos&#9;100&#10;Luis Gómez&#9;Civiles&#9;50&#9;2027-03"></textarea>'
+    +'<div class="row-actions"><button class="btn sm primary" id="stPasteOk">Agregar a la lista</button></div></div>';
+  var lista=cap.staff.filter(function(x){return !fil||x.especialidad===fil;});
+  var nombres={};cap.staff.forEach(function(x){var k=(x.nombre||"").trim().toLowerCase();if(k)nombres[k]=(nombres[k]||0)+1;});
+  html+='<div class="tablewrap" style="max-height:44vh;overflow:auto"><table class="pk lp"><thead><tr><th></th><th>Nombre</th><th>Especialidad</th><th class="r">Dedicación %</th><th>Ingreso</th><th>Egreso</th><th>Nota</th><th>Hoy</th><th></th></tr></thead><tbody>';
+  if(!lista.length)html+='<tr><td></td><td colspan="8" style="color:var(--ink-soft);padding:10px 4px">'+(fil?'Nadie cargado en '+esc(fil)+'.':'La lista está vacía.')+'</td></tr>';
+  lista.forEach(function(x){
+    var a=function(k){return 'data-st="'+esc(x.id)+'|'+k+'" aria-label="'+k+' '+esc(x.nombre||"")+'"';};
+    var av=[];if(!(x.nombre||"").trim())av.push("Falta el nombre");else if(nombres[(x.nombre||"").trim().toLowerCase()]>1)av.push("Nombre repetido");
+    if(x.desde&&x.hasta&&x.hasta<x.desde)av.push("El egreso es anterior al ingreso");
+    var act=E.personaActiva(x,mr);
+    html+='<tr'+(av.length?' class="mal"':'')+'><td'+(av.length?' class="warn" title="'+esc(av.join(" · "))+'">!':'>')+'</td>'
+      +'<td><input type="text" '+a("nombre")+' value="'+esc(x.nombre||"")+'" style="width:170px"></td>'
+      +'<td><select '+a("especialidad")+' style="width:130px">'+esps.map(function(e){return '<option'+(e===x.especialidad?" selected":"")+'>'+esc(e)+'</option>';}).join("")+'</select></td>'
+      +'<td><input type="number" min="0" max="100" step="10" '+a("dedicacion")+' value="'+Math.round((x.dedicacion==null?1:x.dedicacion)*100)+'"></td>'
+      +'<td><input type="month" '+a("desde")+' value="'+esc(x.desde||"")+'"></td>'
+      +'<td><input type="month" '+a("hasta")+' value="'+esc(x.hasta||"")+'"></td>'
+      +'<td><input type="text" '+a("nota")+' value="'+esc(x.nota||"")+'" style="width:160px" placeholder="licencia, part-time…"></td>'
+      +'<td class="c">'+(act?'<span class="fl ok">activo</span>':'<span class="fl">'+(x.desde&&E.mesIdx(x.desde)>mr?'ingresa':'egresó')+'</span>')+'</td>'
+      +'<td class="x"><button data-stdel="'+esc(x.id)+'" title="Quitar a '+esc(x.nombre||"")+'">✕</button></td></tr>';
   });
-  html+='</table></div><div class="row-actions" style="justify-content:flex-end;margin-top:10px"><button class="btn primary" id="rsOk">Aplicar</button></div>';
-  document.getElementById("dlgBody").innerHTML=html;openDlg(false);
-  document.getElementById("rsOk").onclick=function(){
-    push();
-    cap.hhMesPersona=Math.max(1,+document.getElementById("rsHH").value||cap.hhMesPersona);
-    cap.eficiencia=Math.max(0.1,Math.min(1,+document.getElementById("rsEf").value||cap.eficiencia));
-    var d=document.getElementById("rsDesde").value;if(/^\d{4}-\d{2}$/.test(d))h.desde=d;
-    h.meses=Math.max(6,Math.min(60,Math.round(+document.getElementById("rsMeses").value||h.meses)));
-    var kd=document.getElementById("rsKpi").value;h.kpiDesde=/^\d{4}-\d{2}$/.test(kd)?kd:null;
-    document.querySelectorAll("[data-rd]").forEach(function(i){cap.dotacion[i.dataset.rd]=Math.max(0,Math.round(+i.value||0));});
-    cap.subcontratoHH=cap.subcontratoHH||{};
-    document.querySelectorAll("[data-rs]").forEach(function(i){cap.subcontratoHH[i.dataset.rs]=Math.max(0,+i.value||0);});
-    recalc();render();save();openRecursos();toast("Recursos actualizados");
+  html+='</tbody></table></div>';
+  html+='<h4>Resumen por especialidad · '+mlabel(R.kpiDesde)+'</h4><div class="tablewrap"><table class="pk"><tr><th>Especialidad</th><th class="r">'+(nom?'Personas (nómina)':'Personas')+'</th><th class="r">Subcontrato HH/mes</th><th class="r">Capacidad HH/mes</th></tr>';
+  var tp=0,tc=0;
+  esps.forEach(function(e){
+    var pe=nom?personasHoy(e):(cap.dotacion[e]||0),sub=(cap.subcontratoHH||{})[e]||0,c=pe*cap.hhMesPersona*cap.eficiencia+sub;tp+=pe;tc+=c;
+    html+='<tr><td>'+esc(e)+'</td><td class="calc">'+(nom?fmtPers(pe):'<input type="number" min="0" step="1" data-rd="'+esc(e)+'" value="'+pe+'" aria-label="Personas '+esc(e)+'" style="width:80px">')+'</td>'
+      +'<td class="calc"><input type="number" min="0" step="20" data-rs="'+esc(e)+'" value="'+sub+'" aria-label="Subcontrato '+esc(e)+'" style="width:90px"></td><td class="calc">'+hh(c)+'</td></tr>';
+  });
+  html+='<tr><td><b>Total</b></td><td class="calc">'+fmtPers(tp)+'</td><td></td><td class="calc">'+hh(tc)+'</td></tr></table></div>'
+    +(nom?'<div class="hint">Con nómina cargada, la dotación numérica no se usa. Para volver a ella, vaciá la lista.</div>':'')+'</div>';
+  document.getElementById("dlgBody").innerHTML=html;
+  if(!dlg.open)openDlg(true);
+  dlg.className="xwide";dlg.scrollTop=top;document.getElementById("dlgTitle").textContent="Recursos del área";
+  wireRecursos();
+}
+function wireRecursos(){
+  var cap=S.datos.capacidad,h=S.datos.horizonte,box=document.getElementById("rsBox");
+  var refrescar=function(){
+    recalc();render();save();
+    setTimeout(function(){
+      var a=document.activeElement,k=a&&a.dataset?(a.dataset.st?'[data-st="'+a.dataset.st+'"]':a.dataset.rd?'[data-rd="'+a.dataset.rd+'"]':a.dataset.rs?'[data-rs="'+a.dataset.rs+'"]':a.id?"#"+a.id:null):null;
+      openRecursos();
+      if(k){var el=document.querySelector("#rsBox "+k);if(el){el.focus();if(el.select)el.select();}}
+    },0);
   };
+  box.onclick=function(e){
+    var f=e.target.closest("[data-rsf]");if(f){S.rsEsp=f.dataset.rsf;openRecursos();return;}
+    var d=e.target.closest("[data-stdel]");
+    if(d){var x=cap.staff.filter(function(y){return y.id===d.dataset.stdel;})[0];push();cap.staff=cap.staff.filter(function(y){return y!==x;});refrescar();toast((x.nombre||"Persona")+" quitada de la nómina · Ctrl+Z para deshacer");}
+  };
+  box.onchange=function(e){
+    var t=e.target,v=t.value;
+    if(t.dataset.rp){
+      var k=t.dataset.rp;push();
+      if(k==="hhMesPersona")cap.hhMesPersona=Math.max(1,+v||cap.hhMesPersona);
+      else if(k==="eficiencia")cap.eficiencia=Math.max(0.1,Math.min(1,+v||cap.eficiencia));
+      else if(k==="desde"){if(/^\d{4}-\d{2}$/.test(v))h.desde=v;}
+      else if(k==="meses")h.meses=Math.max(6,Math.min(120,Math.round(+v||h.meses)));
+      else if(k==="kpiDesde")h.kpiDesde=/^\d{4}-\d{2}$/.test(v)?v:null;
+      refrescar();return;
+    }
+    if(t.dataset.rd){push();cap.dotacion[t.dataset.rd]=Math.max(0,Math.round(+v||0));refrescar();return;}
+    if(t.dataset.rs){push();cap.subcontratoHH=cap.subcontratoHH||{};cap.subcontratoHH[t.dataset.rs]=Math.max(0,+v||0);refrescar();return;}
+    if(t.dataset.st){
+      var i=t.dataset.st.lastIndexOf("|"),id=t.dataset.st.slice(0,i),k2=t.dataset.st.slice(i+1);
+      var x=cap.staff.filter(function(y){return y.id===id;})[0];if(!x)return;
+      push();
+      if(k2==="dedicacion"){var n=parseFloat(String(v).replace(",","."));x.dedicacion=isNaN(n)?1:Math.max(0,Math.min(100,n))/100;}
+      else if(k2==="desde"||k2==="hasta")x[k2]=/^\d{4}-\d{2}$/.test(v)?v:null;
+      else x[k2]=String(v).trim()||(k2==="especialidad"?x.especialidad:null);
+      refrescar();
+    }
+  };
+  document.getElementById("stAdd").onclick=function(){
+    push();var x={id:idStaff(),nombre:"",especialidad:S.rsEsp||R.especialidades[0],dedicacion:1,desde:null,hasta:null,nota:null};
+    cap.staff.push(x);recalc();render();save();openRecursos();
+    var el=document.querySelector('#rsBox [data-st="'+x.id+'|nombre"]');if(el){el.focus();el.scrollIntoView({block:"nearest"});}
+  };
+  document.getElementById("stPaste").onclick=function(){var b=document.getElementById("stPasteBox");b.hidden=!b.hidden;if(!b.hidden)document.getElementById("stPasteTxt").focus();};
+  document.getElementById("stPasteOk").onclick=function(){
+    var r=staffDesdeTexto(document.getElementById("stPasteTxt").value);
+    if(!r.ok.length){toast(r.err.length?"No se pudo leer: "+r.err[0]:"No hay filas para agregar");return;}
+    push();cap.staff=cap.staff.concat(r.ok);S.rsEsp="";recalc();render();save();openRecursos();
+    toast(r.ok.length+" persona(s) agregadas"+(r.err.length?" · "+r.err.length+" fila(s) con error: "+r.err.slice(0,2).join("; "):""));
+  };
+  var g=document.getElementById("stGen");
+  if(g)g.onclick=function(){
+    push();
+    R.especialidades.forEach(function(e){var n=cap.dotacion[e]||0;for(var k=1;k<=n;k++)cap.staff.push({id:idStaff(),nombre:e.replace(/s$/,"")+" "+k+" (completar)",especialidad:e,dedicacion:1,desde:null,hasta:null,nota:null});});
+    recalc();render();save();openRecursos();toast("Lista creada con "+cap.staff.length+" personas: completá los nombres");
+  };
+}
+/* filas pegadas desde Excel: Nombre · Especialidad · Dedicación % · Ingreso · Egreso */
+function staffDesdeTexto(t){
+  var norm=function(x){return String(x||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").trim();};
+  var buscaEsp=function(x){var n=norm(x);if(!n)return null;
+    return R.especialidades.filter(function(e){var m=norm(e);return m===n||m.slice(0,7)===n.slice(0,7)||m.indexOf(n)===0;})[0]||null;};
+  var mes=function(x){x=String(x||"").trim();if(!x)return null;var m;
+    if((m=x.match(/^(\d{4})-(\d{1,2})/)))return m[1]+"-"+String(+m[2]).padStart(2,"0");
+    if((m=x.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/)))return m[3]+"-"+String(+m[2]).padStart(2,"0");
+    if((m=x.match(/^(\d{1,2})\/(\d{4})$/)))return m[2]+"-"+String(+m[1]).padStart(2,"0");
+    return undefined;};
+  var ok=[],err=[];
+  String(t||"").split(/\r?\n/).forEach(function(l,i){
+    if(!l.trim())return;
+    var c=l.split(l.indexOf("\t")>=0?"\t":(l.indexOf(";")>=0?";":","));
+    var nombre=(c[0]||"").trim(),esp=buscaEsp(c[1]);
+    if(i===0&&/nombre/i.test(nombre)&&!esp)return; /* encabezado */
+    if(!nombre){err.push("fila "+(i+1)+": falta el nombre");return;}
+    if(!esp){err.push("fila "+(i+1)+": especialidad «"+(c[1]||"").trim()+"» desconocida");return;}
+    var ded=parseFloat(String(c[2]||"").replace("%","").replace(",","."));ded=isNaN(ded)?1:(ded>1?ded/100:ded);
+    var d=mes(c[3]),h=mes(c[4]);
+    if(d===undefined||h===undefined){err.push("fila "+(i+1)+": fecha no reconocida");return;}
+    ok.push({id:idStaff(),nombre:nombre,especialidad:esp,dedicacion:Math.max(0,Math.min(1,ded)),desde:d,hasta:h,nota:null});
+  });
+  return {ok:ok,err:err};
 }
 function openNivelar(){
   var sug=E.dotacionMinima(datosVista(S.datos),{},1),cap=S.datos.capacidad,any=false;
@@ -2720,13 +2867,20 @@ function openNivelar(){
     +'<table class="pk"><tr><th>Especialidad</th><th class="r">Hoy</th><th class="r">A sumar</th><th class="r">Pico actual</th></tr>';
   R.especialidades.forEach(function(e){
     if(sug[e])any=true;
-    html+='<tr><td>'+esc(e)+'</td><td class="calc">'+(cap.dotacion[e]||0)+'</td><td class="calc">'+(sug[e]?"+"+sug[e]:"—")+'</td><td class="calc"><span class="fl '+sem(R.cuellos[e].maxOcupacion)+'">'+oc(R.cuellos[e].maxOcupacion)+'</span></td></tr>';
+    html+='<tr><td>'+esc(e)+'</td><td class="calc">'+fmtPers(modoNomina(cap)?personasHoy(e):(cap.dotacion[e]||0))+'</td><td class="calc">'+(sug[e]?"+"+sug[e]:"—")+'</td><td class="calc"><span class="fl '+sem(R.cuellos[e].maxOcupacion)+'">'+oc(R.cuellos[e].maxOcupacion)+'</span></td></tr>';
   });
   html+='</table><div class="hint">Alternativa más barata: mover proyectos simulables con «Mejor inicio» o reforzar solo los meses críticos desde el editor de cada especialidad.</div>'
-    +'<div class="row-actions" style="justify-content:flex-end;margin-top:10px">'+(any?'<button class="btn primary" id="nvOk">Aplicar a la dotación</button>':'<span class="fl ok">Ya no hay meses por encima de 1,00</span>')+'</div>';
+    +'<div class="row-actions" style="justify-content:flex-end;margin-top:10px">'+(any?'<button class="btn primary" id="nvOk">'+(modoNomina(cap)?'Agregar vacantes a la nómina':'Aplicar a la dotación')+'</button>':'<span class="fl ok">Ya no hay meses por encima de 1,00</span>')+'</div>';
   document.getElementById("dlgBody").innerHTML=html;openDlg(false);
   var b=document.getElementById("nvOk");
-  if(b)b.onclick=function(){push();Object.keys(sug).forEach(function(e){cap.dotacion[e]=(cap.dotacion[e]||0)+sug[e];});recalc();render();save();dlg.close();toast("Dotación nivelada");};
+  if(b)b.onclick=function(){
+    push();
+    if(modoNomina(cap)){
+      Object.keys(sug).forEach(function(e){for(var k=1;k<=sug[e];k++)cap.staff.push({id:idStaff(),nombre:"Vacante "+e+" "+k,especialidad:e,dedicacion:1,desde:R.kpiDesde,hasta:null,nota:"Sugerida por Nivelar"});});
+      toast("Vacantes agregadas a la nómina desde "+mlabel(R.kpiDesde));
+    }else{Object.keys(sug).forEach(function(e){cap.dotacion[e]=(cap.dotacion[e]||0)+sug[e];});toast("Dotación nivelada");}
+    recalc();render();save();dlg.close();
+  };
 }
 
 /* ===================== parámetros del modelo ===================== */
@@ -3069,7 +3223,17 @@ function diffDatos(a,b){
   });
   (a.proyectos||[]).forEach(function(q){if(!B[q.id])out.push({t:"baja",p:q.proyecto});});
   var J=JSON.stringify;
-  if(a.capacidad&&J(a.capacidad)!==J(b.capacidad))out.push({t:"recursos"});
+  var sa=(a.capacidad&&a.capacidad.staff)||[],sb=(b.capacidad&&b.capacidad.staff)||[],SA={},SB={};
+  sa.forEach(function(x){SA[x.id]=x;});sb.forEach(function(x){SB[x.id]=x;});
+  sb.forEach(function(x){
+    var y=SA[x.id];
+    if(!y){out.push({t:"staffAlta",p:x.nombre,e:x.especialidad});return;}
+    var cs=[];STAFF_CAMPOS.forEach(function(c){var u=y[c.k]==null?"":y[c.k],v=x[c.k]==null?"":x[c.k];if(String(u)!==String(v))cs.push({c:c.n,k:c.k,a:u,b:v});});
+    if(cs.length)out.push({t:"staffCambio",p:x.nombre,c:cs});
+  });
+  sa.forEach(function(y){if(!SB[y.id])out.push({t:"staffBaja",p:y.nombre,e:y.especialidad});});
+  var sinStaff=function(c){var o=Object.assign({},c);delete o.staff;return J(o);};
+  if(a.capacidad&&sinStaff(a.capacidad)!==sinStaff(b.capacidad))out.push({t:"recursos"});
   if(a.parametros&&J(a.parametros)!==J(b.parametros))out.push({t:"parametros"});
   if(a.curvas&&J(a.curvas)!==J(b.curvas))out.push({t:"curvas"});
   if(a.horizonte&&J(a.horizonte)!==J(b.horizonte))out.push({t:"horizonte"});
@@ -3078,6 +3242,11 @@ function diffDatos(a,b){
 function textoCambio(x){
   if(x.t==="alta")return "Alta de <b>"+esc(x.p)+"</b>";
   if(x.t==="baja")return "Baja de <b>"+esc(x.p)+"</b>";
+  if(x.t==="staffAlta")return "Ingresa a la nómina <b>"+esc(x.p||"(sin nombre)")+"</b> ("+esc(x.e)+")";
+  if(x.t==="staffBaja")return "Sale de la nómina <b>"+esc(x.p||"(sin nombre)")+"</b> ("+esc(x.e)+")";
+  if(x.t==="staffCambio")return "Nómina · <b>"+esc(x.p||"(sin nombre)")+"</b>: "+x.c.map(function(c){
+    var f=function(v){return v===""?"—":c.k==="dedicacion"?NFP.format(+v):(c.k==="desde"||c.k==="hasta")?mlabel(v):String(v);};
+    return esc(c.c)+' <span>'+esc(f(c.a))+' →</span> '+esc(f(c.b));}).join(", ");
   if(x.t==="recursos")return "Recursos (dotación, altas/bajas, subcontratos o HH por persona)";
   if(x.t==="parametros")return "Parámetros de HH";
   if(x.t==="curvas")return "Curvas de distribución";
@@ -3145,9 +3314,9 @@ function compararTabla(lista){
     +'<div class="tablewrap"><table class="pk"><tr><th>Escenario</th><th class="r">Máx. ocup.</th><th>Dónde</th><th>1.er crítico</th><th class="r">HH excedidas</th><th class="r">HH forecast</th><th class="r">Personas</th>'
     +R.especialidades.map(function(e){return '<th class="r" title="Ocupación pico de '+esc(e)+'">'+esc(ABREV[e]||e)+'</th>';}).join("")+'</tr>';
   filas.forEach(function(f){
-    var r=E.calcular(datosVista(f.datos)),k=r.kpis,pers=0;Object.keys(f.datos.capacidad.dotacion).forEach(function(x){pers+=f.datos.capacidad.dotacion[x];});
+    var r=E.calcular(datosVista(f.datos)),k=r.kpis,pers=totPersonas(f.datos.capacidad,f.datos);
     html+='<tr><td><b>'+esc(f.name)+'</b></td><td class="calc"><span class="fl '+sem(k.maxOcupacion.valor)+'">'+oc(k.maxOcupacion.valor)+'</span></td><td>'+esc(k.maxOcupacion.especialidad||"—")+' '+mlabel(k.maxOcupacion.mes)+'</td>'
-      +'<td>'+(k.primerMesCritico?mlabel(k.primerMesCritico.mes):"ninguno")+'</td><td class="calc">'+hh(k.hhExcedidas)+'</td><td class="calc">'+hh(k.hhForecastHorizonte)+'</td><td class="calc">'+pers+'</td>'
+      +'<td>'+(k.primerMesCritico?mlabel(k.primerMesCritico.mes):"ninguno")+'</td><td class="calc">'+hh(k.hhExcedidas)+'</td><td class="calc">'+hh(k.hhForecastHorizonte)+'</td><td class="calc">'+fmtPers(pers)+'</td>'
       +r.especialidades.map(function(e){return '<td class="calc">'+oc(r.cuellos[e].maxOcupacion)+'</td>';}).join("")+'</tr>';
   });
   html+='</table></div>';

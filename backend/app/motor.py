@@ -119,7 +119,8 @@ def aplicar_escenario(datos: dict, escenario: dict | None) -> tuple[list[dict], 
                               "factorSolapamiento": float, "fechaInicio": "YYYY-MM",
                               "duracion": int}},          # meses; None = la de las curvas
       "capacidad": {"dotacion": {...}, "hhMesPersona": n, "eficiencia": f,
-                    "subcontratoHH": {...}, "eventos": [...]}   # eventos se suman a los base
+                    "subcontratoHH": {...}, "eventos": [...],   # eventos se suman a los base
+                    "staff": [...]}   # reemplaza la nómina; con nómina, "dotacion" no se usa
     }
     """
     escenario = escenario or {}
@@ -141,6 +142,8 @@ def aplicar_escenario(datos: dict, escenario: dict | None) -> tuple[list[dict], 
             cap[k] = cc[k]
     cap["dotacion"].update(cc.get("dotacion", {}))
     cap.setdefault("subcontratoHH", {}).update(cc.get("subcontratoHH", {}))
+    if "staff" in cc:
+        cap["staff"] = copy.deepcopy(cc["staff"])
     cap["eventos"] = list(cap.get("eventos", [])) + list(cc.get("eventos", []))
     return proyectos, cap
 
@@ -222,8 +225,33 @@ def forecast(proyectos: list[dict], curvas: dict, params: dict) -> list[dict]:
     return filas
 
 
+def persona_activa(s: dict, mes: int) -> bool:
+    if not _vacio(s.get("desde")) and mes < mes_idx(s["desde"]):
+        return False
+    if not _vacio(s.get("hasta")) and mes > mes_idx(s["hasta"]):
+        return False
+    return True
+
+
+def personas_base(cap: dict, mes: int, esp: str) -> float:
+    """Personas de una especialidad en un mes.
+
+    Con nómina (capacidad.staff = [{nombre, especialidad, dedicacion, desde, hasta}])
+    se cuentan las personas activas ese mes, ponderadas por su dedicación (0,5 = media
+    jornada). Sin nómina se usa la dotación numérica (capacidad.dotacion).
+    """
+    staff = cap.get("staff") or []
+    if staff:
+        total = 0.0
+        for s in staff:
+            if s.get("especialidad") == esp and persona_activa(s, mes):
+                total += 1.0 if _vacio(s.get("dedicacion")) else float(s["dedicacion"])
+        return total
+    return cap["dotacion"].get(esp, 0)
+
+
 def capacidad_mes(cap: dict, mes: int, esp: str) -> float:
-    personas = cap["dotacion"].get(esp, 0)
+    personas = personas_base(cap, mes, esp)
     for ev in cap.get("eventos", []):
         if ev["especialidad"] != esp:
             continue

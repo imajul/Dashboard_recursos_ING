@@ -47,6 +47,21 @@ LA HERRAMIENTA ES LA BASE DE DATOS DE PROYECTOS
   - "Exportar > Lista de proyectos (CSV)" genera la planilla en el formato
     de la lista DIM_Proyecto (se puede volver a importar).
 
+STAFF DE INGENIERÍA (RECURSOS)
+  Botón "Recursos" > "Staff de Ingeniería": lista con nombre, especialidad,
+  % de dedicación, ingreso y egreso (opcionales) y nota.
+  - La cantidad de personas de cada especialidad, mes a mes, sale de esta
+    lista: cuenta a quienes están activos ese mes según su dedicación
+    (50 % = media persona). Así se reflejan ingresos, egresos y licencias.
+  - "Pegar desde Excel": copiar columnas Nombre, Especialidad, Dedicación %,
+    Ingreso, Egreso y pegarlas. "Crear lista desde la dotación" arma filas
+    para completar los nombres.
+  - "Nivelar" agrega vacantes con nombre ("Vacante Eléctricos 1") que se
+    pueden renombrar cuando se cubran.
+  - Las altas y bajas del panel de cada especialidad quedan para refuerzos
+    hipotéticos; las personas reales van en la lista.
+  - Mientras la lista esté vacía se usa la cantidad numérica por especialidad.
+
 HH CARGADAS A MANO
   Si la base de datos de HH no aplica a un proyecto puntual: clic en el
   proyecto > "HH del proyecto · por componente". Para cada componente
