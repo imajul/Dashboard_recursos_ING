@@ -169,6 +169,9 @@ button.area .gcnt{font:600 10.5px/1 var(--f-num);color:var(--ink-soft);margin-to
 .seg.resizing{cursor:ew-resize;opacity:.85;z-index:15}
 .seg.sel{box-shadow:inset 0 0 0 1px rgba(0,0,0,.10),0 0 0 2px var(--today);z-index:12}
 .seg.dim{opacity:.16;filter:grayscale(.6)}
+.seg.sens{cursor:pointer;background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.55) 0 4px,transparent 4px 8px)!important;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.25);outline:1px dashed var(--ink-soft);outline-offset:-1px}
+.seg.sens .stag{position:absolute;left:3px;top:-1px;font:700 8.5px/1 var(--f-num);color:var(--t-ink);opacity:.8;pointer-events:none}
 .seg.excl{opacity:.35;background-image:repeating-linear-gradient(45deg,rgba(0,0,0,.12) 0 3px,transparent 3px 6px)!important}
 .seg .c{pointer-events:none;font:600 10.5px/1 var(--f-num);text-align:center;overflow:hidden;
   border-right:1px solid rgba(0,0,0,.10);height:100%;display:flex;align-items:center;justify-content:center}
@@ -1839,6 +1842,7 @@ window.SAMPLE_DATA = {
 
   const TIPOS_CLIENTE = ['DPI', 'DNN', 'O&M'];
   const MAX_MESES = 120; // tope del horizonte extendido automáticamente (10 años)
+  const MESES_SENSIBILIDAD = 3; // una sensibilidad DNN arranca 3 meses después de que termina el bloque anterior
 
   const mesIdx = (ym) => { const [y, m] = ym.split('-').map(Number); return y * 12 + (m - 1); };
   const mesStr = (i) => `${Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}`;
@@ -1957,6 +1961,17 @@ window.SAMPLE_DATA = {
 
   // ≙ Forecast_Mes_V4 : HH Forecast = HHComponente × Factor × Factor Solapamiento
   // Con p.duracion (meses) cada curva se reescala: mismas HH totales, otra intensidad mensual.
+  const sensibilidades = (p) => (p.tipoCliente === 'DNN' ? Math.max(0, Math.trunc(Number(p.sensibilidades) || 0)) : 0);
+
+  // [[desplazamiento, duración]] del bloque original y de cada sensibilidad DNN.
+  function bloques(p, curvas, params) {
+    const comps = componentes(p, params);
+    const nBase = Math.max(0, ...comps.map((c) => largoCurva(curvas, c.curva)));
+    const dur = Math.max(0, ...comps.map((c) => largoComponente(largoCurva(curvas, c.curva), nBase, p.duracion)));
+    const paso = dur - 1 + MESES_SENSIBILIDAD;
+    return Array.from({ length: sensibilidades(p) + 1 }, (_, b) => [b * paso, dur]);
+  }
+
   function forecast(proyectos, curvas, params) {
     const filas = [];
     for (const p of proyectos) {
@@ -1965,6 +1980,7 @@ window.SAMPLE_DATA = {
       const solap = vacio(p.factorSolapamiento) ? 1 : Number(p.factorSolapamiento);
       const comps = componentes(p, params);
       const nBase = Math.max(0, ...comps.map((c) => largoCurva(curvas, c.curva)));
+      const desp = bloques(p, curvas, params).map((x) => x[0]);
       for (const c of comps) {
         const curva = curvas[c.curva] || {};
         const nC = largoCurva(curvas, c.curva);
@@ -1972,12 +1988,14 @@ window.SAMPLE_DATA = {
         for (const esp of Object.keys(curva)) {
           let factores = curva[esp];
           if (nNuevo !== nC) factores = reescalar(factores.concat(new Array(nC - factores.length).fill(0)), nNuevo);
-          factores.forEach((f, k) => {
-            if (f === 0) return;
-            filas.push({
-              proyectoId: p.id, proyecto: p.proyecto, tipoCliente: p.tipoCliente,
-              componente: c.componente, curva: c.curva, mes: inicio + k, mesCurva: k + 1, especialidad: esp,
-              factor: f, hhComponente: c.hh, hh: c.hh * f * solap,
+          desp.forEach((off, b) => { // b = 0 original, 1.. sensibilidades
+            factores.forEach((f, k) => {
+              if (f === 0) return;
+              filas.push({
+                proyectoId: p.id, proyecto: p.proyecto, tipoCliente: p.tipoCliente,
+                componente: c.componente, bloque: b, curva: c.curva, mes: inicio + off + k, mesCurva: k + 1, especialidad: esp,
+                factor: f, hhComponente: c.hh, hh: c.hh * f * solap,
+              });
             });
           });
         }
@@ -2113,7 +2131,7 @@ window.SAMPLE_DATA = {
     const m = mesIdx(mes), agg = new Map();
     for (const f of res.filas) {
       if (f.mes !== m || f.especialidad !== especialidad) continue;
-      const k = f.proyecto + '\u0000' + f.componente;
+      const k = f.proyecto + '\u0000' + f.componente + (f.bloque ? ' · sensibilidad ' + f.bloque : '');
       agg.set(k, (agg.get(k) || 0) + f.hh);
     }
     return [...agg.entries()].map(([k, hh]) => {
@@ -2165,7 +2183,7 @@ window.SAMPLE_DATA = {
   }
 
   return { TIPOS_CLIENTE, TAMANOS, tamano, mesIdx, mesStr, interpolar, componentes, aplicarEscenario, forecast,
-    personasBase, personaActiva, largoCurva, duracionBase, reescalar, largoComponente,
+    personasBase, personaActiva, sensibilidades, bloques, MESES_SENSIBILIDAD, largoCurva, duracionBase, reescalar, largoComponente,
     capacidadMes, calcular, detalle, mejorInicio, dotacionMinima };
 });
 
@@ -2311,7 +2329,8 @@ function hhMensual(p){
   f.forEach(function(r){var i=r.mes-m0;out[i]=(out[i]||0)+r.hh;});
   return out;
 }
-function totalP(p){var t=0;E.componentes(p,S.datos.parametros).forEach(function(c){t+=c.hh;});return t*(p.factorSolapamiento==null||p.factorSolapamiento===""?1:+p.factorSolapamiento);}
+function nSens(p){return E.sensibilidades(p);}
+function totalP(p){var t=0;E.componentes(p,S.datos.parametros).forEach(function(c){t+=c.hh;});return t*(1+nSens(p))*(p.factorSolapamiento==null||p.factorSolapamiento===""?1:+p.factorSolapamiento);}
 
 /* ===================== render: cabecera ===================== */
 function renderHead(){
@@ -2344,9 +2363,10 @@ function renderRows(){
       names+='<div class="tname'+(isSel?" sel":"")+(excl?" excl":"")+(hit?"":" off")+'" data-p="'+esc(p.id)+'">'
         +'<input type="checkbox" data-inc="'+esc(p.id)+'"'+(excl?"":" checked")+' title="Incluir en el cálculo" aria-label="Incluir '+esc(p.proyecto)+'">'
         +'<span class="nm" title="'+esc(p.proyecto+(p.nombre?" · "+p.nombre:"")+(p.estado?" · "+p.estado:""))+'">'+esc(p.proyecto)+(p.nombre?' <small style="color:var(--ink-soft)">'+esc(p.nombre)+'</small>':'')+'</span>'
-        +'<span class="fl hide-s">'+esc(p.tecnologia)+' '+NF0.format(+p.potencia||0)+' MW</span>'
+        +((nSens(p)||hhManual(p)||durMod(p))?'':'<span class="fl hide-s">'+esc(p.tecnologia)+' '+NF0.format(+p.potencia||0)+' MW</span>')
         +'<span class="fl">'+hhK(tot)+'</span>'
         +(hhManual(p)?'<span class="fl warn" title="HH cargadas a mano'+(p.notaHH?': '+esc(p.notaHH):'')+'">✎</span>':'')
+        +(nSens(p)?'<span class="fl warn" title="'+nSens(p)+' sensibilidad(es): bloque repetido 3 meses después del anterior">+'+nSens(p)+' sens.</span>':'')
         +(durMod(p)?'<span class="fl warn" title="Duración modificada: '+spanOf(p).base+' meses según curvas">'+p.duracion+' m</span>':'')
         +(p.simulable?'':'<span class="fl lock" title="Proyecto no simulable: fecha fija">fijo</span>')
         +'</div>';
@@ -2372,9 +2392,17 @@ function barHTML(p,w,hit){
     if(pt.c.componente==="Línea")g+='<div class="ghost ln" style="left:'+px(sp.start*cw+2)+';width:'+px(pt.n*cw-4)+';bottom:0"></div>';
   });
   var hd=p.simulable?'<div class="h l" data-h="l" title="Arrastrá para cambiar el inicio y la duración"></div><div class="h r" data-h="r" title="Arrastrá para cambiar la duración"></div>':'';
+  /* sensibilidades DNN: mismo bloque repetido, 3 meses después del anterior */
+  var sens="";
+  E.bloques(p,S.datos.curvas,S.datos.parametros).slice(1).forEach(function(bl,i){
+    var st=sp.start+bl[0],c2="";
+    for(var k=0;k<bl[1];k++)c2+='<div class="c">'+(cw>=38?hhK(m[st+k]||0):"")+'</div>';
+    sens+='<div class="'+cls.replace(" mov","").replace(" sel","")+' sens" data-seg="'+esc(p.id)+'" data-sens="'+(i+1)+'" style="left:'+px(st*cw)+';width:'+px(bl[1]*cw)
+      +';background:'+t.c+';grid-template-columns:repeat('+bl[1]+',1fr)" title="Sensibilidad '+(i+1)+'"><span class="stag">S'+(i+1)+'</span>'+c2+'</div>';
+  });
   return '<div class="tl'+(hit?"":" off")+'" style="width:'+px(w)+'">'
     +'<div class="'+cls+'" data-seg="'+esc(p.id)+'" style="left:'+px(sp.start*cw)+';width:'+px(sp.dur*cw)
-    +';background:'+t.c+';grid-template-columns:repeat('+sp.dur+',1fr)">'+cells+hd+'</div>'+g+'</div>';
+    +';background:'+t.c+';grid-template-columns:repeat('+sp.dur+',1fr)">'+cells+hd+'</div>'+sens+g+'</div>';
 }
 
 /* ===================== render: capacidad / ocupación ===================== */
@@ -2625,6 +2653,14 @@ function edProyecto(p){
     +'<button class="btn sm" data-du="-3"'+(p.simulable?"":" disabled")+'>−3 m</button><button class="btn sm" data-du="-1"'+(p.simulable?"":" disabled")+'>−1 m</button>'
     +'<button class="btn sm" data-du="1"'+(p.simulable?"":" disabled")+'>+1 m</button><button class="btn sm" data-du="3"'+(p.simulable?"":" disabled")+'>+3 m</button>'
     +'<button class="btn sm primary" id="bestDurBtn"'+(p.simulable?"":" disabled")+' title="Prueba duraciones de 50 % a 200 % y elige la que menos HH excede">Mejor duración</button></div><div id="bestDurBox"></div>';
+  if(tipo==="DNN"){
+    var bls=E.bloques(p,S.datos.curvas,S.datos.parametros),i0=E.mesIdx(p.fechaInicio),hb=tot*solap;
+    html+='<h4>Sensibilidades</h4><div class="psub" style="margin-bottom:6px">Cada sensibilidad repite el bloque de trabajo (mismas HH, curva y duración) y arranca '+E.MESES_SENSIBILIDAD+' meses después de que termina el bloque anterior.</div>'
+      +'<table class="pk"><tr><th>Bloque</th><th>Período</th><th class="r">HH</th></tr>'
+      +bls.map(function(bl,i){return '<tr><td>'+(i?'Sensibilidad '+i:'Original')+'</td><td>'+mlabel(E.mesStr(i0+bl[0]))+' → '+mlabel(E.mesStr(i0+bl[0]+bl[1]-1))+'</td><td class="calc">'+hh(hb)+'</td></tr>';}).join("")
+      +(bls.length>1?'<tr><td><b>Total</b></td><td></td><td class="calc">'+hh(hb*bls.length)+'</td></tr>':'')+'</table>'
+      +'<div class="row-actions"><button class="btn sm primary" id="sensAdd">Agregar sensibilidad</button>'+(bls.length>1?'<button class="btn sm" id="sensDel">Quitar la última</button>':'')+'</div>';
+  }
   html+='<div class="row-actions" style="margin-top:16px"><button class="btn sm" id="dupBtn">Duplicar</button><button class="btn sm" id="delBtn" style="color:var(--danger)">Eliminar</button></div>';
   ed.innerHTML=html;
 
@@ -2660,6 +2696,12 @@ function edProyecto(p){
   ge("edDur").onchange=function(){var v=Math.round(+this.value);if(v>=1)set(function(){setDur(p,v);});};
   if(ge("edDurReset"))ge("edDurReset").onclick=function(){set(function(){p.duracion=null;});};
   ge("bestDurBtn").onclick=function(){mejorDuracion(p);};
+  if(ge("sensAdd"))ge("sensAdd").onclick=function(){
+    set(function(){p.sensibilidades=nSens(p)+1;});
+    var bl=E.bloques(p,S.datos.curvas,S.datos.parametros),u=bl[bl.length-1],i0=E.mesIdx(p.fechaInicio);
+    toast("Sensibilidad "+nSens(p)+" de "+p.proyecto+": "+mlabel(E.mesStr(i0+u[0]))+" → "+mlabel(E.mesStr(i0+u[0]+u[1]-1)));
+  };
+  if(ge("sensDel"))ge("sensDel").onclick=function(){set(function(){p.sensibilidades=Math.max(0,nSens(p)-1)||null;});};
   ge("bestBtn").onclick=function(){mejorInicio(p);};
   ge("dupBtn").onclick=function(){set(function(){var q=clone(p);q.id=nextId();q.proyecto=p.proyecto+" (copia)";S.datos.proyectos.push(q);sel={p:String(q.id)};});toast("Proyecto duplicado");};
   ge("delBtn").onclick=function(){set(function(){S.datos.proyectos=S.datos.proyectos.filter(function(q){return q!==p;});sel=null;});toast("Proyecto eliminado · Ctrl+Z para deshacer");};
@@ -2786,6 +2828,7 @@ function wireDrag(){
   var rows=document.getElementById("rows");
   rows.addEventListener("pointerdown",function(e){
     var b=e.target.closest(".seg");if(!b)return;
+    if(b.dataset.sens){sel_({p:String(b.dataset.seg)});return;}
     var p=findP(b.dataset.seg);if(!p)return;
     if(!p.simulable){sel_({p:String(p.id)});toast("Proyecto no simulable: fecha y duración fijas");return;}
     var h=e.target.closest(".h"),sp=spanOf(p);
@@ -2893,7 +2936,8 @@ function wireClicks(){
     var seg=t.closest&&t.closest(".seg");
     if(seg){
       var p=findP(seg.dataset.seg),sp=spanOf(p),r=seg.getBoundingClientRect(),k=Math.floor((e.clientX-r.left)/S.cw),m=hhMensual(p);
-      h='<div><b style="font-family:inherit">'+esc(p.proyecto)+'</b></div>'+mlabel(E.mesStr(E.mesIdx(R.meses[0])+sp.start+k))+': <b>'+hh(m[sp.start+k]||0)+'</b> HH<br>Total <b>'+hh(totalP(p))+'</b> HH'+'<br>Duración <b>'+sp.dur+'</b> meses'+(durMod(p)?' (curvas: '+sp.base+')':'')+(p.simulable?'<br>Arrastrá para mover · bordes para la duración':'<br>Fecha y duración fijas');
+      if(seg.dataset.sens){var bl=E.bloques(p,S.datos.curvas,S.datos.parametros)[+seg.dataset.sens];k+=bl[0];}
+      h='<div><b style="font-family:inherit">'+esc(p.proyecto)+'</b></div>'+mlabel(E.mesStr(E.mesIdx(R.meses[0])+sp.start+k))+': <b>'+hh(m[sp.start+k]||0)+'</b> HH<br>Total <b>'+hh(totalP(p))+'</b> HH'+'<br>Duración <b>'+sp.dur+'</b> meses'+(durMod(p)?' (curvas: '+sp.base+')':'')+(seg.dataset.sens?'<br>Sensibilidad '+seg.dataset.sens+' (no se arrastra: se mueve con el bloque original)':'')+(p.simulable?'<br>Arrastrá para mover · bordes para la duración':'<br>Fecha y duración fijas');
     }
     if(!h){tip.className="";return;}
     tip.innerHTML=h;tip.className="on";
@@ -3321,6 +3365,7 @@ var CAMPOS=[
   {k:"linea",n:"Línea",t:"sel",op:["","Línea AT","Línea MT"],w:100},
   {k:"fechaInicio",n:"Inicio",t:"month"},
   {k:"duracion",n:"Duración",t:"num",vacio:"curvas"},
+  {k:"sensibilidades",n:"Sensib. DNN",t:"num"},
   {k:"factorSolapamiento",n:"Solap. %",t:"num",pct:true},
   {k:"estado",n:"Estado",t:"sel",op:["No Iniciado","En Proceso","Finalizado"],w:120},
   {k:"fijo",n:"Cal. fijo",t:"chk"},
@@ -3350,6 +3395,7 @@ function avisosProyecto(p,cod){
   if(!/^\d{4}-\d{2}$/.test(p.fechaInicio||""))a.push("Falta la fecha de inicio");
   if(p.tipoCliente==="DNN"&&["DNN Cat1","DNN Cat2"].indexOf(p.nivelDNN)<0)a.push("DNN sin nivel");
   if(!(+p.potencia>0)&&(p.hhProy==null||p.hhProy==="")&&(p.hhParque==null||p.hhParque===""))a.push("Sin potencia ni HH manuales");
+  if(p.tipoCliente!=="DNN"&&+p.sensibilidades>0)a.push("Las sensibilidades solo aplican a proyectos DNN");
   if(p.tipoCliente!=="DPI"&&(p.est||p.linea))a.push("ET/Línea no se usan en "+p.tipoCliente);
   return a;
 }
@@ -3425,6 +3471,7 @@ function openProyectos(){
       if(n!=null&&(isNaN(n)||n<0))n=null;
       if(k==="duracion"){if(n==null)p.duracion=null;else setDur(p,n);}
       else if(k==="factorSolapamiento")p.factorSolapamiento=n==null?1:Math.min(100,n)/100;
+      else if(k==="sensibilidades")p.sensibilidades=n?Math.max(0,Math.round(n)):null;
       else if(k==="avance")p.avance=n==null?null:Math.min(100,n);
       else p[k]=n;
     }
@@ -3472,14 +3519,14 @@ function csvProyectos(){
   var q=function(v){v=v==null?"":String(v);return '"'+v.replace(/"/g,'""')+'"';};
   var na=function(v){return v==null||v===""?"N/A":v;};
   var dec=function(v,d){return v==null||v===""?"":Number(v).toFixed(d).replace(".",",");};
-  var head=["Proyectos","Nombre","Tipo Cliente","Nivel DNN","Tecnología","Factor Solapa","Potencia","Tensión POE","Est Transformadora","Linea","Fecha Inicio","Estado","Calendario Fijo","% Avance","Duración meses","Tamaño","Incluir",
+  var head=["Proyectos","Nombre","Tipo Cliente","Nivel DNN","Tecnología","Factor Solapa","Potencia","Tensión POE","Est Transformadora","Linea","Fecha Inicio","Estado","Calendario Fijo","% Avance","Duración meses","Tamaño","Incluir","Sensibilidades",
     "HH Estimadas Parque","HH Estimadas ET","HH Estimadas Línea","HH Estimadas Proy","Motivo HH"];
   var rows=[head.map(q).join(",")];
   S.datos.proyectos.forEach(function(p){
     var f=p.fechaInicio?("01/"+p.fechaInicio.slice(5)+"/"+p.fechaInicio.slice(0,4)+" 0:00"):"";
     rows.push([p.proyecto,p.nombre||"",p.tipoCliente,p.nivelDNN?p.nivelDNN.replace("DNN Cat","Cat "):"N/A",p.tecnologia,dec(p.factorSolapamiento==null?1:p.factorSolapamiento,2),
       p.potencia==null?"":String(p.potencia).replace(".",","),p.tensionPOE==null?"":p.tensionPOE,na(p.est),na(p.linea),f,p.estado||"",p.simulable?"No":"Si",
-      p.avance==null?"":p.avance,p.duracion==null?"":p.duracion,p.tamano||"",p.incluir===false?"No":"Si",
+      p.avance==null?"":p.avance,p.duracion==null?"":p.duracion,p.tamano||"",p.incluir===false?"No":"Si",p.sensibilidades||"",
       vacioV(p.hhParque)?"":p.hhParque,vacioV(p.hhEt)?"":p.hhEt,vacioV(p.hhLinea)?"":p.hhLinea,vacioV(p.hhProy)?"":p.hhProy,p.notaHH||""].map(q).join(","));
   });
   return rows.join("\r\n");
@@ -3675,7 +3722,7 @@ function proyectosDesdeCSV(texto){
       simulable:!/^(si|sí|yes|true|1)$/i.test(tx(col(r,"Calendario Fijo"))||"no"),
       hhParque:nm(col(r,"HH Estimadas Parque")),hhEt:nm(col(r,"HH Estimadas ET")),hhLinea:nm(col(r,"HH Estimadas Línea","HH Estimadas Linea")),hhProy:nm(col(r,"HH Estimadas Proy")),
       notaHH:tx(col(r,"Motivo HH")),factorSolapamiento:nm(col(r,"Factor Solapa","Factor Solapamiento"))||1,
-      duracion:nm(col(r,"Duración meses","Duracion meses")),tensionPOE:nm(col(r,"Tensión POE")),avance:nm(col(r,"% Avance"))};
+      duracion:nm(col(r,"Duración meses","Duracion meses")),sensibilidades:nm(col(r,"Sensibilidades"))||null,tensionPOE:nm(col(r,"Tensión POE")),avance:nm(col(r,"% Avance"))};
     if(/^(no|false|0)$/i.test(tx(col(r,"Incluir"))||""))p.incluir=false;
     if(["DPI","DNN","O&M"].indexOf(tipo)<0)av.push(cod+": Tipo Cliente desconocido ("+tipo+")");
     if(!p.fechaInicio)av.push(cod+": sin Fecha Inicio");

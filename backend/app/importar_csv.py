@@ -118,6 +118,7 @@ def leer(texto: str) -> tuple[list[dict], list[str]]:
             "hhProy": _num(f.get("HH Estimadas Proy")), "notaHH": _txt(f.get("Motivo HH")),
             "factorSolapamiento": _num(f.get("Factor Solapa") or f.get("Factor Solapamiento")) or 1.0,
             "duracion": int(_num(f.get("Duración meses")) or 0) or None,
+            "sensibilidades": int(_num(f.get("Sensibilidades")) or 0) or None,
             "tensionPOE": _num(f.get("Tensión POE")),
             "avance": _num(f.get("% Avance")),
         }

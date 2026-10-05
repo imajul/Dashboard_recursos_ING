@@ -131,6 +131,20 @@ class ReglasDeNegocio(unittest.TestCase):
         cap["staff"] = []
         self.assertEqual(motor.personas_base(cap, m("2027-01"), "Eléctricos"), 99)        # sin nómina: dotación
 
+    def test_sensibilidad_dnn(self):
+        d = dataset()
+        dnn = next(p for p in d["proyectos"] if p["proyecto"] == "PEDAN")  # DNN Cat1: 3 meses desde sep-26
+        base = motor.forecast([dnn], d["curvas"], d["parametros"])
+        con = motor.forecast([dict(dnn, sensibilidades=2)], d["curvas"], d["parametros"])
+        meses = sorted({motor.mes_str(f["mes"]) for f in con})
+        # original sep-nov 26; termina nov-26 → la 1.ª arranca feb-27 (3 meses después) → la 2.ª may-27
+        self.assertEqual(meses, ["2026-09", "2026-10", "2026-11", "2027-02", "2027-03", "2027-04", "2027-07", "2027-08", "2027-09"])
+        self.assertAlmostEqual(sum(f["hh"] for f in con), 3 * sum(f["hh"] for f in base))
+        # solo DNN: en un DPI no tiene efecto
+        dpi = d["proyectos"][0]
+        self.assertEqual(len(motor.forecast([dict(dpi, sensibilidades=2)], d["curvas"], d["parametros"])),
+                         len(motor.forecast([dpi], d["curvas"], d["parametros"])))
+
     def test_escenario_sumar_electricos_baja_exceso(self):
         base = motor.calcular(self.d)["cuellos"]["Eléctricos"]["hhExcedidas"]
         esc = {"capacidad": {"dotacion": {"Eléctricos": 9}}}
@@ -259,7 +273,8 @@ class ParidadJavaScript(unittest.TestCase):
     def test_paridad_escenario(self):
         self._comparar({
             "proyectos": {"8": {"desplazamiento": 4}, "3": {"incluir": False},
-                          "1": {"duracion": 7, "desplazamiento": 26}, "2": {"duracion": 20}, "9": {"duracion": 4}},
+                          "1": {"duracion": 7, "desplazamiento": 26}, "2": {"duracion": 20}, "9": {"duracion": 4},
+                          "13": {"sensibilidades": 2, "duracion": 5}, "15": {"sensibilidades": 1}},
             "capacidad": {"dotacion": {"Eléctricos": 16}, "eficiencia": 0.8,
                           "eventos": [{"especialidad": "Civiles", "desde": "2027-01", "hasta": "2027-09", "delta": 2}]},
         })

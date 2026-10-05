@@ -21,6 +21,7 @@ from collections import defaultdict
 
 TIPOS_CLIENTE = ["DPI", "DNN", "O&M"]
 MAX_MESES = 120  # tope del horizonte extendido automáticamente (10 años)
+MESES_SENSIBILIDAD = 3  # una sensibilidad DNN arranca 3 meses después de que termina el bloque anterior
 
 
 # ---------------------------------------------------------------- utilidades
@@ -188,6 +189,26 @@ def largo_componente(n_c: int, n_base: int, duracion) -> int:
     return max(1, math.floor(n_c * int(duracion) / n_base + 0.5))
 
 
+def sensibilidades(p: dict) -> int:
+    """Bloques adicionales de un DNN (0 para DPI y O&M)."""
+    if p.get("tipoCliente") != "DNN":
+        return 0
+    return max(0, int(p.get("sensibilidades") or 0))
+
+
+def bloques(p: dict, curvas: dict, params: dict) -> list[tuple[int, int]]:
+    """[(desplazamiento, duración)] del bloque original y de cada sensibilidad.
+
+    Cada sensibilidad repite el trabajo (mismas HH, curva y duración) y arranca
+    MESES_SENSIBILIDAD meses después del último mes del bloque anterior.
+    """
+    comps = componentes(p, params)
+    n_base = max((largo_curva(curvas, c["curva"]) for c in comps), default=0)
+    dur = max((largo_componente(largo_curva(curvas, c["curva"]), n_base, p.get("duracion")) for c in comps), default=0)
+    paso = dur - 1 + MESES_SENSIBILIDAD
+    return [(b * paso, dur) for b in range(sensibilidades(p) + 1)]
+
+
 def forecast(proyectos: list[dict], curvas: dict, params: dict) -> list[dict]:
     """Distribución mensual de HH por proyecto/componente/especialidad (Forecast_Mes_V4).
 
@@ -205,6 +226,7 @@ def forecast(proyectos: list[dict], curvas: dict, params: dict) -> list[dict]:
         solap = 1.0 if _vacio(solap) else float(solap)
         comps = componentes(p, params)
         n_base = max((largo_curva(curvas, c["curva"]) for c in comps), default=0)
+        desplazamientos = [d for d, _ in bloques(p, curvas, params)]
         for c in comps:
             curva = curvas.get(c["curva"]) or {}
             n_c = largo_curva(curvas, c["curva"])
@@ -212,16 +234,17 @@ def forecast(proyectos: list[dict], curvas: dict, params: dict) -> list[dict]:
             for esp, factores in curva.items():
                 if n_nuevo != n_c:
                     factores = reescalar(factores + [0.0] * (n_c - len(factores)), n_nuevo)
-                for k, f in enumerate(factores):
-                    if f == 0:
-                        continue
-                    filas.append({
-                        "proyectoId": p["id"], "proyecto": p["proyecto"],
-                        "tipoCliente": p["tipoCliente"], "componente": c["componente"],
-                        "curva": c["curva"], "mes": inicio + k, "mesCurva": k + 1, "especialidad": esp,
-                        "factor": f, "hhComponente": c["hh"],
-                        "hh": c["hh"] * f * solap,
-                    })
+                for b, off in enumerate(desplazamientos):  # b = 0 original, 1.. sensibilidades
+                    for k, f in enumerate(factores):
+                        if f == 0:
+                            continue
+                        filas.append({
+                            "proyectoId": p["id"], "proyecto": p["proyecto"],
+                            "tipoCliente": p["tipoCliente"], "componente": c["componente"], "bloque": b,
+                            "curva": c["curva"], "mes": inicio + off + k, "mesCurva": k + 1, "especialidad": esp,
+                            "factor": f, "hhComponente": c["hh"],
+                            "hh": c["hh"] * f * solap,
+                        })
     return filas
 
 
@@ -375,7 +398,8 @@ def detalle(datos: dict, escenario: dict | None, mes: str, especialidad: str) ->
     agg = defaultdict(float)
     for f in forecast(proyectos, datos["curvas"], datos["parametros"]):
         if f["mes"] == m and f["especialidad"] == especialidad:
-            agg[(f["proyecto"], f["componente"])] += f["hh"]
+            comp = f["componente"] + (f" · sensibilidad {f['bloque']}" if f.get("bloque") else "")
+            agg[(f["proyecto"], comp)] += f["hh"]
     return [{"proyecto": p, "componente": c, "hh": hh}
             for (p, c), hh in sorted(agg.items(), key=lambda kv: -kv[1])]
 

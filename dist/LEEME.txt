@@ -77,6 +77,14 @@ HH CARGADAS A MANO
   ET y Línea en la misma proporción; "HH netas" muestra el valor después del
   factor de solapamiento.
 
+SENSIBILIDADES (PROYECTOS DNN)
+  Clic en un proyecto DNN > "Sensibilidades" > "Agregar sensibilidad": suma
+  un bloque de trabajo igual al original (mismas HH, curva y duración) que
+  arranca 3 meses después de que termina el bloque anterior. Se pueden
+  agregar varias y "Quitar la última". En el Gantt se ven rayadas (S1, S2...)
+  y se mueven junto con el bloque original. También desde la tabla
+  "Proyectos", columna "Sensib. DNN".
+
 REGISTRO DE CAMBIOS
   Cada Guardar anota qué cambió y quién lo hizo (por ejemplo "PABRA: Inicio
   ene-27 -> jun-27"). Se ve en el diálogo de la carpeta > Historial, y en el

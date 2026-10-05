@@ -11,6 +11,7 @@
 
   const TIPOS_CLIENTE = ['DPI', 'DNN', 'O&M'];
   const MAX_MESES = 120; // tope del horizonte extendido automáticamente (10 años)
+  const MESES_SENSIBILIDAD = 3; // una sensibilidad DNN arranca 3 meses después de que termina el bloque anterior
 
   const mesIdx = (ym) => { const [y, m] = ym.split('-').map(Number); return y * 12 + (m - 1); };
   const mesStr = (i) => `${Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}`;
@@ -129,6 +130,17 @@
 
   // ≙ Forecast_Mes_V4 : HH Forecast = HHComponente × Factor × Factor Solapamiento
   // Con p.duracion (meses) cada curva se reescala: mismas HH totales, otra intensidad mensual.
+  const sensibilidades = (p) => (p.tipoCliente === 'DNN' ? Math.max(0, Math.trunc(Number(p.sensibilidades) || 0)) : 0);
+
+  // [[desplazamiento, duración]] del bloque original y de cada sensibilidad DNN.
+  function bloques(p, curvas, params) {
+    const comps = componentes(p, params);
+    const nBase = Math.max(0, ...comps.map((c) => largoCurva(curvas, c.curva)));
+    const dur = Math.max(0, ...comps.map((c) => largoComponente(largoCurva(curvas, c.curva), nBase, p.duracion)));
+    const paso = dur - 1 + MESES_SENSIBILIDAD;
+    return Array.from({ length: sensibilidades(p) + 1 }, (_, b) => [b * paso, dur]);
+  }
+
   function forecast(proyectos, curvas, params) {
     const filas = [];
     for (const p of proyectos) {
@@ -137,6 +149,7 @@
       const solap = vacio(p.factorSolapamiento) ? 1 : Number(p.factorSolapamiento);
       const comps = componentes(p, params);
       const nBase = Math.max(0, ...comps.map((c) => largoCurva(curvas, c.curva)));
+      const desp = bloques(p, curvas, params).map((x) => x[0]);
       for (const c of comps) {
         const curva = curvas[c.curva] || {};
         const nC = largoCurva(curvas, c.curva);
@@ -144,12 +157,14 @@
         for (const esp of Object.keys(curva)) {
           let factores = curva[esp];
           if (nNuevo !== nC) factores = reescalar(factores.concat(new Array(nC - factores.length).fill(0)), nNuevo);
-          factores.forEach((f, k) => {
-            if (f === 0) return;
-            filas.push({
-              proyectoId: p.id, proyecto: p.proyecto, tipoCliente: p.tipoCliente,
-              componente: c.componente, curva: c.curva, mes: inicio + k, mesCurva: k + 1, especialidad: esp,
-              factor: f, hhComponente: c.hh, hh: c.hh * f * solap,
+          desp.forEach((off, b) => { // b = 0 original, 1.. sensibilidades
+            factores.forEach((f, k) => {
+              if (f === 0) return;
+              filas.push({
+                proyectoId: p.id, proyecto: p.proyecto, tipoCliente: p.tipoCliente,
+                componente: c.componente, bloque: b, curva: c.curva, mes: inicio + off + k, mesCurva: k + 1, especialidad: esp,
+                factor: f, hhComponente: c.hh, hh: c.hh * f * solap,
+              });
             });
           });
         }
@@ -285,7 +300,7 @@
     const m = mesIdx(mes), agg = new Map();
     for (const f of res.filas) {
       if (f.mes !== m || f.especialidad !== especialidad) continue;
-      const k = f.proyecto + '\u0000' + f.componente;
+      const k = f.proyecto + '\u0000' + f.componente + (f.bloque ? ' · sensibilidad ' + f.bloque : '');
       agg.set(k, (agg.get(k) || 0) + f.hh);
     }
     return [...agg.entries()].map(([k, hh]) => {
@@ -337,6 +352,6 @@
   }
 
   return { TIPOS_CLIENTE, TAMANOS, tamano, mesIdx, mesStr, interpolar, componentes, aplicarEscenario, forecast,
-    personasBase, personaActiva, largoCurva, duracionBase, reescalar, largoComponente,
+    personasBase, personaActiva, sensibilidades, bloques, MESES_SENSIBILIDAD, largoCurva, duracionBase, reescalar, largoComponente,
     capacidadMes, calcular, detalle, mejorInicio, dotacionMinima };
 });
