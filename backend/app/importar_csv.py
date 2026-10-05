@@ -4,7 +4,7 @@ Columnas esperadas (el orden no importa; se ignoran las que no se usan):
 
     Proyectos · Nombre · Tipo Cliente · Nivel DNN · Tecnología · Factor Solapa · Potencia ·
     Tensión POE · Est Transformadora · Linea · Fecha Inicio · Estado · Calendario Fijo · % Avance
-    (opcionales, los agrega «Exportar → Lista de proyectos»: Duración meses · Tamaño · Incluir · Plan Manual)
+    (opcionales, los agrega «Exportar → Lista de proyectos»: Duración meses · Tamaño · Incluir · Plan Manual · Ajuste Sensibilidades)
 
 Reglas de mapeo:
 - "N/A" o vacío -> sin dato.
@@ -126,6 +126,12 @@ def leer(texto: str) -> tuple[list[dict], list[str]]:
         }
         if (_txt(f.get("Incluir")) or "").lower() in ("no", "false", "0"):
             p["incluir"] = False
+        ajuste = _txt(f.get("Ajuste Sensibilidades"))  # inicio/duración de cada sensibilidad DNN (JSON)
+        if ajuste:
+            try:
+                p["sensDetalle"] = json.loads(ajuste)
+            except ValueError:
+                avisos.append(f"{codigo}: «Ajuste Sensibilidades» ilegible (se ignora)")
         plan = _txt(f.get("Plan Manual"))  # tecnología «Otro»: plan de recursos en JSON
         if plan:
             try:

@@ -233,18 +233,39 @@ def sensibilidades(p: dict) -> int:
     return max(0, int(p.get("sensibilidades") or 0))
 
 
+def _ajuste_sens(p: dict, b: int) -> dict:
+    """Ajustes de la sensibilidad b (1..n): p["sensDetalle"][b-1] = {separacion, duracion}."""
+    det = p.get("sensDetalle") or []
+    return (det[b - 1] or {}) if 0 < b <= len(det) else {}
+
+
+def duracion_bloque(p: dict, b: int):
+    """Duración pedida para el bloque b (0 = original): la propia de la sensibilidad o la del proyecto."""
+    d = _ajuste_sens(p, b).get("duracion")
+    return d if b > 0 and not _vacio(d) else p.get("duracion")
+
+
 def bloques(p: dict, curvas: dict, params: dict) -> list[tuple[int, int]]:
     """[(desplazamiento, duración)] del bloque original y de cada sensibilidad.
 
-    Cada sensibilidad repite el trabajo (mismas HH, curva y duración) y arranca
-    MESES_SENSIBILIDAD meses después del último mes del bloque anterior.
+    Cada sensibilidad repite el trabajo (mismas HH y curva). Por defecto dura lo mismo que
+    el original y arranca MESES_SENSIBILIDAD meses después del último mes del bloque anterior;
+    ``sensDetalle`` permite fijar otra separación y otra duración por sensibilidad.
     """
     curvas = curvas_de(p, curvas, params)
     comps = componentes(p, params)
     n_base = max((largo_curva(curvas, c["curva"]) for c in comps), default=0)
-    dur = max((largo_componente(largo_curva(curvas, c["curva"]), n_base, p.get("duracion")) for c in comps), default=0)
-    paso = dur - 1 + MESES_SENSIBILIDAD
-    return [(b * paso, dur) for b in range(sensibilidades(p) + 1)]
+    out: list[tuple[int, int]] = []
+    for b in range(sensibilidades(p) + 1):
+        dur = max((largo_componente(largo_curva(curvas, c["curva"]), n_base, duracion_bloque(p, b)) for c in comps), default=0)
+        if not b:
+            out.append((0, dur))
+            continue
+        o0, d0 = out[-1]
+        sep = _ajuste_sens(p, b).get("separacion")
+        off = o0 + d0 - 1 + (MESES_SENSIBILIDAD if _vacio(sep) else int(sep))
+        out.append((max(o0, off), dur))  # nunca antes que el bloque anterior
+    return out
 
 
 def forecast(proyectos: list[dict], curvas: dict, params: dict) -> list[dict]:
@@ -269,11 +290,12 @@ def forecast(proyectos: list[dict], curvas: dict, params: dict) -> list[dict]:
         for c in comps:
             curva = cv.get(c["curva"]) or {}
             n_c = largo_curva(cv, c["curva"])
-            n_nuevo = largo_componente(n_c, n_base, p.get("duracion"))
-            for esp, factores in curva.items():
-                if n_nuevo != n_c:
-                    factores = reescalar(factores + [0.0] * (n_c - len(factores)), n_nuevo)
-                for b, off in enumerate(desplazamientos):  # b = 0 original, 1.. sensibilidades
+            for esp, base in curva.items():
+                for b, off in enumerate(desplazamientos):  # b = 0 original, 1.. sensibilidades (cada una con su duración)
+                    n_nuevo = largo_componente(n_c, n_base, duracion_bloque(p, b))
+                    factores = base
+                    if n_nuevo != n_c:
+                        factores = reescalar(base + [0.0] * (n_c - len(base)), n_nuevo)
                     for k, f in enumerate(factores):
                         if f == 0:
                             continue

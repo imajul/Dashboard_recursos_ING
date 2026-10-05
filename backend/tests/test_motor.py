@@ -145,6 +145,21 @@ class ReglasDeNegocio(unittest.TestCase):
         self.assertEqual(len(motor.forecast([dict(dpi, sensibilidades=2)], d["curvas"], d["parametros"])),
                          len(motor.forecast([dpi], d["curvas"], d["parametros"])))
 
+    def test_sensibilidad_inicio_y_duracion_editables(self):
+        d = dataset()
+        dnn = next(p for p in d["proyectos"] if p["proyecto"] == "PEDAN")  # sep-nov 26
+        base = sum(f["hh"] for f in motor.forecast([dnn], d["curvas"], d["parametros"]))
+        # S1: arranca 1 mes después del fin (dic-26) y dura 6; S2: separación por defecto, duración del original
+        p = dict(dnn, sensibilidades=2, sensDetalle=[{"separacion": 1, "duracion": 6}, {}])
+        self.assertEqual(motor.bloques(p, d["curvas"], d["parametros"]), [(0, 3), (3, 6), (11, 3)])
+        con = motor.forecast([p], d["curvas"], d["parametros"])
+        for b in (1, 2):
+            self.assertAlmostEqual(sum(f["hh"] for f in con if f["bloque"] == b), base)  # mismas HH
+        self.assertEqual(motor.mes_str(min(f["mes"] for f in con if f["bloque"] == 1)), "2026-12")
+        # separación negativa: se superpone, pero nunca antes que el bloque anterior
+        p2 = dict(dnn, sensibilidades=1, sensDetalle=[{"separacion": -10}])
+        self.assertEqual(motor.bloques(p2, d["curvas"], d["parametros"])[1][0], 0)
+
     def test_tecnologia_otro_plan_manual(self):
         d = dataset()
         otro = {"id": 99, "proyecto": "HIDRO", "tipoCliente": "DPI", "tecnologia": "Otro", "fechaInicio": "2027-03",
@@ -311,7 +326,7 @@ class ParidadJavaScript(unittest.TestCase):
         import tempfile
         d = json.loads((RAIZ / "data" / "sample_data.json").read_text(encoding="utf-8"))
         d["proyectos"].append({"id": 99, "proyecto": "HIDRO", "tipoCliente": "DNN", "tecnologia": "Otro", "fechaInicio": "2027-02",
-                               "sensibilidades": 1, "duracion": 7,
+                               "sensibilidades": 2, "duracion": 7, "sensDetalle": [{"separacion": 1, "duracion": 3}, {"duracion": 9}],
                                "planManual": {"unidad": "personas", "meses": 4,
                                               "valores": {"Eléctricos": [1, 2, 2.5, 1], "Estudios": [1, 1, 0, 0]}}})
         d["proyectos"].append({"id": 98, "proyecto": "OTROHH", "tipoCliente": "DPI", "tecnologia": "Otro", "fechaInicio": "2026-11",
@@ -332,7 +347,7 @@ class ParidadJavaScript(unittest.TestCase):
         self._comparar({
             "proyectos": {"8": {"desplazamiento": 4}, "3": {"incluir": False},
                           "1": {"duracion": 7, "desplazamiento": 26}, "2": {"duracion": 20}, "9": {"duracion": 4},
-                          "13": {"sensibilidades": 2, "duracion": 5}, "15": {"sensibilidades": 1}},
+                          "13": {"sensibilidades": 2, "duracion": 5, "sensDetalle": [{"separacion": 6, "duracion": 2}]}, "15": {"sensibilidades": 1}},
             "capacidad": {"dotacion": {"Eléctricos": 16}, "eficiencia": 0.8,
                           "eventos": [{"especialidad": "Civiles", "desde": "2027-01", "hasta": "2027-09", "delta": 2}]},
         })

@@ -163,14 +163,26 @@
   // Con p.duracion (meses) cada curva se reescala: mismas HH totales, otra intensidad mensual.
   const sensibilidades = (p) => (p.tipoCliente === 'DNN' ? Math.max(0, Math.trunc(Number(p.sensibilidades) || 0)) : 0);
 
+  // Ajustes de cada sensibilidad: p.sensDetalle[i] = {separacion, duracion} (i = 0 → S1).
+  // separacion = meses desde el último mes del bloque anterior (vacío = MESES_SENSIBILIDAD);
+  // duracion = meses del bloque (vacío = la del original). Las HH del bloque no cambian.
+  const ajusteSens = (p, b) => (b > 0 && (p.sensDetalle || [])[b - 1]) || {};
+  const duracionBloque = (p, b) => (b > 0 && !vacio(ajusteSens(p, b).duracion) ? ajusteSens(p, b).duracion : p.duracion);
+
   // [[desplazamiento, duración]] del bloque original y de cada sensibilidad DNN.
   function bloques(p, curvas, params) {
     curvas = curvasDe(p, curvas, params);
     const comps = componentes(p, params);
     const nBase = Math.max(0, ...comps.map((c) => largoCurva(curvas, c.curva)));
-    const dur = Math.max(0, ...comps.map((c) => largoComponente(largoCurva(curvas, c.curva), nBase, p.duracion)));
-    const paso = dur - 1 + MESES_SENSIBILIDAD;
-    return Array.from({ length: sensibilidades(p) + 1 }, (_, b) => [b * paso, dur]);
+    const out = [];
+    for (let b = 0; b <= sensibilidades(p); b++) {
+      const dur = Math.max(0, ...comps.map((c) => largoComponente(largoCurva(curvas, c.curva), nBase, duracionBloque(p, b))));
+      if (!b) { out.push([0, dur]); continue; }
+      const [o0, d0] = out[b - 1], sep = ajusteSens(p, b).separacion;
+      const off = o0 + d0 - 1 + (vacio(sep) ? MESES_SENSIBILIDAD : Math.trunc(Number(sep)));
+      out.push([Math.max(o0, off), dur]); // nunca antes que el bloque anterior
+    }
+    return out;
   }
 
   function forecast(proyectos, curvas, params) {
@@ -186,11 +198,11 @@
       for (const c of comps) {
         const curva = cv[c.curva] || {};
         const nC = largoCurva(cv, c.curva);
-        const nNuevo = largoComponente(nC, nBase, p.duracion);
         for (const esp of Object.keys(curva)) {
-          let factores = curva[esp];
-          if (nNuevo !== nC) factores = reescalar(factores.concat(new Array(nC - factores.length).fill(0)), nNuevo);
-          desp.forEach((off, b) => { // b = 0 original, 1.. sensibilidades
+          desp.forEach((off, b) => { // b = 0 original, 1.. sensibilidades (cada una con su duración)
+            const nNuevo = largoComponente(nC, nBase, duracionBloque(p, b));
+            let factores = curva[esp];
+            if (nNuevo !== nC) factores = reescalar(factores.concat(new Array(nC - factores.length).fill(0)), nNuevo);
             factores.forEach((f, k) => {
               if (f === 0) return;
               filas.push({
