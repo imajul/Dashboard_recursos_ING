@@ -125,6 +125,10 @@ input[type=range]{width:90px;accent-color:var(--focus)}
 .lrow{display:flex;align-items:stretch}
 .lcell{position:sticky;left:0;z-index:30;background:var(--paper);display:flex;
   flex:0 0 var(--labelw);width:var(--labelw);border-right:1px solid var(--rule)}
+button.area{font:inherit;color:inherit;border:none;border-right:1px solid var(--rule);cursor:pointer;margin:0}
+button.area:hover{background:var(--band-3)}
+button.area.off{opacity:.5}
+button.area .gcnt{font:600 10.5px/1 var(--f-num);color:var(--ink-soft);margin-top:2px}
 .area{flex:0 0 92px;border-right:1px solid var(--rule);display:flex;flex-direction:column;align-items:center;
   justify-content:center;text-align:center;font-weight:700;font-size:13px;padding:4px 6px;background:var(--paper);gap:3px}
 .area small{font-weight:500;font-size:10.5px;color:var(--ink-soft);line-height:1.2}
@@ -2341,7 +2345,10 @@ function renderRows(){
         +'</div>';
       tls+=barHTML(p,w,hit);
     });
-    html+='<div class="lrow"><div class="lcell"><div class="area"><i style="background:'+t.c+'"></i>'+t.n+'<small>'+t.d+'</small></div>'
+    var nInc=items.filter(function(p){return p.incluir!==false;}).length,todos=nInc===items.length;
+    html+='<div class="lrow"><div class="lcell"><button class="area grp'+(nInc===0?" off":"")+'" data-grupo="'+esc(t.k)+'" aria-pressed="'+(nInc>0)+'"'
+      +' title="'+(todos?'Excluir del cálculo':'Incluir en el cálculo')+' todos los proyectos '+esc(t.n)+'"><i style="background:'+t.c+'"></i>'+t.n+'<small>'+t.d+'</small>'
+      +'<span class="gcnt">'+(todos?'☑':nInc===0?'☐':'◩')+' '+nInc+'/'+items.length+'</span></button>'
       +'<div style="flex:1;min-width:0">'+names+'</div></div><div>'+tls+'</div></div>';
   });
   box.innerHTML=html;
@@ -2808,6 +2815,14 @@ function wireClicks(){
   var grid=document.getElementById("grid");
   grid.addEventListener("click",function(e){
     var t=e.target;
+    var grp=t.closest("[data-grupo]");
+    if(grp){
+      var tipo=grp.dataset.grupo,ps=S.datos.proyectos.filter(function(p){return p.tipoCliente===tipo;});
+      var todos=ps.every(function(p){return p.incluir!==false;});
+      push();ps.forEach(function(p){p.incluir=!todos;});recalc();render();save();
+      toast((todos?"Excluidos":"Incluidos")+" los "+ps.length+" proyectos "+tipo+" · Ctrl+Z para deshacer");
+      return;
+    }
     var inc=t.closest("[data-inc]");
     if(inc){var p=findP(inc.dataset.inc);push();p.incluir=inc.checked;recalc();render();save();return;}
     var stf=t.closest("[data-staff]");
