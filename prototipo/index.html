@@ -44,18 +44,7 @@
   --f-ui:"Inter Tight",system-ui,-apple-system,"Segoe UI",sans-serif;
   --f-num:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
 }
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --paper:#121613;--ink:#e8ede9;--ink-soft:#9aa9a0;--rule:#2d372f;--rule-soft:#212a23;
-    --band:#1c2b1a;--band-ink:#e5ebe3;--band-2:#232c25;--band-3:#1a211c;--surface:#171d19;--chip:#1c231e;
-    --danger:#ff6b5e;--today:#6aa8ff;--focus:#8fd187;
-    --ok-bg:#16300f;--ok-ink:#a9e39c;--warn-bg:#3a2e08;--warn-ink:#ffd977;--crit-bg:#3a1512;--crit-ink:#ffb4ac;
-    --err-bg:#3a1512;--err-ink:#ffb4ac;
-    --shadow:0 1px 2px rgba(0,0,0,.5),0 8px 24px rgba(0,0,0,.35);
-    --past:rgba(10,14,11,.5);
-    color-scheme:dark;
-  }
-}
+/* Tema claro por defecto, aunque Windows esté en modo oscuro. El oscuro se activa solo con el botón ◐. */
 :root[data-theme="dark"]{
   --paper:#121613;--ink:#e8ede9;--ink-soft:#9aa9a0;--rule:#2d372f;--rule-soft:#212a23;
   --band:#1c2b1a;--band-ink:#e5ebe3;--band-2:#232c25;--band-3:#1a211c;--surface:#171d19;--chip:#1c231e;
@@ -2331,6 +2320,9 @@ function openCarpeta(){
 
 /* ===================== arranque ===================== */
 function boot(){
+  /* tema: claro salvo que el usuario haya elegido oscuro con ◐ */
+  var tema="light";try{tema=localStorage.getItem(KEY+"-tema")||"light";}catch(e){}
+  document.documentElement.setAttribute("data-theme",tema==="dark"?"dark":"light");
   ed=document.getElementById("editor");dlg=document.getElementById("dlg");
   S=load();
   document.getElementById("title").value=S.title||"Plan de capacidad · Ingeniería";
@@ -2359,9 +2351,9 @@ function boot(){
   document.getElementById("kbdBtn").onclick=openAtajos;
   document.getElementById("zoom").oninput=function(){S.cw=+this.value;render();save();};
   document.getElementById("theme").onclick=function(){
-    var r=document.documentElement,c=r.getAttribute("data-theme");
-    var dark=c?c==="dark":window.matchMedia("(prefers-color-scheme: dark)").matches;
+    var r=document.documentElement,dark=r.getAttribute("data-theme")==="dark";
     r.setAttribute("data-theme",dark?"light":"dark");
+    try{localStorage.setItem(KEY+"-tema",dark?"light":"dark");}catch(e){}
   };
   document.getElementById("buscarInp").oninput=function(){S.q=this.value.trim().toLowerCase();renderRows();};
   document.getElementById("buscarX").onclick=cerrarBuscar;
