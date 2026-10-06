@@ -185,6 +185,19 @@
     return out;
   }
 
+  const solapDe = (p) => (vacio(p.factorSolapamiento) || esOtro(p) ? 1 : Number(p.factorSolapamiento)); // «Otro»: sin solapamiento
+  // HH netas de cada bloque (0 = original). Una sensibilidad con sensDetalle[i].hh usa ese total;
+  // vacío = las mismas HH que el original.
+  function hhBloques(p, params) {
+    let base = 0;
+    for (const c of componentes(p, params)) base += c.hh;
+    base *= solapDe(p);
+    return Array.from({ length: sensibilidades(p) + 1 }, (_, b) => {
+      const v = ajusteSens(p, b).hh;
+      return b > 0 && !vacio(v) && base > 0 ? Math.max(0, Number(v)) : base;
+    });
+  }
+
   function forecast(proyectos, curvas, params) {
     const filas = [];
     for (const p of proyectos) {
@@ -195,6 +208,7 @@
       const comps = componentes(p, params);
       const nBase = Math.max(0, ...comps.map((c) => largoCurva(cv, c.curva)));
       const desp = bloques(p, curvas, params).map((x) => x[0]);
+      const hb = hhBloques(p, params), escala = hb.map((x) => (hb[0] > 0 ? x / hb[0] : 1)); // HH propias de cada sensibilidad
       for (const c of comps) {
         const curva = cv[c.curva] || {};
         const nC = largoCurva(cv, c.curva);
@@ -208,7 +222,7 @@
               filas.push({
                 proyectoId: p.id, proyecto: p.proyecto, tipoCliente: p.tipoCliente,
                 componente: c.componente, bloque: b, curva: c.curva, mes: inicio + off + k, mesCurva: k + 1, especialidad: esp,
-                factor: f, hhComponente: c.hh, hh: c.hh * f * solap,
+                factor: f, hhComponente: c.hh, hh: c.hh * f * solap * escala[b],
               });
             });
           });
@@ -398,6 +412,6 @@
   }
 
   return { TIPOS_CLIENTE, TAMANOS, tamano, mesIdx, mesStr, interpolar, componentes, aplicarEscenario, forecast,
-    esOtro, planHH, curvasDe, HH_PERSONA_DEFECTO, personasBase, personaActiva, sensibilidades, bloques, MESES_SENSIBILIDAD, largoCurva, duracionBase, reescalar, largoComponente,
+    esOtro, planHH, curvasDe, HH_PERSONA_DEFECTO, personasBase, personaActiva, sensibilidades, bloques, hhBloques, MESES_SENSIBILIDAD, largoCurva, duracionBase, reescalar, largoComponente,
     capacidadMes, calcular, detalle, mejorInicio, dotacionMinima };
 });

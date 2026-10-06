@@ -160,6 +160,18 @@ class ReglasDeNegocio(unittest.TestCase):
         p2 = dict(dnn, sensibilidades=1, sensDetalle=[{"separacion": -10}])
         self.assertEqual(motor.bloques(p2, d["curvas"], d["parametros"])[1][0], 0)
 
+    def test_sensibilidad_hh_propias(self):
+        d = dataset()
+        dnn = next(p for p in d["proyectos"] if p["proyecto"] == "PEDAN")
+        base = sum(f["hh"] for f in motor.forecast([dnn], d["curvas"], d["parametros"]))
+        p = dict(dnn, sensibilidades=2, sensDetalle=[{"hh": 1000, "duracion": 5}, {}])
+        self.assertEqual([round(x, 6) for x in motor.hh_bloques(p, d["parametros"])], [round(base, 6), 1000, round(base, 6)])
+        con = motor.forecast([p], d["curvas"], d["parametros"])
+        tot = lambda b: sum(f["hh"] for f in con if f["bloque"] == b)
+        self.assertAlmostEqual(tot(0), base)
+        self.assertAlmostEqual(tot(1), 1000)
+        self.assertAlmostEqual(tot(2), base)
+
     def test_tecnologia_otro_plan_manual(self):
         d = dataset()
         otro = {"id": 99, "proyecto": "HIDRO", "tipoCliente": "DPI", "tecnologia": "Otro", "fechaInicio": "2027-03",
@@ -326,7 +338,7 @@ class ParidadJavaScript(unittest.TestCase):
         import tempfile
         d = json.loads((RAIZ / "data" / "sample_data.json").read_text(encoding="utf-8"))
         d["proyectos"].append({"id": 99, "proyecto": "HIDRO", "tipoCliente": "DNN", "tecnologia": "Otro", "fechaInicio": "2027-02",
-                               "sensibilidades": 2, "duracion": 7, "sensDetalle": [{"separacion": 1, "duracion": 3}, {"duracion": 9}],
+                               "sensibilidades": 2, "duracion": 7, "sensDetalle": [{"separacion": 1, "duracion": 3, "hh": 250}, {"duracion": 9}],
                                "planManual": {"unidad": "personas", "meses": 4,
                                               "valores": {"Eléctricos": [1, 2, 2.5, 1], "Estudios": [1, 1, 0, 0]}}})
         d["proyectos"].append({"id": 98, "proyecto": "OTROHH", "tipoCliente": "DPI", "tecnologia": "Otro", "fechaInicio": "2026-11",
@@ -347,7 +359,7 @@ class ParidadJavaScript(unittest.TestCase):
         self._comparar({
             "proyectos": {"8": {"desplazamiento": 4}, "3": {"incluir": False},
                           "1": {"duracion": 7, "desplazamiento": 26}, "2": {"duracion": 20}, "9": {"duracion": 4},
-                          "13": {"sensibilidades": 2, "duracion": 5, "sensDetalle": [{"separacion": 6, "duracion": 2}]}, "15": {"sensibilidades": 1}},
+                          "13": {"sensibilidades": 2, "duracion": 5, "sensDetalle": [{"separacion": 6, "duracion": 2, "hh": 777}]}, "15": {"sensibilidades": 1}},
             "capacidad": {"dotacion": {"Eléctricos": 16}, "eficiencia": 0.8,
                           "eventos": [{"especialidad": "Civiles", "desde": "2027-01", "hasta": "2027-09", "delta": 2}]},
         })

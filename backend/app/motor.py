@@ -268,6 +268,22 @@ def bloques(p: dict, curvas: dict, params: dict) -> list[tuple[int, int]]:
     return out
 
 
+def _solap(p: dict) -> float:
+    s = p.get("factorSolapamiento")
+    return 1.0 if _vacio(s) or es_otro(p) else float(s)  # «Otro»: sin solapamiento
+
+
+def hh_bloques(p: dict, params: dict) -> list[float]:
+    """HH netas de cada bloque (0 = original). sensDetalle[i]["hh"] fija las de una sensibilidad;
+    vacío = las mismas HH que el original."""
+    base = sum(c["hh"] for c in componentes(p, params)) * _solap(p)
+    out = []
+    for b in range(sensibilidades(p) + 1):
+        v = _ajuste_sens(p, b).get("hh")
+        out.append(max(0.0, float(v)) if b > 0 and not _vacio(v) and base > 0 else base)
+    return out
+
+
 def forecast(proyectos: list[dict], curvas: dict, params: dict) -> list[dict]:
     """Distribución mensual de HH por proyecto/componente/especialidad (Forecast_Mes_V4).
 
@@ -287,6 +303,8 @@ def forecast(proyectos: list[dict], curvas: dict, params: dict) -> list[dict]:
         comps = componentes(p, params)
         n_base = max((largo_curva(cv, c["curva"]) for c in comps), default=0)
         desplazamientos = [d for d, _ in bloques(p, curvas, params)]
+        hb = hh_bloques(p, params)
+        escala = [x / hb[0] if hb[0] > 0 else 1.0 for x in hb]  # HH propias de cada sensibilidad
         for c in comps:
             curva = cv.get(c["curva"]) or {}
             n_c = largo_curva(cv, c["curva"])
@@ -304,7 +322,7 @@ def forecast(proyectos: list[dict], curvas: dict, params: dict) -> list[dict]:
                             "tipoCliente": p["tipoCliente"], "componente": c["componente"], "bloque": b,
                             "curva": c["curva"], "mes": inicio + off + k, "mesCurva": k + 1, "especialidad": esp,
                             "factor": f, "hhComponente": c["hh"],
-                            "hh": c["hh"] * f * solap,
+                            "hh": c["hh"] * f * solap * escala[b],
                         })
     return filas
 
