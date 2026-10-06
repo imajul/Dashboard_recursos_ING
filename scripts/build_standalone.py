@@ -104,9 +104,11 @@ SENSIBILIDADES (PROYECTOS DNN)
   "Proyectos", columna "Sensib. DNN".
   Inicio y duracion de cada sensibilidad se pueden cambiar: en la tabla
   "Sensibilidades" del panel (Inicio y Meses) o arrastrando la barra rayada
-  en el Gantt (centro = inicio, bordes = duracion). Las HH no cambian; una
-  sensibilidad ajustada se marca con un lapiz y el boton de flecha circular
-  la vuelve a automatica. El inicio se guarda relativo al fin del bloque
+  en el Gantt (centro = inicio, bordes = duracion). Cada bloque (original y
+  cada sensibilidad) tiene su propia duracion: cambiar una no modifica las
+  demas. Las HH no cambian; una sensibilidad ajustada se marca con un lapiz y
+  el boton de flecha circular la vuelve al inicio automatico y a la duracion
+  del original. El inicio se guarda relativo al fin del bloque
   anterior, asi que si se mueve el proyecto las sensibilidades lo acompañan.
 
 PROYECTOS CON TECNOLOGIA "OTRO"

@@ -67,7 +67,8 @@ ni cuentas de Claude o GitHub: alcanza con la cuenta de Microsoft de la empresa 
   vacío = modelo. Se exportan en las columnas «HH Estimadas …».
 - **Sensibilidades DNN editables:** cada sensibilidad repite el bloque (mismas HH); por defecto arranca 3 meses
   después del fin del anterior y dura lo mismo, pero `sensDetalle[i] = {separacion, duracion}` fija otro inicio
-  (relativo al bloque anterior) y otra duración. Se edita en el panel o arrastrando la barra en el Gantt.
+  (relativo al bloque anterior) y otra duración. Cada bloque guarda su propia duración: al cambiar la del original, la UI fija antes
+  la de cada sensibilidad para que no se arrastren. Se edita en el panel o arrastrando la barra en el Gantt.
 - **Tecnología «Otro»:** proyectos fuera de las tecnologías predefinidas llevan su propio plan de recursos
   (`planManual`: especialidad × mes, en personas equivalentes o HH) en lugar de tablas de HH y curvas; sin
   factor de solapamiento. Editor con generador desde un total de HH, escalado desde la tabla, reescalado al

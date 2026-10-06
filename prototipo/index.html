@@ -567,7 +567,7 @@ function hhManual(p){return ["hhParque","hhEt","hhLinea","hhProy"].some(function
 function hhModelo(p){return E.componentes(Object.assign({},p,{hhParque:null,hhEt:null,hhLinea:null,hhProy:null}),PV());}
 function durMod(p){return p.duracion!=null&&p.duracion!=="";}
 /* fija la duración; si coincide con la de las curvas vuelve a "automática" */
-function setDur(p,n){var b=spanOf(Object.assign({},p,{duracion:null})).base;n=Math.max(1,Math.min(60,Math.round(n)));p.duracion=(n===b)?null:n;}
+function setDur(p,n){congelarSens(p);var b=spanOf(Object.assign({},p,{duracion:null})).base;n=Math.max(1,Math.min(60,Math.round(n)));p.duracion=(n===b)?null:n;}
 /* HH mensuales de un proyecto (todas las especialidades) */
 function hhMensual(p){
   var f=E.forecast([Object.assign({incluir:true},p)],S.datos.curvas,PV()),m0=E.mesIdx(S.datos.horizonte.desde),out={};
@@ -589,10 +589,20 @@ function setSens(p,b,sep,dur){
   var d=(p.sensDetalle||[]).slice();while(d.length<b)d.push({});
   var o=Object.assign({},d[b-1]||{}),base=spanOf(p).dur;
   if(sep!==undefined){if(sep==null||sep===E.MESES_SENSIBILIDAD)delete o.separacion;else o.separacion=sep;}
-  if(dur!==undefined){if(dur==null||dur===base)delete o.duracion;else o.duracion=Math.max(1,Math.min(60,dur));}
+  if(dur!==undefined){if(dur==null)delete o.duracion;else o.duracion=Math.max(1,Math.min(60,dur));}
   d[b-1]=o;p.sensDetalle=d;normSens(p);
 }
-function sensMod(p,b){return Object.keys(sensAj(p,b)).length>0;}
+/* cada bloque tiene su propia duración: antes de cambiar la del original se fija la de cada sensibilidad */
+function detalleCongelado(p){
+  var n=nSens(p);if(!n)return p.sensDetalle||null;
+  var bl=E.bloques(p,S.datos.curvas,PV()),d=(p.sensDetalle||[]).slice(0,n).map(function(o){return Object.assign({},o);});
+  while(d.length<n)d.push({});
+  d.forEach(function(o,i){if(o.duracion==null||o.duracion==="")o.duracion=bl[i+1][1];});
+  return d;
+}
+function congelarSens(p){if(nSens(p))p.sensDetalle=detalleCongelado(p);}
+function sensDurMod(p,b){var a=sensAj(p,b);return a.duracion!=null&&a.duracion!==""&&+a.duracion!==spanOf(p).dur;}
+function sensMod(p,b){var a=sensAj(p,b);return (a.separacion!=null&&a.separacion!=="")||sensDurMod(p,b);}
 function totalP(p){var t=0;E.componentes(p,PV()).forEach(function(c){t+=c.hh;});return t*(1+nSens(p))*(esOtro(p)||p.factorSolapamiento==null||p.factorSolapamiento===""?1:+p.factorSolapamiento);}
 
 /* ===================== render: cabecera ===================== */
@@ -924,14 +934,15 @@ function edProyecto(p){
     +'<button class="btn sm primary" id="bestDurBtn"'+(p.simulable?"":" disabled")+' title="Prueba duraciones de 50 % a 200 % y elige la que menos HH excede">Mejor duración</button></div><div id="bestDurBox"></div>';
   if(tipo==="DNN"){
     var bls=E.bloques(p,S.datos.curvas,PV()),i0=E.mesIdx(p.fechaInicio),hb=tot*solap;
-    html+='<h4>Sensibilidades</h4><div class="psub" style="margin-bottom:6px">Cada sensibilidad repite el bloque de trabajo (mismas HH y curva). Por defecto dura lo mismo que el original y arranca '+E.MESES_SENSIBILIDAD+' meses después de que termina el bloque anterior; podés cambiar su inicio y su duración acá o arrastrándola en el Gantt.</div>'
+    html+='<h4>Sensibilidades</h4><div class="psub" style="margin-bottom:6px">Cada sensibilidad repite el bloque de trabajo (mismas HH y curva). Arranca '+E.MESES_SENSIBILIDAD+' meses después de que termina el bloque anterior (podés cambiarlo). Cada bloque tiene su propia duración: cambiar una no modifica las demás. Se edita acá o arrastrando las barras en el Gantt.</div>'
       +'<table class="pk"><tr><th>Bloque</th><th>Inicio → fin</th><th class="r">Meses</th><th class="r">HH</th><th></th></tr>'
       +bls.map(function(bl,i){
         var ini=E.mesStr(i0+bl[0]),fin=mlabel(E.mesStr(i0+bl[0]+bl[1]-1)),dis=p.simulable?'':' disabled',mod=i&&sensMod(p,i);
-        if(!i)return '<tr><td>Original</td><td>'+mlabel(ini)+' → '+fin+'</td><td class="calc">'+bl[1]+'</td><td class="calc">'+hh(hb)+'</td><td></td></tr>';
+        if(!i)return '<tr><td>Original</td><td>'+mlabel(ini)+'<br><small style="color:var(--ink-soft)">→ '+fin+'</small></td>'
+          +'<td><input type="number" min="1" max="60" step="1" data-sdur="0" value="'+bl[1]+'" aria-label="Duración del bloque original"'+dis+' style="width:54px"></td><td class="calc">'+hh(hb)+'</td><td></td></tr>';
         return '<tr><td>S'+i+(mod?' <span class="fl warn" title="Inicio o duración ajustados a mano">✎</span>':'')+'</td>'
           +'<td><input type="month" data-sini="'+i+'" value="'+ini+'" aria-label="Inicio de la sensibilidad '+i+'"'+dis+' style="width:118px'+(sensAj(p,i).separacion!=null?';border-color:var(--warn-ink);font-weight:600':'')+'"><br><small style="color:var(--ink-soft)">→ '+fin+'</small></td>'
-          +'<td><input type="number" min="1" max="60" step="1" data-sdur="'+i+'" value="'+bl[1]+'" aria-label="Duración de la sensibilidad '+i+'"'+dis+' style="width:54px'+(sensAj(p,i).duracion!=null?';border-color:var(--warn-ink);font-weight:600':'')+'"></td>'
+          +'<td><input type="number" min="1" max="60" step="1" data-sdur="'+i+'" value="'+bl[1]+'" aria-label="Duración de la sensibilidad '+i+'"'+dis+' style="width:54px'+(sensDurMod(p,i)?';border-color:var(--warn-ink);font-weight:600':'')+'"></td>'
           +'<td class="calc">'+hh(hb)+'</td><td class="x">'+(mod?'<button data-sres="'+i+'" title="Volver a inicio y duración automáticos">↺</button>':'')+'</td></tr>';
       }).join("")
       +(bls.length>1?'<tr><td><b>Total</b></td><td></td><td></td><td class="calc">'+hh(hb*bls.length)+'</td><td></td></tr>':'')+'</table>'
@@ -971,10 +982,10 @@ function edProyecto(p){
   ed.querySelectorAll("[data-mv]").forEach(function(b){b.onclick=function(){moverP(p,+b.dataset.mv);};});
   ed.querySelectorAll("[data-du]").forEach(function(b){b.onclick=function(){durP(p,+b.dataset.du);};});
   ge("edDur").onchange=function(){var v=Math.round(+this.value);if(v>=1)set(function(){setDur(p,v);});};
-  if(ge("edDurReset"))ge("edDurReset").onclick=function(){set(function(){p.duracion=null;});};
+  if(ge("edDurReset"))ge("edDurReset").onclick=function(){set(function(){congelarSens(p);p.duracion=null;});};
   ge("bestDurBtn").onclick=function(){mejorDuracion(p);};
   if(ge("sensAdd"))ge("sensAdd").onclick=function(){
-    set(function(){p.sensibilidades=nSens(p)+1;});
+    set(function(){p.sensibilidades=nSens(p)+1;setSens(p,nSens(p),undefined,spanOf(p).dur);});
     var bl=E.bloques(p,S.datos.curvas,PV()),u=bl[bl.length-1],i0=E.mesIdx(p.fechaInicio);
     toast("Sensibilidad "+nSens(p)+" de "+p.proyecto+": "+mlabel(E.mesStr(i0+u[0]))+" → "+mlabel(E.mesStr(i0+u[0]+u[1]-1)));
   };
@@ -987,9 +998,9 @@ function edProyecto(p){
   };});
   ed.querySelectorAll("[data-sdur]").forEach(function(inp){inp.onchange=function(){
     var b=+inp.dataset.sdur,v=Math.round(+inp.value);if(!(v>=1)){renderEditor();return;}
-    set(function(){setSens(p,b,undefined,v);});
+    set(function(){if(b===0)setDur(p,v);else setSens(p,b,undefined,v);});
   };});
-  ed.querySelectorAll("[data-sres]").forEach(function(btn){btn.onclick=function(){var b=+btn.dataset.sres;set(function(){setSens(p,b,null,null);});toast("Sensibilidad "+b+": inicio y duración automáticos");};});
+  ed.querySelectorAll("[data-sres]").forEach(function(btn){btn.onclick=function(){var b=+btn.dataset.sres;set(function(){setSens(p,b,null,spanOf(p).dur);});toast("Sensibilidad "+b+": inicio automático y duración igual al original");};});
   ge("bestBtn").onclick=function(){mejorInicio(p);};
   ge("dupBtn").onclick=function(){set(function(){var q=clone(p);q.id=nextId();q.proyecto=p.proyecto+" (copia)";S.datos.proyectos.push(q);sel={p:String(q.id)};});toast("Proyecto duplicado");};
   ge("delBtn").onclick=function(){set(function(){S.datos.proyectos=S.datos.proyectos.filter(function(q){return q!==p;});sel=null;});toast("Proyecto eliminado · Ctrl+Z para deshacer");};
@@ -1170,7 +1181,7 @@ function mejorDuracion(p){
   var base=spanOf(Object.assign({},p,{duracion:null})).base,actual=spanOf(p).dur,dv=datosVista(S.datos);
   var lo=Math.max(1,Math.ceil(base*0.5)),hi=Math.min(60,Math.floor(base*2)),pr=[];
   for(var n=lo;n<=hi;n++){
-    var cambios={proyectos:{}};cambios.proyectos[String(p.id)]={duracion:n};
+    var cambios={proyectos:{}};cambios.proyectos[String(p.id)]={duracion:n,sensDetalle:detalleCongelado(p)};
     pr.push({n:n,exc:E.calcular(dv,cambios).kpis.hhExcedidas});
   }
   var best=pr.reduce(function(a,b){var ra=Math.round(a.exc*1e6),rb=Math.round(b.exc*1e6);return rb<ra||(rb===ra&&Math.abs(b.n-actual)<Math.abs(a.n-actual))?b:a;});
