@@ -149,6 +149,14 @@ PROYECTOS CON TECNOLOGIA "OTRO"
     especialidad. La lista de proyectos lleva el plan en la columna
     "Plan Manual", asi que se puede volver a importar.
 
+CURVAS (PARAMETROS > CURVAS)
+  Cada especialidad tiene un Peso: el % de las HH del componente que le
+  corresponde (los pesos deberian sumar 100 %). En los meses se carga como se
+  reparte en el tiempo el trabajo de esa especialidad, y cada fila suma 100 %.
+  Cambiar el peso no cambia la forma en el tiempo; cambiar un mes no cambia el
+  peso. Mientras una fila no sume 100 % se marca en rojo y se aplica en
+  proporcion. "Ajustar a 100 %" deja pesos y filas en enteros que suman 100.
+
 REPORTE PDF
   Boton "Reporte PDF" (A3 apaisado, necesita internet para cargar el
   generador). Muestra lo mismo que la pantalla: indicadores, el Gantt con las

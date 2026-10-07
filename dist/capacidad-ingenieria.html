@@ -3550,7 +3550,7 @@ var PTABS=[["parque","HH Parque"],["etl","ET y Línea"],["dnn","DNN y O&M"],["cu
 var NFX=new Intl.NumberFormat("es-AR",{maximumFractionDigits:2});
 function pct(v){return Math.round(v*10000)/100;}
 function numIn(attr,val,extra){return '<input type="number" '+attr+' value="'+val+'" min="0" step="any"'+(extra||"")+'>';}
-function openParametros(){renderParam();openDlg(true);}
+function openParametros(){renderParam();openDlg(true);if(PTAB==="curvas")dlg.className="xwide";}
 function refreshParam(){if(document.getElementById("parBox"))renderParam();}
 function usaCurva(nombre){
   var P=S.datos.parametros;
@@ -3567,6 +3567,7 @@ function renderParam(){
   html+='<div class="row-actions" style="margin-top:14px"><button class="btn sm" data-preset="1">Restablecer '+(PTAB==="parque"?PTEC:PTAB==="curvas"?"la curva "+esc(PCUR):"esta pestaña")+' a los valores de ejemplo</button></div></div>';
   document.getElementById("dlgBody").innerHTML=html;
   document.getElementById("dlgTitle").textContent="Parámetros del modelo";
+  if(dlg.open)dlg.className=PTAB==="curvas"?"xwide":"wide"; /* la grilla de curvas necesita más ancho */
   dlg.scrollTop=top;
   wireParam();
 }
@@ -3629,54 +3630,83 @@ function tabDNN(P){
   });
   return html+'</table></div></div>';
 }
-/* ¿alguna celda no es un porcentaje entero? */
-function conDecimales(cur){return Object.keys(cur).some(function(e){return cur[e].some(function(f){return Math.abs(f*100-Math.round(f*100))>1e-6;});});}
-/* escala la curva a 100 % y la redondea a enteros (método del mayor resto: la suma da exactamente 100) */
-function enterosA100(cur){
-  var cel=[],t=0;
-  Object.keys(cur).forEach(function(e){cur[e].forEach(function(f,k){cel.push({e:e,k:k,f:f});t+=f;});});
-  if(t<=0)return;
-  var asignado=0;
-  cel.forEach(function(c){c.x=c.f/t*100;c.n=Math.floor(c.x);c.r=c.x-c.n;asignado+=c.n;});
-  cel.slice().sort(function(a,b){return b.r-a.r;}).slice(0,100-asignado).forEach(function(c){c.n++;});
-  cel.forEach(function(c){cur[c.e][c.k]=c.n/100;});
+/* ---- Curvas: cada especialidad tiene un PESO (% del total del componente) y una distribución
+   en el tiempo RELATIVA a esa especialidad (cada fila suma 100 %). El motor sigue usando factores
+   absolutos: factor = peso × relativo. ---- */
+var CDRAFT={}; /* fila relativa que se está cargando y todavía no suma 100 (clave "curva|especialidad") */
+function sumaA(a){return a.reduce(function(x,y){return x+(+y||0);},0);}
+/* enteros que suman exactamente 100 (método del mayor resto) */
+function enteros100(v){
+  var t=sumaA(v);if(t<=0)return v.map(function(){return 0;});
+  var c=v.map(function(x,i){var y=x/t*100;return {i:i,n:Math.floor(y),r:y-Math.floor(y)};}),as=0;
+  c.forEach(function(x){as+=x.n;});
+  c.slice().sort(function(a,b){return b.r-a.r;}).slice(0,100-as).forEach(function(x){x.n++;});
+  return c.map(function(x){return x.n;});
+}
+function filaCurva(cur,e,n){var f=(cur[e]||[]).slice(0,n);while(f.length<n)f.push(0);return f;}
+/* distribución relativa (enteros) de una especialidad; si hay un borrador vigente, el borrador */
+function relFila(cname,cur,e,n){
+  var f=filaCurva(cur,e,n),pe=sumaA(f),d=CDRAFT[cname+"|"+e];
+  if(d&&d.length===n){
+    var sd=sumaA(d);
+    if(pe<=0&&!f.some(function(x){return x>0;}))return {rel:d,draft:true};
+    if(sd>0&&f.every(function(x,k){return Math.abs(x-pe*d[k]/sd)<1e-9;}))return {rel:d,draft:true};
+  }
+  delete CDRAFT[cname+"|"+e];
+  return {rel:enteros100(f),draft:false};
+}
+function pesoTxt(pe){var v=Math.round(pe*1000)/10;return v;}
+/* ¿pesos enteros que suman 100 y filas con enteros que suman 100? */
+function curvaNormal(cur){
+  var es=Object.keys(cur),pes=es.map(function(e){return sumaA(cur[e]);}),tot=sumaA(pes);
+  if(Math.abs(tot-1)>1e-6)return false;
+  return es.every(function(e,i){
+    var pe=pes[i];if(pe<=0)return true;
+    if(Math.abs(pe*100-Math.round(pe*100))>1e-6)return false;
+    return cur[e].every(function(x){var r=x/pe*100;return Math.abs(r-Math.round(r))<1e-6;});
+  });
+}
+/* pesos a enteros que suman 100 y cada fila a enteros que suman 100 (conserva la forma) */
+function normalizarCurva(cur){
+  var es=Object.keys(cur),pes=enteros100(es.map(function(e){return sumaA(cur[e]);}));
+  es.forEach(function(e,i){var r=enteros100(cur[e]);cur[e]=cur[e].map(function(_,k){return pes[i]*r[k]/10000;});});
 }
 function tabCurvas(){
   var C=S.datos.curvas,names=Object.keys(C);
   if(!C[PCUR])PCUR=names[0];
   var cur=C[PCUR],esps=R.especialidades,n=E.largoCurva(C,PCUR),tot=0,col=[];
   for(var k=0;k<n;k++)col.push(0);
-  esps.forEach(function(e){(cur[e]||[]).forEach(function(f,k){col[k]+=f;tot+=f;});});
-  var mx=Math.max.apply(null,col.concat([1e-9])),usos=usaCurva(PCUR);
-  var ok=Math.abs(tot-1)<=0.005;
+  esps.forEach(function(e){(cur[e]||[]).forEach(function(f,k){if(k<n){col[k]+=f;tot+=f;}});});
+  var mx=Math.max.apply(null,col.concat([1e-9])),usos=usaCurva(PCUR),ok=Math.abs(tot-1)<=0.0005,norm=curvaNormal(cur);
   var html='<div class="row-actions" style="align-items:center;margin-top:0"><label for="pcurSel" style="font-size:12px;color:var(--ink-soft)">Curva</label>'
     +'<select id="pcurSel" style="border:1px solid var(--rule);border-radius:6px;padding:5px 8px;background:var(--chip)">'+names.map(function(c){return '<option'+(c===PCUR?" selected":"")+'>'+esc(c)+'</option>';}).join("")+'</select>'
-    +'<span class="fl">'+n+' meses</span><span class="fl '+(ok?"ok":"crit")+'" title="Suma de todos los factores">total '+NF0.format(pct(tot))+' %</span>'
+    +'<span class="fl">'+n+' meses</span><span class="fl '+(ok?"ok":"crit")+'" title="Suma de los pesos de las especialidades">pesos '+NFX.format(pesoTxt(tot))+' %</span>'
     +'<span class="psub">'+(usos.length?'Usada por '+usos.length+' proyecto(s): '+usos.slice(0,4).map(function(p){return esc(p.proyecto);}).join(", ")+(usos.length>4?"…":""):"Ningún proyecto la usa")+'</span></div>'
-    +(function(){var z=esps.filter(function(e){return !(cur[e]||[]).some(function(f){return f>0;});});
-      return z.length?'<div class="holg" style="margin-top:8px">'+z.map(esc).join(", ")+': 0 % en esta curva, así que no recibe demanda de los proyectos que la usan. Para asignarle una porción, cargá sus porcentajes por mes y bajá los de las demás especialidades (o usá «Normalizar a 100 %»).</div>':'';})()
-    +'<div class="psub" style="margin:8px 0">Porcentaje entero de las HH del componente que cae en cada mes y especialidad. El total debería dar 100 %; si no, la demanda se infla o se achica en la misma proporción.</div>'
-    +'<div class="tablewrap"><table class="pk cm"><thead><tr><th>Especialidad</th>';
+    +'<div class="psub" style="margin:8px 0"><b>Peso</b>: porción de las HH del componente que corresponde a cada especialidad (la suma de los pesos debería dar 100 %). '
+    +'<b>Meses</b>: cómo se reparte en el tiempo el trabajo de esa especialidad; cada fila suma 100 %. Mientras una fila no sume 100 %, se aplica en proporción.</div>'
+    +'<div class="tablewrap"><table class="pk cm"><thead><tr><th>Especialidad</th><th title="% del total del componente">Peso</th>';
   for(k=0;k<n;k++)html+='<th>M'+(k+1)+'</th>';
-  html+='<th>Total</th></tr></thead><tbody>';
+  html+='<th title="Suma de la fila">Fila</th></tr></thead><tbody>';
   esps.forEach(function(e){
-    var f=cur[e]||[],se=0;
-    html+='<tr><td>'+esc(e)+'</td>';
-    for(var k=0;k<n;k++){var v=f[k]||0;se+=v;html+='<td>'+numIn('data-cf="'+esc(e)+'|'+k+'" aria-label="'+esc(e)+' mes '+(k+1)+' (%)" step="1"',Math.round(v*100))+'</td>';}
-    html+='<td class="calc">'+NF0.format(pct(se))+' %</td></tr>';
+    var f=filaCurva(cur,e,n),pe=sumaA(f),rf=relFila(PCUR,cur,e,n),sr=sumaA(rf.rel),mal=rf.draft&&sr!==100;
+    html+='<tr><td>'+esc(e)+'</td><td>'+numIn('data-cpeso="'+esc(e)+'" aria-label="Peso de '+esc(e)+' (%)" step="1" style="font-weight:700;border-color:var(--ink-soft)"',pesoTxt(pe))+'</td>';
+    for(var k=0;k<n;k++)html+='<td>'+numIn('data-cr="'+esc(e)+'|'+k+'" aria-label="'+esc(e)+' mes '+(k+1)+' (% de la especialidad)" step="1"',rf.rel[k])+'</td>';
+    html+='<td class="calc"'+(mal?' style="color:var(--crit-ink)" title="La fila no suma 100 %: se aplica en proporción"':'')+'>'+(pe>0||rf.draft?sr+' %':'—')+'</td></tr>';
   });
-  html+='</tbody><tfoot><tr><td>Total mes</td>';
-  col.forEach(function(v){html+='<td><div class="mb" title="'+NF0.format(pct(v))+' %"><i style="height:'+(v/mx*100)+'%"></i></div>'+NF0.format(pct(v))+'</td>';});
-  html+='<td>'+NF0.format(pct(tot))+' %</td></tr></tfoot></table></div>'
+  html+='</tbody><tfoot><tr><td>Total mes</td><td style="color:'+(ok?'inherit':'var(--crit-ink)')+'">'+NFX.format(pesoTxt(tot))+' %</td>';
+  col.forEach(function(v){html+='<td><div class="mb" title="'+NFX.format(Math.round(v*1000)/10)+' % del componente"><i style="height:'+(v/mx*100)+'%"></i></div>'+NF0.format(pct(v))+'</td>';});
+  html+='<td></td></tr></tfoot></table></div>'
+    +(function(){var z=esps.filter(function(e){return !(sumaA(filaCurva(cur,e,n))>0);});
+      return z.length?'<div class="hint">'+z.map(esc).join(", ")+': peso 0 %, no recibe demanda de los proyectos que usan esta curva. Para asignarle una porción, cargá su peso y su reparto en el tiempo.</div>':'';})()
+    +'<div class="hint">«Total mes» es el % de todo el componente que cae en cada mes (suma de las especialidades).</div>'
     +'<div class="row-actions"><button class="btn sm" data-cact="add">+ mes al final</button><button class="btn sm" data-cact="del"'+(n<2?" disabled":"")+'>Quitar último mes</button>'
-    +'<button class="btn sm" data-cact="todas"'+(Object.keys(C).some(function(c){return conDecimales(C[c]);})?"":" disabled")+' title="Aplica el ajuste a 100 % en enteros a todas las curvas">Ajustar todas las curvas</button>'
-    +'<button class="btn sm primary" data-cact="norm"'+((ok&&!conDecimales(cur))||tot<=0?" disabled":"")+' title="Escala la curva para que sume 100 % y redondea cada celda a un porcentaje entero">Ajustar a 100 % en enteros</button></div>'
-    +(conDecimales(cur)?'<div class="hint">Esta curva tiene valores con decimales (se muestran redondeados). «Ajustar a 100 % en enteros» los convierte manteniendo la suma en 100 %.</div>':'');
+    +'<button class="btn sm" data-cact="todas"'+(Object.keys(C).some(function(c){return !curvaNormal(C[c]);})?"":" disabled")+' title="Aplica el ajuste a todas las curvas">Ajustar todas las curvas</button>'
+    +'<button class="btn sm primary" data-cact="norm"'+(norm||tot<=0?" disabled":"")+' title="Pesos en enteros que suman 100 % y cada fila en enteros que suman 100 %">Ajustar a 100 %</button></div>';
   return html;
 }
 function keyOf(el){
   if(!el||!el.attributes)return null;
-  for(var i=0;i<el.attributes.length;i++){var a=el.attributes[i];if(/^data-(pp|et|ln|fx|fdnn|cf|pdel|padd|cact|ptab|ptec|preset)$/.test(a.name))return '['+a.name+'="'+a.value.replace(/"/g,'\\"')+'"]';}
+  for(var i=0;i<el.attributes.length;i++){var a=el.attributes[i];if(/^data-(pp|et|ln|fx|fdnn|cf|cr|cpeso|pdel|padd|cact|ptab|ptec|preset)$/.test(a.name))return '['+a.name+'="'+a.value.replace(/"/g,'\\"')+'"]';}
   return el.id==="pcurSel"?"#pcurSel":null;
 }
 function wireParam(){
@@ -3698,10 +3728,12 @@ function wireParam(){
       push();
       R.especialidades.forEach(function(e){var f=cur[e]=cur[e]||[];while(f.length<n)f.push(0);});
       if(d.cact==="add")Object.keys(cur).forEach(function(e){cur[e].push(0);});
-      if(d.cact==="del")Object.keys(cur).forEach(function(e){cur[e].pop();});
-      if(d.cact==="norm")enterosA100(cur);
-      if(d.cact==="todas")Object.keys(C).forEach(function(c){if(conDecimales(C[c]))enterosA100(C[c]);});
-      aplicarParam();toast(d.cact==="norm"?"Curva ajustada a 100 % en enteros":d.cact==="todas"?"Todas las curvas ajustadas a 100 % en enteros":"Curva "+PCUR+": "+E.largoCurva(C,PCUR)+" meses");return;
+      if(d.cact==="del")Object.keys(cur).forEach(function(e){ /* quita el mes y conserva el peso de la especialidad */
+        var pe=sumaA(cur[e]);cur[e].pop();var s2=sumaA(cur[e]);if(s2>0)cur[e]=cur[e].map(function(x){return x*pe/s2;});});
+      if(d.cact==="add"||d.cact==="del")Object.keys(CDRAFT).forEach(function(k){if(k.indexOf(PCUR+"|")===0)delete CDRAFT[k];});
+      if(d.cact==="norm"){normalizarCurva(cur);Object.keys(CDRAFT).forEach(function(k){if(k.indexOf(PCUR+"|")===0)delete CDRAFT[k];});}
+      if(d.cact==="todas"){Object.keys(C).forEach(function(c){if(!curvaNormal(C[c]))normalizarCurva(C[c]);});CDRAFT={};}
+      aplicarParam();toast(d.cact==="norm"?"Curva ajustada a 100 %":d.cact==="todas"?"Todas las curvas ajustadas a 100 %":"Curva "+PCUR+": "+E.largoCurva(C,PCUR)+" meses");return;
     }
     if(d.preset){
       var M=window.SAMPLE_DATA.parametros;push();
@@ -3715,7 +3747,7 @@ function wireParam(){
   box.onchange=function(e){
     var t=e.target;
     if(t.id==="pcurSel"){PCUR=t.value;renderParam();return;}
-    var d0=t.dataset;if(!(d0.pp||d0.et||d0.ln||d0.fx||d0.fdnn||d0.cf))return;
+    var d0=t.dataset;if(!(d0.pp||d0.et||d0.ln||d0.fx||d0.fdnn||d0.cf||d0.cr||d0.cpeso))return;
     var v=parseFloat(String(t.value).replace(",","."));
     if(isNaN(v)||v<0){toast("Ingresá un número mayor o igual a cero");renderParam();return;}
     var P=S.datos.parametros,C=S.datos.curvas,d=t.dataset;
@@ -3726,6 +3758,22 @@ function wireParam(){
     else if(d.fx)P[d.fx]=v/100;
     else if(d.fdnn)P.factorDNN[d.fdnn]=v/100;
     else if(d.cf){var b=d.cf.split("|"),f=C[PCUR][b[0]]=C[PCUR][b[0]]||[];while(f.length<=+b[1])f.push(0);f[+b[1]]=Math.round(v)/100;}
+    else if(d.cr||d.cpeso){
+      var cur=C[PCUR],nn=E.largoCurva(C,PCUR),e=d.cr?d.cr.slice(0,d.cr.lastIndexOf("|")):d.cpeso,fr=filaCurva(cur,e,nn),pe=sumaA(fr);
+      var rel=relFila(PCUR,cur,e,nn).rel.slice();
+      if(d.cr){rel[+d.cr.slice(d.cr.lastIndexOf("|")+1)]=Math.round(v);}
+      else{
+        pe=v/100;
+        if(!(sumaA(rel)>0)){ /* sin reparto propio: toma la forma de todo el componente */
+          var cc=[];for(var q=0;q<nn;q++){cc.push(0);Object.keys(cur).forEach(function(x){cc[q]+=(cur[x][q]||0);});}
+          rel=sumaA(cc)>0?enteros100(cc):cc.map(function(){return Math.round(100/nn);});
+        }
+      }
+      var sr=sumaA(rel);
+      if(sr>0)cur[e]=rel.map(function(r){return pe*r/sr;});
+      if(sr===0||(sr===100&&pe>0))delete CDRAFT[PCUR+"|"+e];else CDRAFT[PCUR+"|"+e]=rel;
+      if(d.cr&&!(pe>0))toast("Cargá también el peso de "+e+": con peso 0 % no recibe HH");
+    }
     aplicarParam();
   };
 }
