@@ -3536,14 +3536,37 @@ function openRecursos(){
       +'<td class="x"><button data-stdel="'+esc(x.id)+'" title="Quitar a '+esc(x.nombre||"")+'">✕</button></td></tr>';
   });
   html+='</tbody></table></div>';
-  html+='<h4>Resumen por especialidad · '+mlabel(R.kpiDesde)+'</h4><div class="tablewrap"><table class="pk"><tr><th>Especialidad</th><th class="r">'+(nom?'Personas (nómina)':'Personas')+'</th><th class="r">Subcontrato HH/mes</th><th class="r">Capacidad HH/mes</th></tr>';
+  /* altas y bajas programadas (≙ eventos de capacidad): las mismas que se ven en el panel de cada especialidad */
+  cap.eventos=cap.eventos||[];
+  var evs=cap.eventos.map(function(ev,i){return {ev:ev,i:i};}).filter(function(x){return !fil||x.ev.especialidad===fil;});
+  html+='<h4>Altas y bajas programadas'+(cap.eventos.length?' · '+cap.eventos.length:'')+'</h4>'
+    +'<div class="psub">Refuerzos o bajas que cambian la cantidad de personas de una especialidad entre dos meses (Δ positivo = alta, negativo = baja; hasta vacío = sin fin). Se suman a '+(nom?'la nómina':'la dotación')+'. '+(nom?'Para personas reales conviene usar la nómina con su ingreso o egreso; acá van los casos hipotéticos o sin nombre.':'')+'</div>'
+    +'<div class="row-actions" style="margin:6px 0"><button class="btn sm primary" id="evAdd" title="Agrega una alta o baja'+(fil?' en '+esc(fil):'')+' desde el mes de los indicadores">+ Alta / baja</button></div>'
+    +'<div class="tablewrap" style="max-height:30vh;overflow:auto"><table class="pk lp"><thead><tr><th>Especialidad</th><th>Desde</th><th>Hasta</th><th class="r" title="Personas que se suman (+) o restan (−)">Δ personas</th><th>Nota</th><th>Hoy</th><th></th></tr></thead><tbody>';
+  if(!evs.length)html+='<tr><td colspan="7" style="color:var(--ink-soft);padding:10px 4px">'+(fil?'No hay altas ni bajas en '+esc(fil)+'.':'No hay altas ni bajas programadas.')+'</td></tr>';
+  evs.forEach(function(x){
+    var ev=x.ev,a=function(k){return 'data-ev="'+x.i+'|'+k+'" aria-label="'+k+' de la alta o baja '+(x.i+1)+'"';};
+    var act=mr>=E.mesIdx(ev.desde)&&(!ev.hasta||mr<=E.mesIdx(ev.hasta)),fut=mr<E.mesIdx(ev.desde);
+    var mal=ev.hasta&&ev.hasta<ev.desde;
+    html+='<tr'+(mal?' class="mal"':'')+'><td><select '+a("especialidad")+' style="width:130px">'+esps.map(function(e){return '<option'+(e===ev.especialidad?" selected":"")+'>'+esc(e)+'</option>';}).join("")+'</select></td>'
+      +'<td><input type="month" '+a("desde")+' value="'+esc(ev.desde||"")+'"></td>'
+      +'<td><input type="month" '+a("hasta")+' value="'+esc(ev.hasta||"")+'" title="Vacío = sin fin"></td>'
+      +'<td><input type="number" step="0.5" '+a("delta")+' value="'+esc(ev.delta)+'" style="width:72px;font-weight:600;color:'+(ev.delta<0?'var(--crit-ink)':'var(--ok-ink)')+'"></td>'
+      +'<td><input type="text" '+a("nota")+' value="'+esc(ev.nota||"")+'" style="width:200px" placeholder="jubilación, refuerzo, licencia…"></td>'
+      +'<td class="c">'+(mal?'<span class="fl crit" title="El mes hasta es anterior al desde">revisar</span>':act?'<span class="fl ok">vigente</span>':fut?'<span class="fl">desde '+mlabel(ev.desde)+'</span>':'<span class="fl">terminó</span>')+'</td>'
+      +'<td class="x"><button data-evdel="'+x.i+'" title="Quitar esta alta o baja">✕</button></td></tr>';
+  });
+  html+='</tbody></table></div>';
+  html+='<h4>Resumen por especialidad · '+mlabel(R.kpiDesde)+'</h4><div class="tablewrap"><table class="pk"><tr><th>Especialidad</th><th class="r">'+(nom?'Personas (nómina)':'Personas')+'</th><th class="r" title="Altas y bajas programadas vigentes ese mes">Altas/bajas</th><th class="r">Subcontrato HH/mes</th><th class="r">Capacidad HH/mes</th></tr>';
   var tp=0,tc=0;
   esps.forEach(function(e){
-    var pe=nom?personasHoy(e):(cap.dotacion[e]||0),sub=(cap.subcontratoHH||{})[e]||0,c=pe*cap.hhMesPersona*cap.eficiencia+sub;tp+=pe;tc+=c;
+    var pe=nom?personasHoy(e):(cap.dotacion[e]||0),sub=(cap.subcontratoHH||{})[e]||0,c=E.capacidadMes(cap,mr,e),dv=0;tc+=c;
+    (cap.eventos||[]).forEach(function(ev){if(ev.especialidad===e&&mr>=E.mesIdx(ev.desde)&&(!ev.hasta||mr<=E.mesIdx(ev.hasta)))dv+=+ev.delta||0;});tp+=Math.max(0,pe+dv);
     html+='<tr><td>'+esc(e)+'</td><td class="calc">'+(nom?fmtPers(pe):'<input type="number" min="0" step="1" data-rd="'+esc(e)+'" value="'+pe+'" aria-label="Personas '+esc(e)+'" style="width:80px">')+'</td>'
+      +'<td class="calc"'+(dv?' style="color:'+(dv<0?'var(--crit-ink)':'var(--ok-ink)')+';font-weight:600"':'')+'>'+(dv?(dv>0?"+":"−")+fmtPers(Math.abs(dv)):'·')+'</td>'
       +'<td class="calc"><input type="number" min="0" step="20" data-rs="'+esc(e)+'" value="'+sub+'" aria-label="Subcontrato '+esc(e)+'" style="width:90px"></td><td class="calc">'+hh(c)+'</td></tr>';
   });
-  html+='<tr><td><b>Total</b></td><td class="calc">'+fmtPers(tp)+'</td><td></td><td class="calc">'+hh(tc)+'</td></tr></table></div>'
+  html+='<tr><td><b>Total</b></td><td class="calc" title="Personas efectivas, con las altas y bajas vigentes">'+fmtPers(tp)+'</td><td></td><td></td><td class="calc">'+hh(tc)+'</td></tr></table></div>'
     +(nom?'<div class="hint">Con nómina cargada, la dotación numérica no se usa. Para volver a ella, vaciá la lista.</div>':'')+'</div>';
   document.getElementById("dlgBody").innerHTML=html;
   if(!dlg.open)openDlg(true);
@@ -3555,7 +3578,7 @@ function wireRecursos(){
   var refrescar=function(){
     recalc();render();save();
     setTimeout(function(){
-      var a=document.activeElement,k=a&&a.dataset?(a.dataset.st?'[data-st="'+a.dataset.st+'"]':a.dataset.rd?'[data-rd="'+a.dataset.rd+'"]':a.dataset.rs?'[data-rs="'+a.dataset.rs+'"]':a.id?"#"+a.id:null):null;
+      var a=document.activeElement,k=a&&a.dataset?(a.dataset.ev?'[data-ev="'+a.dataset.ev+'"]':a.dataset.st?'[data-st="'+a.dataset.st+'"]':a.dataset.rd?'[data-rd="'+a.dataset.rd+'"]':a.dataset.rs?'[data-rs="'+a.dataset.rs+'"]':a.id?"#"+a.id:null):null;
       openRecursos();
       if(k){var el=document.querySelector("#rsBox "+k);if(el){el.focus();if(el.select)el.select();}}
     },0);
@@ -3567,6 +3590,8 @@ function wireRecursos(){
       push();vis.forEach(function(y){y.simulado=on;});refrescar();
       toast((on?"Tildadas":"Destildadas")+" "+vis.length+" persona(s)"+(S.rsEsp?" de "+S.rsEsp:"")+" · Ctrl+Z para deshacer");return;
     }
+    var de=e.target.closest("[data-evdel]");
+    if(de){var ev=cap.eventos[+de.dataset.evdel];push();cap.eventos.splice(+de.dataset.evdel,1);refrescar();toast("Quitada: "+ev.especialidad+" "+(ev.delta>0?"+":"")+ev.delta+" desde "+mlabel(ev.desde)+" · Ctrl+Z para deshacer");return;}
     var d=e.target.closest("[data-stdel]");
     if(d){var x=cap.staff.filter(function(y){return y.id===d.dataset.stdel;})[0];push();cap.staff=cap.staff.filter(function(y){return y!==x;});refrescar();toast((x.nombre||"Persona")+" quitada de la nómina · Ctrl+Z para deshacer");}
   };
@@ -3579,6 +3604,16 @@ function wireRecursos(){
       else if(k==="desde"){if(/^\d{4}-\d{2}$/.test(v))h.desde=v;}
       else if(k==="meses")h.meses=Math.max(6,Math.min(120,Math.round(+v||h.meses)));
       else if(k==="kpiDesde")h.kpiDesde=/^\d{4}-\d{2}$/.test(v)?v:null;
+      refrescar();return;
+    }
+    if(t.dataset.ev){
+      var q=t.dataset.ev.split("|"),ev=cap.eventos[+q[0]],c=q[1];if(!ev)return;
+      if((c==="desde")&&!/^\d{4}-\d{2}$/.test(v)){toast("Fecha inválida");openRecursos();return;}
+      push();
+      if(c==="delta"){var n=parseFloat(String(v).replace(",","."));ev.delta=isNaN(n)?ev.delta:n;}
+      else if(c==="hasta")ev.hasta=/^\d{4}-\d{2}$/.test(v)?v:null;
+      else if(c==="nota")ev.nota=String(v).trim()||null;
+      else ev[c]=v;
       refrescar();return;
     }
     if(t.dataset.rd){push();cap.dotacion[t.dataset.rd]=Math.max(0,Math.round(+v||0));refrescar();return;}
@@ -3598,6 +3633,12 @@ function wireRecursos(){
     push();var x={id:idStaff(),nombre:"",especialidad:S.rsEsp||R.especialidades[0],dedicacion:1,desde:null,hasta:null,nota:null};
     cap.staff.push(x);recalc();render();save();openRecursos();
     var el=document.querySelector('#rsBox [data-st="'+x.id+'|nombre"]');if(el){el.focus();el.scrollIntoView({block:"nearest"});}
+  };
+  document.getElementById("evAdd").onclick=function(){
+    push();cap.eventos=cap.eventos||[];
+    cap.eventos.push({especialidad:S.rsEsp||R.especialidades[0],desde:R.kpiDesde,hasta:null,delta:1,nota:null});
+    recalc();render();save();openRecursos();
+    var el=document.querySelector('#rsBox [data-ev="'+(cap.eventos.length-1)+'|delta"]');if(el){el.focus();el.select();el.scrollIntoView({block:"nearest"});}
   };
   document.getElementById("stPaste").onclick=function(){var b=document.getElementById("stPasteBox");b.hidden=!b.hidden;if(!b.hidden)document.getElementById("stPasteTxt").focus();};
   document.getElementById("stPasteOk").onclick=function(){
@@ -3670,7 +3711,7 @@ var NFX=new Intl.NumberFormat("es-AR",{maximumFractionDigits:2});
 function pct(v){return Math.round(v*10000)/100;}
 function numIn(attr,val,extra){return '<input type="number" '+attr+' value="'+val+'" min="0" step="any"'+(extra||"")+'>';}
 function openParametros(){renderParam();openDlg(true);if(PTAB==="curvas")dlg.className="xwide";}
-function refreshParam(){if(document.getElementById("parBox"))renderParam();}
+function refreshParam(){if(document.getElementById("parBox"))renderParam();if(document.getElementById("rsBox"))openRecursos();if(document.getElementById("lpBox"))openProyectos();}
 function usaCurva(nombre){
   var P=S.datos.parametros;
   return S.datos.proyectos.filter(function(p){return !esOtro(p)&&E.componentes(p,P).some(function(c){return c.curva===nombre;});});

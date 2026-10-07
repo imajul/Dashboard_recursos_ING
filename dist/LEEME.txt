@@ -143,6 +143,14 @@ AYUDAS EN PANTALLA
   Pasando el mouse sobre cualquier indicador, boton, encabezado o leyenda
   aparece una descripcion de lo que significa.
 
+ALTAS Y BAJAS PROGRAMADAS
+  En Recursos (y en el panel de cada especialidad) se cargan refuerzos o bajas
+  de personas entre dos meses: especialidad, desde, hasta (vacio = sin fin),
+  Delta personas (+ alta, - baja) y nota. Se suman a la nomina o a la
+  dotacion. El resumen por especialidad muestra las vigentes en el mes de los
+  indicadores. Los datos de ejemplo traen una baja de Electricos desde mar-27
+  ("Jubilacion prevista"): borrala si no corresponde.
+
 SATURACION POR ESPECIALIDAD
   Debajo de la matriz de ocupacion hay un panel por especialidad: barras con
   la demanda de HH de esa especialidad (por tipo de cliente), linea con su
