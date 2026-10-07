@@ -2772,30 +2772,39 @@ function edProyecto(p){
     +'<label class="chk"><input type="checkbox" id="edInc"'+(p.incluir===false?"":" checked")+'> Incluir en el cálculo</label></div>';
   if(otro)html+=resumenPlan(p);
   else{
-  var mod=hhModelo(p),totMod=0,man=hhManual(p);
-  html+='<h4>HH del proyecto · por componente</h4><table class="pk"><tr><th>Componente</th><th class="r">Modelo</th><th class="r">HH asignadas</th><th class="r">Meses</th><th></th></tr>';
+  /* Un solo bloque: total del proyecto (editable) + reparto por especialidad + componentes.
+     Las HH por componente forman la base; las cargadas por especialidad pisan esa especialidad.
+     El total siempre es la suma por especialidad, así que todo queda sincronizado. */
+  var mod=hhModelo(p),man=hhManual(p),totMod=0;
+  mod.forEach(function(c){totMod+=c.hh;});
+  var eeM=E.hhEspecialidades(Object.assign({},p,{hhParque:null,hhEt:null,hhLinea:null,hhProy:null,hhEsp:null}),S.datos.curvas,PV()).modelo; /* modelo puro */
+  var ee=E.hhEspecialidades(p,S.datos.curvas,PV()),hhE=p.hhEsp||{},conE=E.conEsp(p),totB=0,totA=E.hhBruto(p,S.datos.curvas,PV());
+  Object.keys(ee.modelo).forEach(function(e){totB+=ee.modelo[e];});
+  var kComp=conE&&totB>0?totA/totB:1; /* componentes efectivos: escalados por los ajustes de especialidad */
+  var sub=function(t){return '<tr><td colspan="5" style="padding-top:10px;font:600 10.5px/1 var(--f-num);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)">'+t+'</td></tr>';};
+  html+='<h4>HH del proyecto</h4><table class="pk"><tr><th></th><th class="r">Modelo</th><th class="r">HH asignadas</th><th class="r">Meses</th><th></th></tr>'
+    +'<tr style="background:var(--band-3)"><td><b>Total</b></td><td class="calc">'+hh(totMod)+'</td>'
+    +'<td><input type="number" min="0" step="100" data-hhtot="1" placeholder="'+Math.round(totMod)+'" value="'+(man?Math.round(totA):"")+'" aria-label="HH totales del proyecto" title="Otro total reparte la diferencia en la misma proporción'+(conE?' entre las especialidades':' entre los componentes')+'" style="width:96px;font-weight:700'+(man?';border-color:var(--warn-ink)':'')+'">'
+    +(solap<1?'<br><small style="color:var(--ink-soft)">× '+pctEnt(solap)+' = '+hh(totA*solap)+' netas</small>':'')+'</td><td class="calc">'+sp.dur+'</td>'
+    +'<td class="x">'+(man?'<button id="edHHReset2" title="Volver todo al modelo">↺</button>':'')+'</td></tr>';
+  html+=sub('Por especialidad');
+  S.datos.especialidades.forEach(function(e){
+    var m=ee.modelo[e]||0,esM=!vacioV(hhE[e]),m0=eeM[e]||0;
+    html+='<tr><td>'+esc(e)+'</td><td class="calc">'+(m0?hh(m0):'·')+'</td>'
+      +'<td><input type="number" min="0" step="100" data-hhe="'+esc(e)+'" placeholder="'+Math.round(m)+'" value="'+(esM?esc(hhE[e]):"")+'" aria-label="HH asignadas a '+esc(e)+'" style="width:96px'+(esM?';border-color:var(--warn-ink);font-weight:600':'')+'"></td><td></td>'
+      +'<td class="x">'+(esM?'<button data-hher="'+esc(e)+'" title="Volver al valor del modelo">↺</button>':'')+'</td></tr>';
+  });
+  html+=sub('Por componente');
   sp.parts.forEach(function(pt,i){
-    var k=CAMPO_HH[pt.c.componente],m=mod[i]?mod[i].hh:0,esMan=!vacioV(p[k]);totMod+=m;
+    var k=CAMPO_HH[pt.c.componente],m=mod[i]?mod[i].hh:0,esMan=!vacioV(p[k]);
     html+='<tr><td>'+esc(pt.c.componente)+'<br><small style="color:var(--ink-soft)">curva '+esc(pt.c.curva)+'</small></td>'
       +'<td class="calc">'+hh(m)+'</td>'
-      +'<td><input type="number" min="0" step="100" data-hhm="'+k+'" placeholder="'+Math.round(m)+'" value="'+(esMan?esc(p[k]):"")+'" aria-label="HH asignadas a '+esc(pt.c.componente)+'" style="width:96px'+(esMan?';border-color:var(--warn-ink);font-weight:600':'')+'"></td>'
+      +'<td><input type="number" min="0" step="100" data-hhm="'+k+'" placeholder="'+Math.round(m)+'" value="'+(esMan?esc(p[k]):"")+'" aria-label="HH asignadas a '+esc(pt.c.componente)+'" style="width:96px'+(esMan?';border-color:var(--warn-ink);font-weight:600':'')+'">'
+      +(conE?'<br><small style="color:var(--ink-soft)" title="Con los ajustes por especialidad">→ '+hh(pt.c.hh*kComp)+' efectivas</small>':'')+'</td>'
       +'<td class="calc">'+(pt.n!==pt.n0?'<span title="Curva original: '+pt.n0+' meses">'+pt.n0+' → '+pt.n+'</span>':pt.n)+'</td>'
       +'<td class="x">'+(esMan?'<button data-hhr="'+k+'" title="Volver al valor del modelo">↺</button>':'')+'</td></tr>';
   });
-  html+='<tr><td><b>Total</b></td><td class="calc">'+hh(totMod)+'</td><td class="calc">'+hh(tot)+(solap<1?'<br><small style="color:var(--ink-soft)">× '+pctEnt(solap)+' = '+hh(tot*solap)+'</small>':'')+'</td><td></td><td></td></tr></table>';
-  html+='<div class="hint">Dejá vacío para usar la base de datos de HH (Parámetros). Un valor cargado pisa el modelo solo para este proyecto'+(solap<1?'; el factor de solapamiento se aplica igual sobre ese valor':'')+'.</div>';
-  /* HH por especialidad: pisan el total de la especialidad elegida (antes del solapamiento) */
-  var ee=E.hhEspecialidades(p,S.datos.curvas,PV()),hhE=p.hhEsp||{},conE=E.conEsp(p),totM=0,totA=0;
-  html+='<h4>HH por especialidad</h4><table class="pk"><tr><th>Especialidad</th><th class="r">Modelo</th><th class="r">HH asignadas</th><th></th></tr>';
-  S.datos.especialidades.forEach(function(e){
-    var m=ee.modelo[e]||0,a=ee.asignadas[e]||0,esM=!vacioV(hhE[e]);totM+=m;totA+=a;
-    html+='<tr><td>'+esc(e)+'</td><td class="calc">'+(m?hh(m):'·')+'</td>'
-      +'<td><input type="number" min="0" step="100" data-hhe="'+esc(e)+'" placeholder="'+Math.round(m)+'" value="'+(esM?esc(hhE[e]):"")+'" aria-label="HH asignadas a '+esc(e)+'" style="width:96px'+(esM?';border-color:var(--warn-ink);font-weight:600':'')+'"></td>'
-      +'<td class="x">'+(esM?'<button data-hher="'+esc(e)+'" title="Volver al valor del modelo">↺</button>':'')+'</td></tr>';
-  });
-  html+='<tr><td><b>Total</b></td><td class="calc">'+hh(totM)+'</td><td class="calc">'+hh(totA)+(solap<1?'<br><small style="color:var(--ink-soft)">× '+pctEnt(solap)+' = '+hh(totA*solap)+'</small>':'')+'</td><td></td></tr></table>';
-  html+='<div class="hint">Escribí las HH de la especialidad que se aparta de la curva estándar; las vacías siguen con el modelo. Cada especialidad mantiene la forma de su curva en el tiempo; si el modelo no le asigna horas, toma la forma del proyecto completo. Valores antes del factor de solapamiento.</div>';
-  if(conE)html+='<div class="holg">Con HH por especialidad cargadas, el total del proyecto (<b>'+hh(totA)+' HH</b>) sale de esta tabla; las HH por componente quedan como referencia.</div>';
+  html+='</table><div class="hint">Vacío = base de datos de HH (Parámetros). Podés cargar el total, las HH de una especialidad o las de un componente: el total del proyecto es siempre la suma por especialidad. Una especialidad cargada pisa su valor y conserva la forma de su curva (sin horas en el modelo, toma la forma del proyecto). Valores antes del factor de solapamiento.</div>';
   if(man)html+='<div class="f" style="margin-top:8px"><label for="edNotaHH">Motivo del ajuste de HH</label><input type="text" id="edNotaHH" value="'+esc(p.notaHH||"")+'" placeholder="Ej.: alcance reducido, ingeniería del cliente"></div>'
     +'<div class="row-actions"><button class="btn sm" id="edHHReset">Volver todo al modelo</button></div>';
   }
@@ -2861,7 +2870,16 @@ function edProyecto(p){
     if(v!=null){var n=document.getElementById("edNotaHH");if(n&&!n.value)n.focus();}
   };});
   ed.querySelectorAll("[data-hher]").forEach(function(b){b.onclick=function(){var e=b.dataset.hher;set(function(){setHHEsp(p,e,null);if(!hhManual(p))p.notaHH=null;});};});
-  if(ge("edHHReset"))ge("edHHReset").onclick=function(){set(function(){p.hhParque=p.hhEt=p.hhLinea=p.hhProy=null;p.hhEsp=null;p.notaHH=null;});toast("HH de "+p.proyecto+" vuelven al modelo");};
+  var resetHH=function(){set(function(){p.hhParque=p.hhEt=p.hhLinea=p.hhProy=null;p.hhEsp=null;p.notaHH=null;});toast("HH de "+p.proyecto+" vuelven al modelo");};
+  if(ge("edHHReset"))ge("edHHReset").onclick=resetHH;
+  if(ge("edHHReset2"))ge("edHHReset2").onclick=resetHH;
+  ed.querySelectorAll("[data-hhtot]").forEach(function(inp){inp.onchange=function(){
+    var v=inp.value===""?null:parseFloat(String(inp.value).replace(",","."));
+    if(v!=null&&(isNaN(v)||v<0)){toast("Ingresá un número de HH mayor o igual a cero");renderEditor();return;}
+    if(v==null){resetHH();return;}
+    set(function(){asignarHHTotal(p,v);});
+    var n=document.getElementById("edNotaHH");if(n&&!n.value)n.focus();
+  };});
   ge("edSim").onchange=function(){var v=this.checked;set(function(){p.simulable=v;});};
   ge("edInc").onchange=function(){var v=this.checked;set(function(){p.incluir=v;});};
   ed.querySelectorAll("[data-mv]").forEach(function(b){b.onclick=function(){moverP(p,+b.dataset.mv);};});
