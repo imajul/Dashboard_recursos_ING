@@ -435,7 +435,7 @@ sequenceDiagram
 | Factor de solapamiento | Editor lateral | Multiplica HH Forecast |
 | HH manual | Editor lateral | Pisa el modelo |
 | Dotación por especialidad | Stepper − / + en la matriz · editor · diálogo Recursos | `dotacion` |
-| Altas y bajas con fecha | Editor de especialidad | `eventos` (desde, hasta, ±personas) |
+| Altas y bajas con fecha | Nómina (Recursos): ingreso y egreso de cada persona; vacantes para altas sin nombre | `capacidad.staff` (`eventos` queda solo por compatibilidad) |
 | Subcontrato | Editor de especialidad · Recursos | HH/mes extra |
 | HH por persona y eficiencia | Diálogo Recursos | Capacidad global |
 | Horizonte | Diálogo Recursos | Meses evaluados |

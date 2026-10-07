@@ -67,7 +67,8 @@ class ReglasDeNegocio(unittest.TestCase):
         self.assertAlmostEqual(total, 11800 * 0.6, delta=11800 * 0.6 * 0.005)
 
     def test_capacidad_con_eventos(self):
-        cap = self.d["capacidad"]
+        # eventos: compatibilidad con planes viejos y la API (la UI usa la nómina)
+        cap = dict(self.d["capacidad"], eventos=[{"especialidad": "Eléctricos", "desde": "2027-03", "hasta": None, "delta": -1}])
         antes = motor.capacidad_mes(cap, motor.mes_idx("2027-02"), "Eléctricos")
         despues = motor.capacidad_mes(cap, motor.mes_idx("2027-03"), "Eléctricos")
         self.assertAlmostEqual(antes - despues, cap["hhMesPersona"] * cap["eficiencia"])

@@ -107,11 +107,9 @@ CAPACIDAD = {
     "eficiencia": 0.85,
     "dotacion": {"Civiles": 8, "Coordinadores": 6, "Eléctricos": 14, "Electrónicos": 4, "Mecánicos": 5, "Estudios": 2},
     "subcontratoHH": {},
-    # Altas/bajas ya conocidas (delta de personas desde/hasta un mes).
-    "eventos": [
-        {"especialidad": "Eléctricos", "desde": "2027-03", "hasta": None, "delta": -1,
-         "nota": "Jubilación prevista"},
-    ],
+    # Las altas y bajas se cargan en la nómina (ingreso / egreso de cada persona); el motor
+    # sigue aceptando "eventos" por compatibilidad con planes viejos y la API.
+    "eventos": [],
 }
 
 # Proyectos reales: export de la lista SharePoint DIM_Proyecto (data/proyectos.csv).

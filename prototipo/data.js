@@ -212,15 +212,7 @@ window.SAMPLE_DATA = {
    "Estudios": 2
   },
   "subcontratoHH": {},
-  "eventos": [
-   {
-    "especialidad": "Eléctricos",
-    "desde": "2027-03",
-    "hasta": null,
-    "delta": -1,
-    "nota": "Jubilación prevista"
-   }
-  ]
+  "eventos": []
  },
  "curvas": {
   "Solar": {
@@ -1036,6 +1028,7 @@ window.SAMPLE_DATA = {
    "notaHH": null,
    "factorSolapamiento": 1.0,
    "duracion": null,
+   "sensibilidades": null,
    "tensionPOE": 132.0,
    "avance": null
   },
@@ -1060,6 +1053,7 @@ window.SAMPLE_DATA = {
    "notaHH": null,
    "factorSolapamiento": 1.0,
    "duracion": null,
+   "sensibilidades": null,
    "tensionPOE": 33.0,
    "avance": null
   },
@@ -1084,6 +1078,7 @@ window.SAMPLE_DATA = {
    "notaHH": null,
    "factorSolapamiento": 1.0,
    "duracion": null,
+   "sensibilidades": null,
    "tensionPOE": 33.0,
    "avance": null
   },
@@ -1108,6 +1103,7 @@ window.SAMPLE_DATA = {
    "notaHH": null,
    "factorSolapamiento": 0.43,
    "duracion": null,
+   "sensibilidades": null,
    "tensionPOE": 33.0,
    "avance": null
   },
@@ -1132,6 +1128,7 @@ window.SAMPLE_DATA = {
    "notaHH": null,
    "factorSolapamiento": 0.43,
    "duracion": null,
+   "sensibilidades": null,
    "tensionPOE": 33.0,
    "avance": null
   },
@@ -1156,6 +1153,7 @@ window.SAMPLE_DATA = {
    "notaHH": null,
    "factorSolapamiento": 0.43,
    "duracion": null,
+   "sensibilidades": null,
    "tensionPOE": 33.0,
    "avance": null
   },
@@ -1180,6 +1178,7 @@ window.SAMPLE_DATA = {
    "notaHH": null,
    "factorSolapamiento": 0.43,
    "duracion": null,
+   "sensibilidades": null,
    "tensionPOE": 132.0,
    "avance": null
   },
@@ -1204,6 +1203,7 @@ window.SAMPLE_DATA = {
    "notaHH": null,
    "factorSolapamiento": 0.43,
    "duracion": null,
+   "sensibilidades": null,
    "tensionPOE": 33.0,
    "avance": null
   },
@@ -1228,6 +1228,7 @@ window.SAMPLE_DATA = {
    "notaHH": null,
    "factorSolapamiento": 0.43,
    "duracion": null,
+   "sensibilidades": null,
    "tensionPOE": 33.0,
    "avance": null
   },
@@ -1252,6 +1253,7 @@ window.SAMPLE_DATA = {
    "notaHH": null,
    "factorSolapamiento": 0.43,
    "duracion": null,
+   "sensibilidades": null,
    "tensionPOE": 33.0,
    "avance": null
   },
@@ -1276,6 +1278,7 @@ window.SAMPLE_DATA = {
    "notaHH": null,
    "factorSolapamiento": 1.0,
    "duracion": null,
+   "sensibilidades": null,
    "tensionPOE": 33.0,
    "avance": null
   },
@@ -1300,6 +1303,7 @@ window.SAMPLE_DATA = {
    "notaHH": null,
    "factorSolapamiento": 1.0,
    "duracion": null,
+   "sensibilidades": null,
    "tensionPOE": 33.0,
    "avance": null
   },
@@ -1324,6 +1328,7 @@ window.SAMPLE_DATA = {
    "notaHH": null,
    "factorSolapamiento": 1.0,
    "duracion": null,
+   "sensibilidades": null,
    "tensionPOE": 33.0,
    "avance": null
   },
@@ -1348,6 +1353,7 @@ window.SAMPLE_DATA = {
    "notaHH": null,
    "factorSolapamiento": 1.0,
    "duracion": null,
+   "sensibilidades": null,
    "tensionPOE": 33.0,
    "avance": null
   },
@@ -1372,6 +1378,7 @@ window.SAMPLE_DATA = {
    "notaHH": null,
    "factorSolapamiento": 1.0,
    "duracion": null,
+   "sensibilidades": null,
    "tensionPOE": 33.0,
    "avance": null
   },
@@ -1396,6 +1403,7 @@ window.SAMPLE_DATA = {
    "notaHH": null,
    "factorSolapamiento": 1.0,
    "duracion": null,
+   "sensibilidades": null,
    "tensionPOE": 33.0,
    "avance": null
   }

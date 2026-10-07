@@ -80,8 +80,7 @@ STAFF DE INGENIERÍA (RECURSOS)
     para completar los nombres.
   - "Nivelar" agrega vacantes con nombre ("Vacante Eléctricos 1") que se
     pueden renombrar cuando se cubran.
-  - Las altas y bajas del panel de cada especialidad quedan para refuerzos
-    hipotéticos; las personas reales van en la lista.
+  - Altas: fecha de ingreso; bajas: fecha de egreso de cada persona.
   - Mientras la lista esté vacía se usa la cantidad numérica por especialidad.
 
 HH CARGADAS A MANO
@@ -161,13 +160,15 @@ AYUDAS EN PANTALLA
   Pasando el mouse sobre cualquier indicador, boton, encabezado o leyenda
   aparece una descripcion de lo que significa.
 
-ALTAS Y BAJAS PROGRAMADAS
-  En Recursos (y en el panel de cada especialidad) se cargan refuerzos o bajas
-  de personas entre dos meses: especialidad, desde, hasta (vacio = sin fin),
-  Delta personas (+ alta, - baja) y nota. Se suman a la nomina o a la
-  dotacion. El resumen por especialidad muestra las vigentes en el mes de los
-  indicadores. Los datos de ejemplo traen una baja de Electricos desde mar-27
-  ("Jubilacion prevista"): borrala si no corresponde.
+ALTAS Y BAJAS DE PERSONAS
+  Se programan en la nomina (Recursos): fecha de ingreso para las altas y de
+  egreso para las bajas. Una alta sin nombre todavia se carga como vacante
+  ("Vacante Electrico 1") y se puede marcar o desmarcar "Simulado" para ver el
+  escenario con y sin ella. Los botones "+N pers." de Cuellos de botella y
+  "Nivelar" agregan vacantes con ingreso en el primer mes critico.
+  Planes viejos con "altas y bajas programadas": las altas pasan solas a
+  vacantes de la nomina; las bajas aparecen en un aviso en Recursos para
+  cargarle el egreso a la persona que corresponda.
 
 SATURACION POR ESPECIALIDAD
   Debajo de la matriz de ocupacion hay un panel por especialidad: barras con
