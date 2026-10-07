@@ -4206,71 +4206,225 @@ function pdfTxt(s){return String(s).replace(/[≥]/g,">=").replace(/[−]/g,"-")
 function openPDF(){
   toast("Generando reporte…");
   loadJsPDF().then(function(JsPDF){
-    var doc=new JsPDF({orientation:"landscape",unit:"mm",format:"a3"}),W=420,M=12,k=R.kpis,y;
-    doc.setFillColor(34,53,31);doc.rect(0,0,W,22,"F");
-    doc.setTextColor(242,245,240);doc.setFont("helvetica","bold");doc.setFontSize(16);
-    doc.text(pdfTxt(document.getElementById("title").value||"Plan de capacidad"),M,14);
-    doc.setFont("helvetica","normal");doc.setFontSize(10);
-    doc.text(pdfTxt("Escenario: "+S.nombre+(S.filtro?" (solo "+S.filtro+")":"")+" - Base: "+S.baseNombre+" - "+new Date().toLocaleDateString("es-AR")),W-M,14,{align:"right"});
-    var kp=[["Maxima ocupacion",oc(k.maxOcupacion.valor),(k.maxOcupacion.especialidad||"")+" "+mlabel(k.maxOcupacion.mes)],
-      ["Primer mes critico",k.primerMesCritico?mlabel(k.primerMesCritico.mes):"ninguno",k.primerMesCritico?k.primerMesCritico.especialidades.join(", "):""],
-      ["HH excedidas",hh(k.hhExcedidas),"sobre la capacidad"],["HH forecast",hh(k.hhForecastHorizonte),"en el horizonte"],
-      ["Mix DPI / DNN / O&M",TIPOS.map(function(t){return NFP.format((R.mixTipoCliente[t.k]||0)/(k.hhForecastTotal||1));}).join(" / "),""]];
-    var kw=(W-2*M)/kp.length;y=30;
-    kp.forEach(function(x,i){
-      var x0=M+i*kw;doc.setDrawColor(201,210,204);doc.rect(x0,y,kw-4,20);
-      doc.setTextColor(91,107,98);doc.setFontSize(8);doc.text(pdfTxt(x[0].toUpperCase()),x0+3,y+5);
-      doc.setTextColor(21,32,26);doc.setFont("helvetica","bold");doc.setFontSize(14);doc.text(pdfTxt(x[1]),x0+3,y+13);
-      doc.setFont("helvetica","normal");doc.setFontSize(8);doc.setTextColor(91,107,98);doc.text(pdfTxt(x[2]),x0+3,y+18);
+    try{generarPDF(JsPDF);}
+    catch(e){console.error(e);toast("No se pudo generar el reporte: "+e.message);}
+  },function(){toast("No se pudo cargar el generador de PDF (sin conexión)");});
+}
+/* Reporte con la misma información que la pantalla: KPIs, Gantt con las HH mensuales de cada proyecto
+   (y sus sensibilidades), ocupación por especialidad y demanda vs capacidad sobre la misma línea de
+   tiempo; al final, la ficha de cada proyecto. A3 apaisado, varias páginas si hace falta. */
+function generarPDF(JsPDF){
+  var doc=new JsPDF({orientation:"landscape",unit:"mm",format:"a3"}),W=420,H=297,M=10,k=R.kpis,pag=1;
+  var n=R.meses.length,lw=78,gx=M+lw,cw=(W-2*M-lw)/n,rh=5.6,yMax=H-12;
+  var rgb=function(h){h=h.replace("#","");return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];};
+  var mix=function(c,f){return c.map(function(v){return Math.round(v+(255-v)*f);});}; /* aclara hacia blanco */
+  var INK=[21,32,26],SOFT=[91,107,98],RULE=[201,210,204],BAND=[238,241,238],PAST=[244,246,244];
+  var col={};TIPOS.forEach(function(t){col[t.k]=rgb(t.hex);});
+  var iHoy=R.meses.indexOf(R.kpiDesde),fs=cw>=7?6:cw>=5?5:4.2;
+  var titulo=pdfTxt(document.getElementById("title").value||"Plan de capacidad");
+  var fill=function(c){doc.setFillColor(c[0],c[1],c[2]);},ink=function(c){doc.setTextColor(c[0],c[1],c[2]);},draw=function(c){doc.setDrawColor(c[0],c[1],c[2]);};
+  var pie=function(){
+    doc.setFont("helvetica","normal");doc.setFontSize(7);ink(SOFT);
+    doc.text(pdfTxt(titulo+" - "+S.nombre+" - "+new Date().toLocaleDateString("es-AR")),M,H-5);
+    doc.text("Pagina "+pag,W-M,H-5,{align:"right"});
+  };
+  var nuevaPagina=function(){pie();doc.addPage("a3","landscape");pag++;return M+4;};
+  /* cabecera de la línea de tiempo: años y meses (los meses pasados, sombreados) */
+  var cabeceraTiempo=function(y,rotulo){
+    doc.setFont("helvetica","bold");doc.setFontSize(7.5);
+    fill([34,53,31]);doc.rect(M,y,lw,9,"F");doc.setTextColor(242,245,240);doc.text(pdfTxt(rotulo),M+2,y+5.8);
+    var yy=null,x0=gx;
+    R.meses.forEach(function(m,i){
+      if(m.slice(0,4)!==yy){
+        yy=m.slice(0,4);var nn=R.meses.filter(function(z){return z.slice(0,4)===yy;}).length;
+        fill([34,53,31]);doc.rect(gx+i*cw,y,nn*cw,4.5,"F");draw([80,100,80]);doc.line(gx+i*cw,y,gx+i*cw,y+9);
+        doc.setTextColor(242,245,240);doc.setFontSize(7);doc.text(yy,gx+i*cw+Math.min(nn*cw,40)/2,y+3.4,{align:"center"});
+      }
+      fill(m<R.kpiDesde?[225,230,226]:BAND);doc.rect(gx+i*cw,y+4.5,cw,4.5,"F");
+      ink(m<R.kpiDesde?[140,150,145]:SOFT);doc.setFontSize(fs);doc.text(MES[+m.slice(5)-1].slice(0,cw<5?1:3),gx+i*cw+cw/2,y+7.9,{align:"center"});
     });
-    /* matriz de ocupación */
-    y=60;doc.setTextColor(21,32,26);doc.setFontSize(11);doc.setFont("helvetica","bold");doc.text("Ocupacion por especialidad (HH forecast / capacidad)",M,y);
-    var n=R.meses.length,lw=36,cw=(W-2*M-lw)/n,rh=7;y+=4;
-    doc.setFontSize(7);doc.setFont("helvetica","bold");
-    R.meses.forEach(function(m,i){doc.setFillColor(238,241,238);doc.rect(M+lw+i*cw,y,cw,rh,"F");doc.setTextColor(91,107,98);doc.text(mlabel(m),M+lw+i*cw+cw/2,y+4.6,{align:"center"});});
-    y+=rh;
-    var fill={ok:[220,240,216],warn:[255,243,205],crit:[253,224,221],zero:[255,255,255]},ink={ok:[38,92,34],warn:[122,90,6],crit:[140,28,20],zero:[150,160,154]};
-    R.especialidades.forEach(function(e,j){
-      doc.setFont("helvetica","bold");doc.setTextColor(21,32,26);doc.setFontSize(8);doc.text(pdfTxt(e),M+1,y+4.8);
-      doc.setFontSize(7);
-      R.meses.forEach(function(m,i){
-        var v=R.ocupacion[i][j],c=R.demanda[i][j]<0.5?"zero":sem(v);
-        doc.setFillColor.apply(doc,fill[c]);doc.rect(M+lw+i*cw,y,cw-0.4,rh-0.4,"F");
-        doc.setTextColor.apply(doc,ink[c]);doc.text(c==="zero"?"-":oc(v),M+lw+i*cw+cw/2,y+4.6,{align:"center"});
+    return y+9;
+  };
+  /* fondo de fila: meses pasados sombreados y línea del mes actual */
+  var fondoFila=function(y,h){
+    for(var i=0;i<n;i++){if(R.meses[i]<R.kpiDesde){fill(PAST);doc.rect(gx+i*cw,y,cw,h,"F");}}
+    draw([229,234,231]);doc.line(M,y+h,W-M,y+h);
+  };
+  var lineaHoy=function(y0,y1){
+    if(iHoy<0)return;
+    doc.setDrawColor(201,60,46);doc.setLineWidth(0.35);doc.setLineDashPattern([1,0.8],0);
+    doc.line(gx+iHoy*cw,y0,gx+iHoy*cw,y1);doc.setLineDashPattern([],0);doc.setLineWidth(0.2);
+  };
+
+  /* ---------- página 1: título y KPIs ---------- */
+  fill([34,53,31]);doc.rect(0,0,W,18,"F");
+  doc.setTextColor(242,245,240);doc.setFont("helvetica","bold");doc.setFontSize(15);doc.text(titulo,M,11.5);
+  doc.setFont("helvetica","normal");doc.setFontSize(9);
+  doc.text(pdfTxt("Escenario: "+S.nombre+(S.filtro?" (demanda solo "+S.filtro+")":"")+" - Base: "+S.baseNombre+" - Indicadores desde "+mlabel(R.kpiDesde)+" - "+new Date().toLocaleDateString("es-AR")),W-M,11.5,{align:"right"});
+  var kp=[["Maxima ocupacion",oc(k.maxOcupacion.valor),(k.maxOcupacion.especialidad||"")+" - "+mlabel(k.maxOcupacion.mes)],
+    ["Primer mes critico",k.primerMesCritico?mlabel(k.primerMesCritico.mes):"ninguno",k.primerMesCritico?k.primerMesCritico.especialidades.join(", "):"ningun mes supera el 100%"],
+    ["HH excedidas",hh(k.hhExcedidas),"demanda por encima de la capacidad"],
+    ["HH forecast",hh(k.hhForecastHorizonte),"desde "+mlabel(R.kpiDesde)+" a "+mlabel(R.meses[n-1])],
+    ["DPI / DNN / O&M",TIPOS.map(function(t){return NFP.format((R.mixTipoCliente[t.k]||0)/(k.hhForecastTotal||1));}).join(" / "),"mix de la demanda"],
+    ["Personas",fmtPers(totPersonas()),"dotacion en "+mlabel(R.kpiDesde)]];
+  var kw=(W-2*M)/kp.length,y=22;
+  kp.forEach(function(x,i){
+    var x0=M+i*kw;draw(RULE);doc.rect(x0,y,kw-3,17);
+    ink(SOFT);doc.setFont("helvetica","bold");doc.setFontSize(7);doc.text(pdfTxt(x[0].toUpperCase()),x0+3,y+4.5);
+    ink(INK);doc.setFontSize(13);doc.text(pdfTxt(x[1]),x0+3,y+11);
+    doc.setFont("helvetica","normal");doc.setFontSize(7);ink(SOFT);doc.text(pdfTxt(x[2]).slice(0,70),x0+3,y+15);
+  });
+  y+=22;
+
+  /* ---------- Gantt: proyectos con HH por mes ---------- */
+  doc.setFont("helvetica","bold");doc.setFontSize(10);ink(INK);doc.text("Proyectos - HH forecast por mes",M,y);
+  doc.setFont("helvetica","normal");doc.setFontSize(7);ink(SOFT);
+  doc.text(pdfTxt("Cada celda: HH del proyecto en el mes (netas). Color mas claro = sensibilidad DNN (S1, S2...). Recuadro = calendario fijo. Gris = mes pasado. Linea roja punteada = mes actual."),M+62,y);
+  y+=2;
+  var yT=cabeceraTiempo(y,"Tipo - Proyecto"),yG0=yT;y=yT;
+  /* fila de HH totales del mes */
+  doc.setFont("helvetica","bold");doc.setFontSize(6.5);ink(SOFT);doc.text("HH forecast del mes",M+2,y+3.8);
+  R.meses.forEach(function(m,i){var t=R.demanda[i].reduce(function(a,b){return a+b;},0);if(t>=0.5){ink(m<R.kpiDesde?[150,160,154]:INK);doc.setFontSize(fs);doc.text(hhK(t),gx+i*cw+cw/2,y+3.8,{align:"center"});}});
+  draw(RULE);doc.line(M,y+5,W-M,y+5);y+=5.5;
+  TIPOS.forEach(function(t){
+    var items=S.datos.proyectos.filter(function(p){return p.tipoCliente===t.k;});
+    if(!items.length)return;
+    if(y+rh*2>yMax){lineaHoy(yG0,y);y=nuevaPagina();y=cabeceraTiempo(y,"Tipo - Proyecto (cont.)");yG0=y;}
+    var nInc=items.filter(function(p){return p.incluir!==false;}).length;
+    fill(mix(col[t.k],0.55));doc.rect(M,y,W-2*M,4.6,"F");
+    doc.setFont("helvetica","bold");doc.setFontSize(7.5);ink(INK);doc.text(pdfTxt(t.n+" - "+t.d+" ("+nInc+"/"+items.length+" incluidos)"),M+2,y+3.3);
+    y+=4.8;
+    items.forEach(function(p){
+      if(y+rh>yMax){lineaHoy(yG0,y);y=nuevaPagina();y=cabeceraTiempo(y,"Tipo - Proyecto (cont.)");yG0=y;}
+      var excl=p.incluir===false,dim=excl||(S.filtro&&S.filtro!==p.tipoCliente);
+      fondoFila(y,rh);
+      /* rótulo: código, nombre, tecnología, HH y marcas */
+      var marcas=[];
+      if(esOtro(p))marcas.push("plan");
+      if(hhManual(p)&&!esOtro(p))marcas.push("HH man.");
+      if(nSens(p))marcas.push("+"+nSens(p)+" sens.");
+      if(durMod(p))marcas.push(spanOf(p).dur+" m");
+      if(!p.simulable)marcas.push("fijo");
+      if(excl)marcas.push("excluido");
+      doc.setFont("helvetica","bold");doc.setFontSize(7);ink(dim?[150,160,154]:INK);
+      doc.text(pdfTxt(p.proyecto),M+2,y+3.9);
+      doc.setFont("helvetica","normal");doc.setFontSize(6.2);ink(SOFT);
+      var det=(p.nombre?p.nombre+" ":"")+"- "+(esOtro(p)?"Otro":p.tecnologia+" "+NF0.format(+p.potencia||0)+" MW");
+      doc.text(pdfTxt(det).slice(0,34),M+13,y+3.9);
+      doc.setFont("helvetica","bold");ink(dim?[150,160,154]:INK);doc.text(hhK(totalP(p))+" HH",M+lw-2,y+3.9,{align:"right"});
+      if(marcas.length){doc.setFont("helvetica","normal");doc.setFontSize(5.2);doc.setTextColor(122,90,6);doc.text(pdfTxt(marcas.join(" - ")),M+lw-14,y+3.9,{align:"right"});}
+      /* barras: bloque original + sensibilidades */
+      var sp=spanOf(p),m=hhMensual(p),bl=E.bloques(p,S.datos.curvas,PV()),c0=dim?mix(col[t.k],0.6):col[t.k];
+      bl.forEach(function(b,ib){
+        var st=sp.start+b[0],cc=ib?mix(c0,0.45):c0;
+        for(var q=0;q<b[1];q++){
+          var i=st+q;if(i<0||i>=n)continue;
+          fill(cc);doc.rect(gx+i*cw+0.15,y+0.6,cw-0.3,rh-1.2,"F");
+          var v=m[i]||0;if(v>=0.5&&cw>=3.2){doc.setFont("helvetica","normal");doc.setFontSize(fs);ink(dim?[110,120,114]:INK);doc.text(hhK(v),gx+i*cw+cw/2,y+3.9,{align:"center"});}
+        }
+        if(ib&&st>=0&&st<n){doc.setFont("helvetica","bold");doc.setFontSize(4.6);ink(SOFT);doc.text("S"+ib,gx+st*cw+0.4,y+1.9);}
+        if(!ib&&!p.simulable){draw(INK);doc.setLineWidth(0.25);doc.rect(gx+Math.max(0,st)*cw+0.15,y+0.6,Math.max(0,Math.min(n,st+b[1])-Math.max(0,st))*cw-0.3,rh-1.2);doc.setLineWidth(0.2);}
       });
       y+=rh;
     });
-    /* gráfico demanda vs capacidad (total área) */
-    y+=8;doc.setFontSize(11);doc.setFont("helvetica","bold");doc.setTextColor(21,32,26);doc.text("Demanda vs capacidad - total del area (HH/mes)",M,y);
-    var gh=55,gy=y+4,s=R.meses.map(function(_,i){return {t:R.demandaPorTipo[i],c:R.capacidad[i].reduce(function(a,b){return a+b;},0)};});
-    var mx=niceMax(Math.max.apply(null,s.map(function(r){return Math.max(r.c,r.t.reduce(function(a,b){return a+b;},0));})));
-    var yy=function(v){return gy+gh*(1-v/mx);};
-    doc.setDrawColor(229,234,231);[0.5,1].forEach(function(f){doc.line(M+lw,yy(mx*f),W-M,yy(mx*f));doc.setFontSize(7);doc.setTextColor(91,107,98);doc.text(hh(mx*f),M+lw-2,yy(mx*f)+1,{align:"right"});});
-    var col=[[157,195,230],[244,177,131],[169,209,142]];
-    s.forEach(function(r,i){
-      var acc=0,x=M+lw+i*cw+1;
-      r.t.forEach(function(v,t){if(v<=0)return;doc.setFillColor.apply(doc,col[t]);doc.rect(x,yy(acc+v),cw-2,yy(acc)-yy(acc+v),"F");acc+=v;});
-      doc.setDrawColor(21,32,26);doc.setLineWidth(0.6);doc.line(M+lw+i*cw,yy(r.c),M+lw+(i+1)*cw,yy(r.c));doc.setLineWidth(0.2);
-    });
-    TIPOS.forEach(function(t,i){doc.setFillColor.apply(doc,col[i]);doc.rect(M+i*0,gy+8+i*6,4,3,"F");doc.setFontSize(7);doc.setTextColor(21,32,26);doc.text(pdfTxt(t.n),M+6,gy+10.5+i*6);});
-    doc.setDrawColor(21,32,26);doc.setLineWidth(0.6);doc.line(M,gy+28,M+4,gy+28);doc.setLineWidth(0.2);doc.text("Capacidad",M+6,gy+29);
-    /* cuellos y pareto */
-    y=gy+gh+12;
-    doc.setFontSize(11);doc.setFont("helvetica","bold");doc.text("Cuellos de botella",M,y);doc.text("Pareto de proyectos (HH forecast)",W/2,y);
-    doc.setFontSize(8.5);var y2=y+7;
-    R.especialidades.forEach(function(e){
-      var c=R.cuellos[e];doc.setFont("helvetica","bold");doc.text(pdfTxt(e),M,y2);doc.setFont("helvetica","normal");
-      doc.text(pdfTxt("pico "+oc(c.maxOcupacion)+" en "+mlabel(c.mesPico)+" - "+c.mesesCriticos+" meses > 1 - "+hh(c.hhExcedidas)+" HH excedidas - faltan "+c.personasAdicionales+" pers."),M+30,y2);y2+=6;
-    });
-    var y3=y+7,pm=R.pareto.length?R.pareto[0].hh:1;
-    R.pareto.slice(0,12).forEach(function(r){
-      doc.setTextColor(21,32,26);doc.text(pdfTxt(r.proyecto),W/2,y3);
-      doc.setFillColor(157,195,230);doc.rect(W/2+48,y3-3,90*r.hh/pm,3.4,"F");
-      doc.text(pdfTxt(hh(r.hh)+" HH - acum "+NFP.format(r.pctAcum)),W/2+142,y3);y3+=5.5;
-    });
-    doc.setFontSize(7);doc.setTextColor(91,107,98);doc.text("Semaforo de ocupacion: verde < 80% - amarillo < 100% - rojo >= 100%.",M,290);
-    offer(slug()+"-reporte.pdf",doc.output("arraybuffer"));
-  }).catch(function(){toast("No se pudo cargar el generador de PDF (sin conexión)");});
+  });
+  lineaHoy(yG0,y);
+
+  /* ---------- ocupación por especialidad (misma grilla de meses) ---------- */
+  var filasOc=R.especialidades.length+2;
+  if(y+12+filasOc*rh>yMax){y=nuevaPagina();}else y+=6;
+  doc.setFont("helvetica","bold");doc.setFontSize(10);ink(INK);doc.text("Ocupacion por especialidad (HH forecast / capacidad)",M,y);
+  doc.setFont("helvetica","normal");doc.setFontSize(7);ink(SOFT);doc.text(pdfTxt(NF0.format(S.datos.capacidad.hhMesPersona*S.datos.capacidad.eficiencia)+" HH por persona y mes - verde < 80% - amarillo < 100% - rojo >= 100%"),M+92,y);
+  y=cabeceraTiempo(y+2,"Especialidad - personas");var yO0=y;
+  var FILL={ok:[220,240,216],warn:[255,243,205],crit:[253,224,221],zero:[255,255,255]},INKS={ok:[38,92,34],warn:[122,90,6],crit:[140,28,20],zero:[150,160,154]};
+  var filaOc=function(nombre,pers,val,dem){
+    doc.setFont("helvetica","bold");doc.setFontSize(7);ink(INK);doc.text(pdfTxt(nombre),M+2,y+3.9);
+    doc.setFont("helvetica","normal");ink(SOFT);doc.text(pdfTxt(pers),M+lw-2,y+3.9,{align:"right"});
+    for(var i=0;i<n;i++){
+      var c=dem[i]<0.5?"zero":sem(val[i]);fill(FILL[c]);doc.rect(gx+i*cw+0.15,y+0.4,cw-0.3,rh-0.8,"F");
+      ink(INKS[c]);doc.setFontSize(fs);doc.text(c==="zero"?"-":oc(val[i]),gx+i*cw+cw/2,y+3.9,{align:"center"});
+    }
+    y+=rh;
+  };
+  R.especialidades.forEach(function(e,j){
+    var cu=R.cuellos[e];
+    filaOc(e,(modoNomina()?fmtPers(personasHoy(e)):(S.datos.capacidad.dotacion[e]||0))+" pers."+(cu.mesesCriticos?" - "+cu.mesesCriticos+" m >100%":""),
+      R.meses.map(function(_,i){return R.ocupacion[i][j];}),R.meses.map(function(_,i){return R.demanda[i][j];}));
+  });
+  var dT=R.meses.map(function(_,i){return R.demanda[i].reduce(function(a,b){return a+b;},0);}),cT=R.meses.map(function(_,i){return R.capacidad[i].reduce(function(a,b){return a+b;},0);});
+  filaOc("Total area",fmtPers(totPersonas())+" pers.",dT.map(function(d,i){return cT[i]?d/cT[i]:0;}),dT);
+  lineaHoy(yO0,y);
+
+  /* ---------- demanda vs capacidad ---------- */
+  var gh=48;
+  if(y+gh+16>yMax){y=nuevaPagina();}else y+=7;
+  doc.setFont("helvetica","bold");doc.setFontSize(10);ink(INK);doc.text("Demanda vs capacidad - total del area (HH/mes)",M,y);
+  var gy=y+4,s=R.meses.map(function(_,i){return {t:R.demandaPorTipo[i],c:cT[i]};});
+  var mx=niceMax(Math.max.apply(null,s.map(function(r){return Math.max(r.c,r.t.reduce(function(a,b){return a+b;},0));}))*1.05);
+  var yy=function(v){return gy+gh*(1-v/mx);};
+  for(var ip=0;ip<n;ip++)if(R.meses[ip]<R.kpiDesde){fill(PAST);doc.rect(gx+ip*cw,gy,cw,gh,"F");}
+  draw([229,234,231]);[0,0.25,0.5,0.75,1].forEach(function(f){doc.line(gx,yy(mx*f),W-M,yy(mx*f));doc.setFontSize(6.5);ink(SOFT);doc.text(hhK(mx*f),gx-1.5,yy(mx*f)+1,{align:"right"});});
+  s.forEach(function(r,i){
+    var acc=0,x=gx+i*cw+cw*0.12;
+    r.t.forEach(function(v,t){if(v<=0)return;fill(col[TIPOS[t].k]);doc.rect(x,yy(acc+v),cw*0.76,yy(acc)-yy(acc+v),"F");acc+=v;});
+    draw(INK);doc.setLineWidth(0.5);doc.line(gx+i*cw,yy(r.c),gx+(i+1)*cw,yy(r.c));
+    if(i<n-1&&s[i+1].c!==r.c)doc.line(gx+(i+1)*cw,yy(r.c),gx+(i+1)*cw,yy(s[i+1].c));
+    doc.setLineWidth(0.2);
+  });
+  for(var il=0;il<n;il++){doc.setFontSize(fs);ink(SOFT);doc.text(mlabel(R.meses[il]).slice(0,cw<6?3:6),gx+il*cw+cw/2,gy+gh+3.2,{align:"center"});}
+  lineaHoy(gy,gy+gh);
+  TIPOS.forEach(function(t,i){fill(col[t.k]);doc.rect(M+2,gy+4+i*5,4,3,"F");doc.setFontSize(7);ink(INK);doc.text(pdfTxt(t.n+" - "+t.d),M+8,gy+6.5+i*5);});
+  draw(INK);doc.setLineWidth(0.5);doc.line(M+2,gy+21.5,M+6,gy+21.5);doc.setLineWidth(0.2);doc.text("Capacidad",M+8,gy+22.5);
+  y=gy+gh+8;
+
+  /* ---------- cuellos de botella y Pareto ---------- */
+  var alto=Math.max(R.especialidades.length,Math.min(12,R.pareto.length))*5.5+12;
+  if(y+alto>yMax){y=nuevaPagina();}else y+=4;
+  doc.setFont("helvetica","bold");doc.setFontSize(10);ink(INK);doc.text("Cuellos de botella",M,y);doc.text("Pareto de proyectos (HH forecast)",W/2,y);
+  doc.setFontSize(7.5);var y2=y+6;
+  R.especialidades.slice().sort(function(a,b){return R.cuellos[b].hhExcedidas-R.cuellos[a].hhExcedidas;}).forEach(function(e){
+    var c=R.cuellos[e];doc.setFont("helvetica","bold");ink(INK);doc.text(pdfTxt(e),M,y2);doc.setFont("helvetica","normal");
+    doc.text(pdfTxt(!(c.maxOcupacion>0)?"sin demanda en el horizonte":"pico "+oc(c.maxOcupacion)+" en "+mlabel(c.mesPico)+" - "+c.mesesCriticos+" meses > 100% - "+hh(c.hhExcedidas)+" HH excedidas"+(c.personasAdicionales>0?" - faltan "+c.personasAdicionales+" pers.":"")),M+30,y2);y2+=5.5;
+  });
+  var y3=y+6,pm=R.pareto.length?R.pareto[0].hh:1;
+  R.pareto.slice(0,12).forEach(function(r){
+    var pp=S.datos.proyectos.filter(function(q){return q.proyecto===r.proyecto;})[0];
+    ink(INK);doc.setFont("helvetica","normal");doc.text(pdfTxt(r.proyecto),W/2,y3);
+    fill(pp?col[pp.tipoCliente]||[157,195,230]:[157,195,230]);doc.rect(W/2+22,y3-2.8,90*r.hh/pm,3.2,"F");
+    doc.text(pdfTxt(hh(r.hh)+" HH - acum. "+NFP.format(r.pctAcum)),W/2+116,y3);y3+=5.5;
+  });
+  y=Math.max(y2,y3);
+
+  /* ---------- ficha de proyectos ---------- */
+  var cols=[["Proyecto",16],["Nombre",38],["Tipo",11],["Tecnologia",22],["MW",12],["Inicio",14],["Fin",14],["Meses",11],["Sens.",10],["HH asignadas",20],["HH netas",18],["Solap.",12],["Ajustes",58],["Motivo HH",70],["Estado",22]];
+  var fc=(W-2*M)/cols.reduce(function(a,c){return a+c[1];},0);
+  var fila=function(vals,bold,bg){
+    if(bg){fill(bg);doc.rect(M,y-3.6,W-2*M,5,"F");}
+    var x=M;doc.setFont("helvetica",bold?"bold":"normal");doc.setFontSize(6.8);ink(INK);
+    vals.forEach(function(v,i){var w=cols[i][1]*fc,txt=pdfTxt(v==null?"":v);
+      while(txt.length>2&&doc.getTextWidth(txt)>w-1.5)txt=txt.slice(0,-1);
+      var der=i>=4&&i<=11&&i!==5&&i!==6;doc.text(txt,der?x+w-1.5:x+1,y,der?{align:"right"}:undefined);x+=w;});
+    y+=5;
+  };
+  var cab=function(){fila(cols.map(function(c){return c[0];}),true,BAND);};
+  if(y+30>yMax)y=nuevaPagina();else y+=8;
+  doc.setFont("helvetica","bold");doc.setFontSize(10);ink(INK);doc.text("Ficha de proyectos",M,y);y+=6;cab();
+  S.datos.proyectos.slice().sort(function(a,b){return TIPOS.map(function(t){return t.k;}).indexOf(a.tipoCliente)-TIPOS.map(function(t){return t.k;}).indexOf(b.tipoCliente)||String(a.fechaInicio).localeCompare(String(b.fechaInicio));}).forEach(function(p,ix){
+    if(y+5>yMax){y=nuevaPagina()+2;cab();}
+    var sp=spanOf(p),fin=E.mesStr(E.mesIdx(p.fechaInicio)+sp.dur-1),aj=[];
+    if(E.conEsp(p))aj.push("HH por especialidad: "+Object.keys(p.hhEsp).map(function(e){return (ABREV[e]||e)+" "+hh(p.hhEsp[e]);}).join(", "));
+    else if(hhManual(p))aj.push("HH por componente");
+    if(esOtro(p))aj.push("plan manual "+planDe(p).meses+" m");
+    if(durMod(p))aj.push("duracion "+sp.base+" -> "+sp.dur+" m");
+    if(nSens(p))aj.push(nSens(p)+" sens.");
+    if(!p.simulable)aj.push("fijo");
+    if(p.incluir===false)aj.push("excluido");
+    var solp=(esOtro(p)||vacioV(p.factorSolapamiento))?1:+p.factorSolapamiento;
+    fila([p.proyecto,p.nombre||"",p.tipoCliente,esOtro(p)?"Otro":p.tecnologia,esOtro(p)?"-":NF0.format(+p.potencia||0),mlabel(p.fechaInicio),mlabel(fin),sp.dur,nSens(p)||"",
+      hh(E.hhBruto(p,S.datos.curvas,PV())),hh(totalP(p)),pctEnt(solp),aj.join(" - "),p.notaHH||"",p.estado||""],false,ix%2?[248,250,248]:null);
+  });
+  pie();
+  offer(slug()+"-reporte.pdf",doc.output("arraybuffer"));
 }
 
 /* ===================== búsqueda, atajos, toast ===================== */
