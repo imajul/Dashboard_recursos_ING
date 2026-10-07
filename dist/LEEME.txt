@@ -141,9 +141,16 @@ CURVAS (PARAMETROS > CURVAS)
 
 AYUDAS EN PANTALLA
   Pasando el mouse sobre cualquier indicador, boton, encabezado o leyenda
-  aparece una descripcion de lo que significa. El grafico "Demanda vs
-  capacidad" tiene tres altos (C, M, G) y muestra el valor de cada mes al
-  pasar el mouse.
+  aparece una descripcion de lo que significa.
+
+SATURACION POR ESPECIALIDAD
+  Debajo de la matriz de ocupacion hay un panel por especialidad: barras con
+  la demanda de HH de esa especialidad (por tipo de cliente), linea con su
+  capacidad y en rojo el exceso, con su valor. Vista "Personas": balance en
+  personas equivalentes (arriba sobran, abajo faltan). Escala "Propia" (cada
+  panel con la suya) o "Comun" (para comparar tamaños) y tres altos (C, M, G).
+  Pasando el mouse por un mes se ven los valores; con un clic, los proyectos
+  que explican esa demanda.
 
 REPORTE PDF
   Boton "Reporte PDF" (A3 apaisado, necesita internet para cargar el

@@ -202,7 +202,8 @@ button.area .gcnt{font:600 10.5px/1 var(--f-num);color:var(--ink-soft);margin-to
 
 /* gráfico alineado */
 .tl.chart{border-bottom:1px solid var(--rule)}
-.tl.chart rect[data-bar]:hover{fill:color-mix(in srgb,var(--ink) 7%,transparent)}
+.tl.chart rect[data-pb]:hover{fill:color-mix(in srgb,var(--ink) 7%,transparent)}
+.tl.chart{border-bottom:1px solid var(--rule-soft)}
 .chartcell{align-items:flex-start} /* .lcell ya es sticky (posicionada): sirve de referencia para el eje */
 .yaxis{position:absolute;right:6px;top:0;bottom:0;width:60px;pointer-events:none}
 .yaxis span{position:absolute;right:0;transform:translateY(-50%);font:500 11px var(--f-num);color:var(--ink-soft)}
@@ -2581,16 +2582,8 @@ function renderCap(){
     html+='<div class="occ '+c2+'" data-tot="'+i2+'" style="left:'+px(i2*cw)+';width:'+px(cw)+';cursor:default">'+(c2==="zero"?"·":(cw>=36?oc(vv):""))+'</div>';
   }
   html+='</div></div>';
-  /* gráfico demanda vs capacidad alineado a la línea de tiempo */
-  var opts='<option value="">Todas las especialidades</option>'+R.especialidades.map(function(e){return '<option'+(S.espChart===e?" selected":"")+'>'+esc(e)+'</option>';}).join("");
-  html+='<div class="lrow secrow"><div class="hhead" title="Barras: HH que demandan los proyectos cada mes, por tipo de cliente. Línea: HH disponibles del área. Donde la barra pasa la línea hay exceso (en rojo). Pasá el mouse por un mes para ver los valores">Demanda vs capacidad <small>HH por mes</small></div><div class="band" style="width:'+px(w)+'"></div></div>';
-  var sz=S.chartSz||"mediano";
-  html+='<div class="lrow"><div class="lcell chartcell" style="height:'+px(chartH())+'"><div class="chartlbl" style="justify-content:flex-start;padding-right:72px"><select id="espChart" aria-label="Especialidad del gráfico" title="Mostrar la demanda y la capacidad de todo el área o de una sola especialidad">'+opts+'</select>'
-    +'<div class="legs">'+TIPOS.map(function(t){return '<span class="leg" title="Demanda de HH de los proyectos '+esc(t.n)+' ('+esc(t.d)+')"><i style="background:'+t.c+'"></i>'+t.n+'</span>';}).join("")
-    +'<span class="leg" title="HH disponibles del área (personas × HH por persona y mes × eficiencia + subcontratos)"><i class="line"></i>Capacidad</span>'
-    +'<span class="leg" title="Parte de la demanda que supera la capacidad de ese mes"><i style="background:color-mix(in srgb,var(--danger) 18%,transparent);box-shadow:inset 0 0 0 1.5px var(--danger)"></i>Exceso</span></div>'
-    +'<div class="chsz" title="Alto del gráfico">Alto '+["chico","mediano","grande"].map(function(k){return '<button data-chsz="'+k+'" class="'+(sz===k?"on":"")+'" aria-pressed="'+(sz===k)+'">'+k[0].toUpperCase()+'</button>';}).join("")+'</div></div>'+chartEje()+'</div>'
-    +'<div class="tl chart" style="width:'+px(w)+';height:'+px(chartH())+'">'+chartSVG(w)+'</div></div>';
+  /* saturación por especialidad: un panel por especialidad sobre la misma línea de tiempo */
+  html+=panelesEspecialidad(w);
   box.innerHTML=html;
 }
 /* ---- nómina del staff: si hay personas cargadas, la dotación sale de la lista ---- */
@@ -2601,54 +2594,97 @@ function totPersonas(cap,d){var t=0;(d||S.datos).especialidades.forEach(function
 function fmtPers(v){return NFX.format(Math.round(v*100)/100);}
 function staffDe(e){return (S.datos.capacidad.staff||[]).filter(function(x){return x.especialidad===e;});}
 function idStaff(){return "s"+Math.random().toString(36).slice(2,9);}
-function serieChart(){
-  var j=S.espChart?R.especialidades.indexOf(S.espChart):-1;
+function niceMax(v){if(v<=0)return 1;var p=Math.pow(10,Math.floor(Math.log10(v))),f=v/p;return (f<=1?1:f<=2?2:f<=2.5?2.5:f<=5?5:10)*p;}
+/* ===================== saturación por especialidad (paneles) =====================
+   Un panel por especialidad: barras = demanda de esa especialidad (por tipo de cliente),
+   línea = su capacidad, rojo = exceso. Vista «Personas»: balance capacidad − demanda en personas
+   equivalentes (arriba sobran, abajo faltan). Escala propia de cada panel o común a todos. */
+var PANEL_ALTOS={chico:80,mediano:120,grande:180};
+function panelH(){return PANEL_ALTOS[S.chartSz]||PANEL_ALTOS.mediano;}
+function hpMesCap(){var c=S.datos.capacidad;return c.hhMesPersona*c.eficiencia;}
+function serieEsp(j){
   return R.meses.map(function(_,i){
-    var tipos=j<0?R.demandaPorTipo[i]:R.demandaPorTipoEsp[i][j];
-    var cap=j<0?R.capacidad[i].reduce(function(a,b){return a+b;},0):R.capacidad[i][j];
-    return {tipos:tipos,dem:tipos.reduce(function(a,b){return a+b;},0),cap:cap};
+    var t=R.demandaPorTipoEsp[i][j];
+    return {tipos:t,dem:t.reduce(function(a,b){return a+b;},0),cap:R.capacidad[i][j]};
   });
 }
-function niceMax(v){if(v<=0)return 1;var p=Math.pow(10,Math.floor(Math.log10(v))),f=v/p;return (f<=1?1:f<=2?2:f<=2.5?2.5:f<=5?5:10)*p;}
-/* alto del gráfico demanda vs capacidad (px), elegible en la etiqueta del gráfico */
-var CH_ALTOS={chico:200,mediano:320,grande:460};
-function chartH(){return CH_ALTOS[S.chartSz]||CH_ALTOS.mediano;}
-function chartEscala(){
-  var H=chartH(),top=22,bot=10,s=serieChart();
-  var mx=niceMax(Math.max.apply(null,s.map(function(r){return Math.max(r.dem,r.cap);}))*1.08);
-  return {H:H,s:s,mx:mx,y:function(v){return top+(H-top-bot)*(1-v/mx);}};
+function maxPanel(j){
+  var s=serieEsp(j),hp=hpMesCap();
+  if(S.chVista==="pers")return Math.max.apply(null,s.map(function(r){return Math.abs(r.cap-r.dem)/hp;}).concat([0]));
+  return Math.max.apply(null,s.map(function(r){return Math.max(r.dem,r.cap);}).concat([0]));
 }
-/* etiquetas del eje Y: van en la columna izquierda, alineadas con las líneas de la grilla */
-function chartEje(){
-  var e=chartEscala(),h="";
-  [0,0.25,0.5,0.75,1].forEach(function(f){h+='<span style="top:'+px(e.y(e.mx*f))+'">'+(f?hhK(e.mx*f):"0")+'</span>';});
-  return '<div class="yaxis" aria-hidden="true">'+h+'</div>';
+function escalaPanel(j){
+  var H=panelH(),top=16,bot=6,m;
+  if(S.chEscala==="comun")m=Math.max.apply(null,R.especialidades.map(function(_,k){return maxPanel(k);}));
+  else m=maxPanel(j);
+  var mx=niceMax(m*1.1);
+  if(S.chVista==="pers"){var mid=top+(H-top-bot)/2,half=(H-top-bot)/2;return {H:H,mx:mx,y:function(v){return mid-v/mx*half;}};}
+  return {H:H,mx:mx,y:function(v){return top+(H-top-bot)*(1-v/mx);}};
 }
-function chartSVG(w){
-  var e=chartEscala(),H=e.H,cw=S.cw,s=e.s,mx=e.mx,y=e.y;
-  var g='<svg width="'+w+'" height="'+H+'" role="img" aria-label="Demanda por tipo de cliente y capacidad por mes">';
-  [0.25,0.5,0.75,1].forEach(function(f){var yy=y(mx*f);g+='<line x1="0" x2="'+w+'" y1="'+yy+'" y2="'+yy+'" stroke="var(--rule-soft)" stroke-width="1"/>';});
-  var path="",iPico=-1;
-  s.forEach(function(r,i){if(iPico<0||r.dem>s[iPico].dem)iPico=i;});
+function panelesEspecialidad(w){
+  var vista=S.chVista==="pers"?"pers":"hh",esc0=S.chEscala==="comun"?"comun":"propia",sz=S.chartSz||"mediano",hp=hpMesCap(),html="";
+  var botones=function(attr,val,ops){return ops.map(function(o){return '<button data-'+attr+'="'+o[0]+'" class="'+(val===o[0]?"on":"")+'" aria-pressed="'+(val===o[0])+'" title="'+o[2]+'">'+o[1]+'</button>';}).join("");};
+  html+='<div class="lrow secrow"><div class="hhead" title="Un panel por especialidad, sobre la misma línea de tiempo. Muestra en qué meses cada especialidad se satura, cuánto y qué tipo de cliente lo genera. Pasá el mouse por un mes para ver los valores; clic para ver los proyectos">Saturación por especialidad <small>'+(vista==="pers"?'balance en personas equivalentes · '+NF0.format(hp)+' HH/persona·mes':'HH demandadas vs capacidad por mes')+'</small></div><div class="band" style="width:'+px(w)+'"></div></div>';
+  /* controles y leyenda */
+  var leyenda=vista==="pers"
+    ?'<span class="leg" title="Capacidad mayor que la demanda: personas que sobran"><i style="background:var(--ok-bg);box-shadow:inset 0 0 0 1px var(--ok-ink)"></i>Sobran</span><span class="leg" title="Demanda mayor que la capacidad: personas que faltan"><i style="background:var(--danger)"></i>Faltan</span>'
+    :TIPOS.map(function(t){return '<span class="leg" title="Demanda de HH de los proyectos '+esc(t.n)+' ('+esc(t.d)+')"><i style="background:'+t.c+'"></i>'+t.n+'</span>';}).join("")
+      +'<span class="leg" title="HH disponibles de la especialidad (personas × HH por persona y mes × eficiencia + subcontratos)"><i class="line"></i>Capacidad</span>'
+      +'<span class="leg" title="Parte de la demanda que supera la capacidad de ese mes"><i style="background:color-mix(in srgb,var(--danger) 22%,transparent);box-shadow:inset 0 0 0 1.5px var(--danger)"></i>Exceso</span>';
+  html+='<div class="lrow"><div class="lcell"><div class="chartlbl" style="gap:5px;padding:6px 8px">'
+    +'<div class="chsz">Vista '+botones("chv",vista,[["hh","HH","Demanda y capacidad en HH, con el exceso en rojo"],["pers","Personas","Balance en personas equivalentes: arriba sobran, abajo faltan"]])
+    +'<span style="width:8px"></span>Escala '+botones("che",esc0,[["propia","Propia","Cada especialidad con su propia escala: se lee igual una especialidad chica que una grande"],["comun","Común","Misma escala para todas: compara el tamaño de cada especialidad"]])
+    +'<span style="width:8px"></span>Alto '+botones("chsz",sz,[["chico","C","Paneles bajos"],["mediano","M","Paneles medianos"],["grande","G","Paneles altos"]])+'</div>'
+    +'<div class="legs">'+leyenda+'</div></div></div><div class="tl" style="width:'+px(w)+';height:auto"></div></div>';
+  R.especialidades.forEach(function(e,j){
+    var s=serieEsp(j),cu=R.cuellos[e],k0=R.meses.indexOf(R.kpiDesde),sc=escalaPanel(j),H=sc.H;
+    var falta=0;s.forEach(function(r,i){if(i>=Math.max(0,k0))falta=Math.max(falta,(r.dem-r.cap)/hp);});
+    var chip=cu.mesesCriticos?'<span class="fl crit" title="Meses (desde '+mlabel(R.kpiDesde)+') en que la demanda supera la capacidad">'+cu.mesesCriticos+' m &gt;100%</span>'
+      :'<span class="fl ok" title="Ningún mes supera la capacidad">sin exceso</span>';
+    var det='pico '+oc(cu.maxOcupacion)+(cu.mesPico?' · '+mlabel(cu.mesPico):'')+(falta>0.05?' · faltan '+fmtPers(Math.round(falta*10)/10)+' pers.':'');
+    var ticks=vista==="pers"?[sc.mx,0,-sc.mx]:[sc.mx,sc.mx/2,0];
+    var eje='<div class="yaxis" aria-hidden="true">'+ticks.map(function(v){return '<span style="top:'+px(sc.y(v))+'">'+(vista==="pers"?(v>0?"+":v<0?"−":"")+fmtPers(Math.abs(v)):(v?hhK(v):"0"))+'</span>';}).join("")+'</div>';
+    html+='<div class="lrow"><div class="lcell chartcell" style="height:'+px(H)+'"><div class="tname" data-e="'+esc(e)+'" style="padding:8px 72px 0 12px;flex-direction:column;align-items:flex-start;gap:4px;border:none;height:auto;min-height:0;width:100%" title="'+esc(e)+': clic para ver el detalle de la especialidad">'
+      +'<span class="nm"><b>'+esc(e)+'</b> '+chip+'</span><small style="color:var(--ink-soft);font:500 11px var(--f-num)">'+det+'</small></div>'+eje+'</div>'
+      +'<div class="tl chart" style="width:'+px(w)+';height:'+px(H)+'">'+panelSVG(j,w,s,sc)+'</div></div>';
+  });
+  return html;
+}
+function panelSVG(j,w,s,sc){
+  var H=sc.H,cw=S.cw,y=sc.y,mx=sc.mx,hp=hpMesCap(),pers=S.chVista==="pers",g='<svg width="'+w+'" height="'+H+'" role="img" aria-label="'+esc(R.especialidades[j])+': demanda vs capacidad por mes">';
+  var pad=Math.max(2,cw*0.14),bw=Math.max(2,cw-2*pad);
+  (pers?[mx/2,-mx/2,mx,-mx]:[mx/2,mx]).forEach(function(v){g+='<line x1="0" x2="'+w+'" y1="'+y(v)+'" y2="'+y(v)+'" stroke="var(--rule-soft)" stroke-width="1"/>';});
+  if(pers){
+    s.forEach(function(r,i){
+      var b=(r.cap-r.dem)/hp,x=i*cw+pad,y0=y(0),y1=y(b);
+      if(Math.abs(b)>=0.005){
+        if(b>0)g+='<rect x="'+x+'" y="'+y1+'" width="'+bw+'" height="'+Math.max(1,y0-y1)+'" fill="var(--ok-bg)" stroke="var(--ok-ink)" stroke-width="1" rx="2"/>';
+        else{g+='<rect x="'+x+'" y="'+y0+'" width="'+bw+'" height="'+Math.max(1,y1-y0)+'" fill="var(--danger)" rx="2"/>';
+          if(cw>=26&&b<=-0.05)g+='<text class="dl" x="'+(i*cw+cw/2)+'" y="'+Math.min(H-2,y1+11)+'" text-anchor="middle" style="fill:var(--danger)">−'+fmtPers(Math.round(-b*10)/10)+'</text>';}
+      }
+      g+='<rect x="'+(i*cw)+'" y="0" width="'+cw+'" height="'+H+'" fill="transparent" data-pb="'+i+'|'+j+'"/>';
+    });
+    g+='<line x1="0" x2="'+w+'" y1="'+y(0)+'" y2="'+y(0)+'" stroke="var(--ink-soft)" stroke-width="1"/>';
+    return g+'</svg>';
+  }
+  var path="";
   s.forEach(function(r,i){
-    var x=i*cw+Math.max(2,cw*0.14),bw=Math.max(2,cw-2*Math.max(2,cw*0.14)),acc=0;
+    var x=i*cw+pad,acc=0;
     r.tipos.forEach(function(v,t){
       if(v<=0)return;
-      var y1=y(acc+v),y0=y(acc),hgt=Math.max(0,y0-y1-(acc>0?2:0));
-      g+='<rect x="'+x+'" y="'+y1+'" width="'+bw+'" height="'+hgt+'" fill="'+TIPOS[t].c+'" rx="'+(acc+v>=r.dem-0.01?3:0)+'"/>';
+      var y1=y(acc+v),y0=y(acc),hgt=Math.max(0,y0-y1-(acc>0?1.5:0));
+      g+='<rect x="'+x+'" y="'+y1+'" width="'+bw+'" height="'+hgt+'" fill="'+TIPOS[t].c+'" rx="'+(acc+v>=r.dem-0.01?2.5:0)+'"/>';
       acc+=v;
     });
-    if(r.dem>r.cap&&r.cap>0){g+='<rect x="'+x+'" y="'+y(r.dem)+'" width="'+bw+'" height="'+Math.max(1,y(r.cap)-y(r.dem))+'" fill="color-mix(in srgb,var(--danger) 18%,transparent)" stroke="var(--danger)" stroke-width="1.5"/>';}
-    /* etiquetas selectivas: el mes pico y los meses con exceso */
-    if(r.dem>=0.5&&(i===iPico||(r.dem>r.cap&&r.cap>0))&&cw>=26)g+='<text class="dl" x="'+(i*cw+cw/2)+'" y="'+(y(r.dem)-5)+'" text-anchor="middle">'+hhK(r.dem)+'</text>';
-    var yc=y(r.cap);
-    path+=(i===0?"M":"L")+(i*cw)+" "+yc+" L"+((i+1)*cw)+" "+yc+" ";
-    g+='<rect x="'+(i*cw)+'" y="0" width="'+cw+'" height="'+H+'" fill="transparent" data-bar="'+i+'"/>';
+    if(r.dem>r.cap){
+      g+='<rect x="'+x+'" y="'+y(r.dem)+'" width="'+bw+'" height="'+Math.max(1,y(Math.max(0,r.cap))-y(r.dem))+'" fill="color-mix(in srgb,var(--danger) 22%,transparent)" stroke="var(--danger)" stroke-width="1.5"/>';
+      if(cw>=26)g+='<text class="dl" x="'+(i*cw+cw/2)+'" y="'+Math.max(10,y(r.dem)-4)+'" text-anchor="middle" style="fill:var(--danger)">+'+hhK(r.dem-r.cap)+'</text>';
+    }
+    var yc=y(r.cap);path+=(i===0?"M":"L")+(i*cw)+" "+yc+" L"+((i+1)*cw)+" "+yc+" ";
+    g+='<rect x="'+(i*cw)+'" y="0" width="'+cw+'" height="'+H+'" fill="transparent" data-pb="'+i+'|'+j+'"/>';
   });
-  g+='<path d="'+path+'" fill="none" stroke="var(--ink)" stroke-width="2.5" stroke-linejoin="round"/>';
+  g+='<path d="'+path+'" fill="none" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/>';
   g+='<line x1="0" x2="'+w+'" y1="'+y(0)+'" y2="'+y(0)+'" stroke="var(--rule)" stroke-width="1"/>';
-  /* rótulo directo de la línea de capacidad, en el último mes */
-  var ul=s[s.length-1];if(ul&&ul.cap>0)g+='<text class="dl" x="'+(w-6)+'" y="'+(y(ul.cap)-6)+'" text-anchor="end">capacidad '+hhK(ul.cap)+'</text>';
   return g+'</svg>';
 }
 
@@ -3353,6 +3389,10 @@ function wireClicks(){
     var t=e.target;
     var csz=t.closest("[data-chsz]");
     if(csz){S.chartSz=csz.dataset.chsz;renderCap();renderOverlay();save();return;}
+    var chv=t.closest("[data-chv]");if(chv){S.chVista=chv.dataset.chv;renderCap();save();return;}
+    var che=t.closest("[data-che]");if(che){S.chEscala=che.dataset.che;renderCap();save();return;}
+    var pb=t.getAttribute&&t.getAttribute("data-pb");
+    if(pb){var q=pb.split("|");sel_({e:R.especialidades[+q[1]],m:R.meses[+q[0]]});return;}
     var grp=t.closest("[data-grupo]");
     if(grp){
       var tipo=grp.dataset.grupo,ps=S.datos.proyectos.filter(function(p){return p.tipoCliente===tipo;});
@@ -3374,7 +3414,7 @@ function wireClicks(){
     if(tn&&tn.dataset.e){sel_({e:tn.dataset.e});return;}
   });
   grid.addEventListener("change",function(e){
-    if(e.target.id==="espChart"){S.espChart=e.target.value;renderCap();save();}
+
   });
   ed.addEventListener("click",function(e){
     var g=e.target.closest("[data-goto]");if(g&&g.dataset.goto){sel_({p:g.dataset.goto});return;}
@@ -3395,12 +3435,14 @@ function wireClicks(){
       var ij=cell.dataset.cell.split("|"),i=+ij[0],j=+ij[1];
       h='<div>'+esc(R.especialidades[j])+' · '+mlabel(R.meses[i])+'</div>Demanda <b>'+hh(R.demanda[i][j])+'</b> HH<br>Capacidad <b>'+hh(R.capacidad[i][j])+'</b> HH<br>Ocupación <b>'+oc(R.ocupacion[i][j])+'</b> · '+semTxt(R.ocupacion[i][j]);
     }
-    var bar=t.getAttribute&&t.getAttribute("data-bar");
-    if(bar!==null&&bar!==undefined&&t.tagName==="rect"){
-      var s=serieChart()[+bar];
-      h='<div>'+mlabel(R.meses[+bar])+(S.espChart?" · "+esc(S.espChart):"")+'</div>'
-        +TIPOS.map(function(tp,k){return tp.n+' <b>'+hh(s.tipos[k])+'</b>';}).join(" · ")
-        +'<br>Demanda <b>'+hh(s.dem)+'</b> · capacidad <b>'+hh(s.cap)+'</b>'+(s.dem>s.cap?'<br>Exceso <b>'+hh(s.dem-s.cap)+'</b> HH':'');
+    var pbt=t.getAttribute&&t.getAttribute("data-pb");
+    if(pbt){
+      var q=pbt.split("|"),ii=+q[0],jj=+q[1],sr=serieEsp(jj)[ii],hpx=hpMesCap(),bal=(sr.cap-sr.dem)/hpx;
+      h='<div>'+esc(R.especialidades[jj])+' · '+mlabel(R.meses[ii])+'</div>'
+        +TIPOS.map(function(tp,k){return tp.n+' <b>'+hh(sr.tipos[k])+'</b>';}).join(" · ")
+        +'<br>Demanda <b>'+hh(sr.dem)+'</b> · capacidad <b>'+hh(sr.cap)+'</b> HH · ocupación <b>'+oc(sr.cap?sr.dem/sr.cap:0)+'</b>'
+        +'<br>'+(bal<0?'Faltan <b>'+fmtPers(Math.round(-bal*10)/10)+'</b> personas · exceso <b>'+hh(sr.dem-sr.cap)+'</b> HH':'Sobran <b>'+fmtPers(Math.round(bal*10)/10)+'</b> personas')
+        +'<br><span style="opacity:.75">Clic para ver los proyectos de ese mes</span>';
     }
     var seg=t.closest&&t.closest(".seg");
     if(seg){
@@ -4480,27 +4522,45 @@ function generarPDF(JsPDF){
   filaOc("Total area",fmtPers(totPersonas())+" pers.",dT.map(function(d,i){return cT[i]?d/cT[i]:0;}),dT);
   lineaHoy(yO0,y);
 
-  /* ---------- demanda vs capacidad ---------- */
-  var gh=48;
-  if(y+gh+16>yMax){y=nuevaPagina();}else y+=7;
-  doc.setFont("helvetica","bold");doc.setFontSize(10);ink(INK);doc.text("Demanda vs capacidad - total del area (HH/mes)",M,y);
-  var gy=y+4,s=R.meses.map(function(_,i){return {t:R.demandaPorTipo[i],c:cT[i]};});
-  var mx=niceMax(Math.max.apply(null,s.map(function(r){return Math.max(r.c,r.t.reduce(function(a,b){return a+b;},0));}))*1.05);
-  var yy=function(v){return gy+gh*(1-v/mx);};
-  for(var ip=0;ip<n;ip++)if(R.meses[ip]<R.kpiDesde){fill(PAST);doc.rect(gx+ip*cw,gy,cw,gh,"F");}
-  draw([229,234,231]);[0,0.25,0.5,0.75,1].forEach(function(f){doc.line(gx,yy(mx*f),W-M,yy(mx*f));doc.setFontSize(6.5);ink(SOFT);doc.text(hhK(mx*f),gx-1.5,yy(mx*f)+1,{align:"right"});});
-  s.forEach(function(r,i){
-    var acc=0,x=gx+i*cw+cw*0.12;
-    r.t.forEach(function(v,t){if(v<=0)return;fill(col[TIPOS[t].k]);doc.rect(x,yy(acc+v),cw*0.76,yy(acc)-yy(acc+v),"F");acc+=v;});
-    draw(INK);doc.setLineWidth(0.5);doc.line(gx+i*cw,yy(r.c),gx+(i+1)*cw,yy(r.c));
-    if(i<n-1&&s[i+1].c!==r.c)doc.line(gx+(i+1)*cw,yy(r.c),gx+(i+1)*cw,yy(s[i+1].c));
-    doc.setLineWidth(0.2);
+  /* ---------- saturación por especialidad: un panel por especialidad ---------- */
+  var ph=17,hpP=S.datos.capacidad.hhMesPersona*S.datos.capacidad.eficiencia;
+  var tituloSat=function(){
+    doc.setFont("helvetica","bold");doc.setFontSize(10);ink(INK);doc.text("Saturacion por especialidad - HH demandadas vs capacidad",M,y);
+    doc.setFont("helvetica","normal");doc.setFontSize(7);ink(SOFT);
+    doc.text(pdfTxt("Barras: demanda por tipo de cliente - linea: capacidad de la especialidad - rojo: exceso (HH por encima de la capacidad). Escala propia de cada panel."),M+112,y);
+    TIPOS.forEach(function(t,i){fill(col[t.k]);doc.rect(W-M-70+i*16,y-2.6,3.5,2.6,"F");ink(INK);doc.text(t.n,W-M-65.5+i*16,y-0.4);});
+    y+=3;
+  };
+  if(y+12+2*(ph+2)>yMax){y=nuevaPagina();}else y+=7;
+  tituloSat();var yS0=y;
+  R.especialidades.forEach(function(e,j){
+    if(y+ph+2>yMax){lineaHoy(yS0,y);y=nuevaPagina();tituloSat();yS0=y;}
+    var s=R.meses.map(function(_,i){var t=R.demandaPorTipoEsp[i][j];return {t:t,d:t.reduce(function(a,b){return a+b;},0),c:R.capacidad[i][j]};});
+    var mx=niceMax(Math.max.apply(null,s.map(function(r){return Math.max(r.d,r.c);}).concat([1]))*1.1),top=y+2.5,hgt=ph-3;
+    var yy=function(v){return top+hgt*(1-v/mx);};
+    var cu=R.cuellos[e],falta=0;s.forEach(function(r,i){if(R.meses[i]>=R.kpiDesde)falta=Math.max(falta,(r.d-r.c)/hpP);});
+    for(var ip=0;ip<n;ip++)if(R.meses[ip]<R.kpiDesde){fill(PAST);doc.rect(gx+ip*cw,y,cw,ph,"F");}
+    doc.setFont("helvetica","bold");doc.setFontSize(8);ink(INK);doc.text(pdfTxt(e),M+2,y+5);
+    doc.setFont("helvetica","normal");doc.setFontSize(6.5);
+    if(cu.mesesCriticos){doc.setTextColor(140,28,20);doc.text(pdfTxt(cu.mesesCriticos+" meses > 100%"+(falta>0.05?" - faltan "+fmtPers(Math.round(falta*10)/10)+" pers.":"")),M+2,y+9);}
+    else{doc.setTextColor(38,92,34);doc.text("sin exceso",M+2,y+9);}
+    ink(SOFT);doc.text(pdfTxt("pico "+oc(cu.maxOcupacion)+(cu.mesPico?" - "+mlabel(cu.mesPico):"")),M+2,y+12.5);
+    doc.setFontSize(5.5);doc.text(hhK(mx),gx-1.5,yy(mx)+1,{align:"right"});doc.text("0",gx-1.5,yy(0)+1,{align:"right"});
+    draw([229,234,231]);doc.line(gx,yy(mx/2),W-M,yy(mx/2));
+    s.forEach(function(r,i){
+      var acc=0,x=gx+i*cw+cw*0.12,bw=cw*0.76;
+      r.t.forEach(function(v,t){if(v<=0)return;fill(col[TIPOS[t].k]);doc.rect(x,yy(acc+v),bw,yy(acc)-yy(acc+v),"F");acc+=v;});
+      if(r.d>r.c){doc.setFillColor(253,224,221);doc.setDrawColor(201,60,46);doc.setLineWidth(0.3);doc.rect(x,yy(r.d),bw,yy(Math.max(0,r.c))-yy(r.d),"FD");doc.setLineWidth(0.2);
+        if(cw>=6){doc.setFont("helvetica","bold");doc.setFontSize(5);doc.setTextColor(140,28,20);doc.text("+"+hhK(r.d-r.c),gx+i*cw+cw/2,Math.max(y+2,yy(r.d)-0.8),{align:"center"});}}
+      draw(INK);doc.setLineWidth(0.45);doc.line(gx+i*cw,yy(r.c),gx+(i+1)*cw,yy(r.c));
+      if(i<n-1&&s[i+1].c!==r.c)doc.line(gx+(i+1)*cw,yy(r.c),gx+(i+1)*cw,yy(s[i+1].c));
+      doc.setLineWidth(0.2);
+    });
+    draw(RULE);doc.line(M,y+ph,W-M,y+ph);
+    y+=ph+1;
   });
-  for(var il=0;il<n;il++){doc.setFontSize(fs);ink(SOFT);doc.text(mlabel(R.meses[il]).slice(0,cw<6?3:6),gx+il*cw+cw/2,gy+gh+3.2,{align:"center"});}
-  lineaHoy(gy,gy+gh);
-  TIPOS.forEach(function(t,i){fill(col[t.k]);doc.rect(M+2,gy+4+i*5,4,3,"F");doc.setFontSize(7);ink(INK);doc.text(pdfTxt(t.n+" - "+t.d),M+8,gy+6.5+i*5);});
-  draw(INK);doc.setLineWidth(0.5);doc.line(M+2,gy+21.5,M+6,gy+21.5);doc.setLineWidth(0.2);doc.text("Capacidad",M+8,gy+22.5);
-  y=gy+gh+8;
+  lineaHoy(yS0,y);
+  y+=2;
 
   /* ---------- cuellos de botella y Pareto ---------- */
   var alto=Math.max(R.especialidades.length,Math.min(12,R.pareto.length))*5.5+12;
