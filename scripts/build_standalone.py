@@ -157,6 +157,12 @@ CURVAS (PARAMETROS > CURVAS)
   peso. Mientras una fila no sume 100 % se marca en rojo y se aplica en
   proporcion. "Ajustar a 100 %" deja pesos y filas en enteros que suman 100.
 
+AYUDAS EN PANTALLA
+  Pasando el mouse sobre cualquier indicador, boton, encabezado o leyenda
+  aparece una descripcion de lo que significa. El grafico "Demanda vs
+  capacidad" tiene tres altos (C, M, G) y muestra el valor de cada mes al
+  pasar el mouse.
+
 REPORTE PDF
   Boton "Reporte PDF" (A3 apaisado, necesita internet para cargar el
   generador). Muestra lo mismo que la pantalla: indicadores, el Gantt con las

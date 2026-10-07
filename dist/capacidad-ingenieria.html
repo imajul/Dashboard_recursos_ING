@@ -201,7 +201,15 @@ button.area .gcnt{font:600 10.5px/1 var(--f-num);color:var(--ink-soft);margin-to
 .esp-ele .nm b{color:var(--ink)}
 
 /* gráfico alineado */
-.tl.chart{height:150px;border-bottom:1px solid var(--rule)}
+.tl.chart{border-bottom:1px solid var(--rule)}
+.tl.chart rect[data-bar]:hover{fill:color-mix(in srgb,var(--ink) 7%,transparent)}
+.chartcell{align-items:flex-start} /* .lcell ya es sticky (posicionada): sirve de referencia para el eje */
+.yaxis{position:absolute;right:6px;top:0;bottom:0;width:60px;pointer-events:none}
+.yaxis span{position:absolute;right:0;transform:translateY(-50%);font:500 11px var(--f-num);color:var(--ink-soft)}
+.chsz{display:flex;gap:4px;align-items:center;font-size:11.5px;color:var(--ink-soft)}
+.chsz button{border:1px solid var(--rule);background:var(--chip);border-radius:5px;padding:1px 7px;font-size:11.5px;cursor:pointer;color:var(--ink)}
+.chsz button.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.chart svg text.dl{font:600 11px var(--f-num);fill:var(--ink);paint-order:stroke;stroke:var(--paper);stroke-width:3px}
 .tl.chart::before{display:none}
 .chartlbl{flex:1;display:flex;flex-direction:column;gap:6px;padding:10px 8px;justify-content:center;min-width:0}
 .chartlbl select{border:1px solid var(--rule);border-radius:6px;padding:4px 6px;background:var(--chip);font-size:12.5px;max-width:100%}
@@ -371,29 +379,29 @@ kbd{font:600 11px var(--f-num);background:var(--band-3);border:1px solid var(--r
 
 <header>
   <input id="title" value="Plan de capacidad · Ingeniería" aria-label="Título del plan">
-  <span id="escName" title="Escenario abierto"></span>
+  <span id="escName" title="Escenario abierto: el conjunto de proyectos, fechas, recursos y parámetros que estás viendo"></span>
   <button id="fsChip" title="Carpeta compartida (OneDrive / SharePoint)">Sin carpeta compartida</button>
-  <span class="muestra" title="Proyectos del CSV de SharePoint; parámetros, curvas y dotación son ilustrativos">capacidad de ejemplo</span>
+  <span class="muestra" title="Proyectos del CSV de SharePoint; parámetros, curvas y dotación son ilustrativos hasta que cargues los reales">capacidad de ejemplo</span>
   <div class="tools">
-    <button class="btn" id="lpBtn" title="Lista de proyectos: la base de datos de la herramienta">Proyectos</button>
-    <button class="btn" id="addBtn">Agregar proyecto</button>
-    <button class="btn" id="undo" disabled>Deshacer</button>
+    <button class="btn" id="lpBtn" title="Lista de proyectos: la base de datos de la herramienta. Tabla editable con todos los campos, HH asignadas y motivo">Proyectos</button>
+    <button class="btn" id="addBtn" title="Crea un proyecto nuevo y abre su ficha para completarlo">Agregar proyecto</button>
+    <button class="btn" id="undo" disabled title="Deshace el último cambio (Ctrl+Z). Ctrl+Y lo rehace">Deshacer</button>
     <div class="sep"></div>
-    <button class="btn" id="resBtn" title="Dotación, HH por persona, eficiencia, horizonte">Recursos</button>
-    <button class="btn" id="parBtn" title="Tablas de HH por tecnología y tamaño, ET, Línea, DNN, O&amp;M y curvas">Parámetros</button>
-    <button class="btn" id="minBtn" title="Personas mínimas para que ningún mes supere el 100 %">Nivelar</button>
+    <button class="btn" id="resBtn" title="Capacidad del área: nómina del staff por especialidad, HH por persona y mes, eficiencia, subcontratos y horizonte de meses">Recursos</button>
+    <button class="btn" id="parBtn" title="Modelo de estimación: HH por tecnología y tamaño, ET, Línea, DNN, O&amp;M y curvas de distribución en el tiempo">Parámetros</button>
+    <button class="btn" id="minBtn" title="Calcula cuántas personas hacen falta en cada especialidad (y desde cuándo) para que ningún mes supere el 100 % de ocupación">Nivelar</button>
     <div class="sep"></div>
     <button class="btn primary" id="fsSave" title="Guardar el plan en la carpeta compartida (Ctrl+S)">Guardar</button>
-    <button class="btn" id="scenBtn">Escenarios</button>
-    <button class="btn" id="cmpBtn">Comparar</button>
-    <button class="btn" id="pdfBtn" title="Reporte PDF para la dirección">Reporte PDF</button>
-    <button class="btn" id="exportBtn">Exportar</button>
+    <button class="btn" id="scenBtn" title="Guardar, abrir y borrar escenarios: fotos completas del plan para probar alternativas">Escenarios</button>
+    <button class="btn" id="cmpBtn" title="Compara el escenario actual con otro: indicadores y ocupación mes a mes lado a lado">Comparar</button>
+    <button class="btn" id="pdfBtn" title="Reporte PDF con lo mismo que la pantalla: indicadores, Gantt con HH por mes, ocupación, gráfico y ficha de proyectos (Ctrl+P)">Reporte PDF</button>
+    <button class="btn" id="exportBtn" title="Descarga el forecast mensual, la matriz de ocupación, la lista de proyectos o el escenario completo">Exportar</button>
     <button class="btn" id="importBtn" title="Escenario (JSON) o lista de proyectos exportada de SharePoint (CSV)">Importar</button>
     <input type="file" id="file" accept=".json,.csv" hidden>
     <div class="sep"></div>
-    <div class="zoom"><label for="zoom">Zoom</label><input type="range" id="zoom" min="30" max="80" value="46"></div>
+    <div class="zoom" title="Ancho de cada mes en la línea de tiempo"><label for="zoom">Zoom</label><input type="range" id="zoom" min="30" max="80" value="46"></div>
     <button class="btn" id="kbdBtn" title="Atajos de teclado (F1)">⌨</button>
-    <button class="btn" id="theme" title="Claro / oscuro">◐</button>
+    <button class="btn" id="theme" title="Cambia entre tema claro y oscuro">◐</button>
   </div>
 </header>
 
@@ -2474,10 +2482,10 @@ function totalP(p){return E.hhBloques(p,PV(),S.datos.curvas).reduce(function(a,b
 function renderHead(){
   var h=document.getElementById("head"),n=R.meses.length,cw=S.cw,years=[],cur=null,i;
   R.meses.forEach(function(ym){var y=ym.slice(0,4);if(!cur||cur.y!==y){cur={y:y,n:0};years.push(cur);}cur.n++;});
-  var yb='<div class="lrow"><div class="hhead" style="height:22px;border-bottom:1px solid var(--rule)">Tipo · Proyecto</div><div class="yband">';
+  var yb='<div class="lrow"><div class="hhead" style="height:22px;border-bottom:1px solid var(--rule)" title="Proyectos agrupados por tipo de cliente. Clic en un proyecto para ver y editar su ficha; el casillero lo incluye o excluye del cálculo">Tipo · Proyecto</div><div class="yband">';
   years.forEach(function(g){yb+='<div class="ycell" style="width:'+px(g.n*cw)+'">'+g.y+'</div>';});
   var mb='<div class="lrow"><div class="hhead" style="height:22px;border-bottom:1px solid var(--rule)"></div><div class="mband">';
-  var nb='<div class="lrow"><div class="hhead" style="height:22px;border-bottom:1px solid var(--rule);font-weight:500;font-size:11px;color:color-mix(in srgb,var(--band-ink) 85%,var(--band))">HH forecast del mes</div><div class="nband">';
+  var nb='<div class="lrow"><div class="hhead" style="height:22px;border-bottom:1px solid var(--rule);font-weight:500;font-size:11px;color:color-mix(in srgb,var(--band-ink) 85%,var(--band))">HH forecast del mes</div><div class="nband" title="HH de ingeniería que demandan todos los proyectos incluidos en cada mes">';
   for(i=0;i<n;i++){
     var tot=R.demanda[i].reduce(function(a,b){return a+b;},0);
     var pas=R.meses[i]<R.kpiDesde?" past":"";
@@ -2548,14 +2556,14 @@ function barHTML(p,w,hit){
 function renderCap(){
   var box=document.getElementById("cap"),n=R.meses.length,cw=S.cw,w=n*cw,html="";
   var cap=S.datos.capacidad,hp=cap.hhMesPersona*cap.eficiencia;
-  html+='<div class="lrow secrow"><div class="hhead">Ocupación por especialidad <small>HH forecast ÷ capacidad · '+NF0.format(hp)+' HH/persona·mes</small></div><div class="band" style="width:'+px(w)+'"></div></div>';
+  html+='<div class="lrow secrow"><div class="hhead" title="Para cada especialidad y mes: HH que demandan los proyectos dividido las HH disponibles del staff. Clic en una celda para ver qué proyectos la componen">Ocupación por especialidad <small>HH forecast ÷ capacidad · '+NF0.format(hp)+' HH/persona·mes</small></div><div class="band" style="width:'+px(w)+'"></div></div>';
   R.especialidades.forEach(function(e,j){
     var cu=R.cuellos[e],pers=cap.dotacion[e]||0,isSel=sel&&sel.e===e&&!sel.m,nom=modoNomina(cap);
-    var tag=cu.mesesCriticos?'<span class="fl crit" title="Meses con ocupación mayor a 100%">'+cu.mesesCriticos+' m &gt;100%</span>':'<span class="fl ok">sin exceso</span>';
+    var tag=cu.mesesCriticos?'<span class="fl crit" title="Meses con ocupación mayor a 100%">'+cu.mesesCriticos+' m &gt;100%</span>':'<span class="fl ok" title="Ningún mes supera el 100 % de ocupación en esta especialidad">sin exceso</span>';
     html+='<div class="lrow"><div class="lcell"><div class="tname'+(isSel?" sel":"")+'" data-e="'+esc(e)+'" style="padding-left:12px">'
       +'<span class="nm"><b>'+esc(e)+'</b></span>'+tag
       +(nom?'<button class="fl" data-staff="'+esc(e)+'" title="Personas en la nómina en '+mlabel(R.kpiDesde)+' (clic para ver la lista)" style="border:1px solid var(--rule);cursor:pointer">'+fmtPers(personasHoy(e))+' pers.</button>'
-        :'<span class="stepper" title="Personas asignadas"><button data-dot="'+esc(e)+'" data-d="-1" aria-label="Quitar una persona en '+esc(e)+'">−</button><span>'+pers+'</span><button data-dot="'+esc(e)+'" data-d="1" aria-label="Sumar una persona en '+esc(e)+'">+</button></span>')
+        :'<span class="stepper" title="Personas asignadas a la especialidad (sin nómina cargada). Con + y − sumás o quitás una persona en todo el horizonte"><button data-dot="'+esc(e)+'" data-d="-1" aria-label="Quitar una persona en '+esc(e)+'">−</button><span>'+pers+'</span><button data-dot="'+esc(e)+'" data-d="1" aria-label="Sumar una persona en '+esc(e)+'">+</button></span>')
       +'</div></div><div class="tl" style="width:'+px(w)+'">';
     for(var i=0;i<n;i++){
       var v=R.ocupacion[i][j],d=R.demanda[i][j];
@@ -2566,7 +2574,7 @@ function renderCap(){
     html+='</div></div>';
   });
   /* fila total */
-  html+='<div class="lrow"><div class="lcell"><div class="tname" style="padding-left:12px;cursor:default"><span class="nm"><b>Total área</b></span><span class="fl">'+fmtPers(totPersonas())+' pers.</span></div></div><div class="tl" style="width:'+px(w)+'">';
+  html+='<div class="lrow"><div class="lcell"><div class="tname" style="padding-left:12px;cursor:default"><span class="nm" title="Ocupación de todo el área: demanda total ÷ capacidad total de cada mes"><b>Total área</b></span><span class="fl" title="Personas del área en '+mlabel(R.kpiDesde)+'">'+fmtPers(totPersonas())+' pers.</span></div></div><div class="tl" style="width:'+px(w)+'">';
   for(var i2=0;i2<n;i2++){
     var dd=R.demanda[i2].reduce(function(a,b){return a+b;},0),cc=R.capacidad[i2].reduce(function(a,b){return a+b;},0),vv=cc?dd/cc:0;
     var c2=dd<0.5?"zero":sem(vv);
@@ -2575,11 +2583,14 @@ function renderCap(){
   html+='</div></div>';
   /* gráfico demanda vs capacidad alineado a la línea de tiempo */
   var opts='<option value="">Todas las especialidades</option>'+R.especialidades.map(function(e){return '<option'+(S.espChart===e?" selected":"")+'>'+esc(e)+'</option>';}).join("");
-  html+='<div class="lrow secrow"><div class="hhead">Demanda vs capacidad <small>HH por mes</small></div><div class="band" style="width:'+px(w)+'"></div></div>';
-  html+='<div class="lrow"><div class="lcell"><div class="chartlbl"><select id="espChart" aria-label="Especialidad del gráfico">'+opts+'</select>'
-    +'<div class="legs">'+TIPOS.map(function(t){return '<span class="leg"><i style="background:'+t.c+'"></i>'+t.n+'</span>';}).join("")
-    +'<span class="leg"><i class="line"></i>Capacidad</span></div></div></div>'
-    +'<div class="tl chart" style="width:'+px(w)+'">'+chartSVG(w)+'</div></div>';
+  html+='<div class="lrow secrow"><div class="hhead" title="Barras: HH que demandan los proyectos cada mes, por tipo de cliente. Línea: HH disponibles del área. Donde la barra pasa la línea hay exceso (en rojo). Pasá el mouse por un mes para ver los valores">Demanda vs capacidad <small>HH por mes</small></div><div class="band" style="width:'+px(w)+'"></div></div>';
+  var sz=S.chartSz||"mediano";
+  html+='<div class="lrow"><div class="lcell chartcell" style="height:'+px(chartH())+'"><div class="chartlbl" style="justify-content:flex-start;padding-right:72px"><select id="espChart" aria-label="Especialidad del gráfico" title="Mostrar la demanda y la capacidad de todo el área o de una sola especialidad">'+opts+'</select>'
+    +'<div class="legs">'+TIPOS.map(function(t){return '<span class="leg" title="Demanda de HH de los proyectos '+esc(t.n)+' ('+esc(t.d)+')"><i style="background:'+t.c+'"></i>'+t.n+'</span>';}).join("")
+    +'<span class="leg" title="HH disponibles del área (personas × HH por persona y mes × eficiencia + subcontratos)"><i class="line"></i>Capacidad</span>'
+    +'<span class="leg" title="Parte de la demanda que supera la capacidad de ese mes"><i style="background:color-mix(in srgb,var(--danger) 18%,transparent);box-shadow:inset 0 0 0 1.5px var(--danger)"></i>Exceso</span></div>'
+    +'<div class="chsz" title="Alto del gráfico">Alto '+["chico","mediano","grande"].map(function(k){return '<button data-chsz="'+k+'" class="'+(sz===k?"on":"")+'" aria-pressed="'+(sz===k)+'">'+k[0].toUpperCase()+'</button>';}).join("")+'</div></div>'+chartEje()+'</div>'
+    +'<div class="tl chart" style="width:'+px(w)+';height:'+px(chartH())+'">'+chartSVG(w)+'</div></div>';
   box.innerHTML=html;
 }
 /* ---- nómina del staff: si hay personas cargadas, la dotación sale de la lista ---- */
@@ -2599,28 +2610,45 @@ function serieChart(){
   });
 }
 function niceMax(v){if(v<=0)return 1;var p=Math.pow(10,Math.floor(Math.log10(v))),f=v/p;return (f<=1?1:f<=2?2:f<=2.5?2.5:f<=5?5:10)*p;}
+/* alto del gráfico demanda vs capacidad (px), elegible en la etiqueta del gráfico */
+var CH_ALTOS={chico:200,mediano:320,grande:460};
+function chartH(){return CH_ALTOS[S.chartSz]||CH_ALTOS.mediano;}
+function chartEscala(){
+  var H=chartH(),top=22,bot=10,s=serieChart();
+  var mx=niceMax(Math.max.apply(null,s.map(function(r){return Math.max(r.dem,r.cap);}))*1.08);
+  return {H:H,s:s,mx:mx,y:function(v){return top+(H-top-bot)*(1-v/mx);}};
+}
+/* etiquetas del eje Y: van en la columna izquierda, alineadas con las líneas de la grilla */
+function chartEje(){
+  var e=chartEscala(),h="";
+  [0,0.25,0.5,0.75,1].forEach(function(f){h+='<span style="top:'+px(e.y(e.mx*f))+'">'+(f?hhK(e.mx*f):"0")+'</span>';});
+  return '<div class="yaxis" aria-hidden="true">'+h+'</div>';
+}
 function chartSVG(w){
-  var H=150,top=12,bot=16,cw=S.cw,s=serieChart();
-  var mx=niceMax(Math.max.apply(null,s.map(function(r){return Math.max(r.dem,r.cap);}))*1.05);
-  var y=function(v){return top+(H-top-bot)*(1-v/mx);};
+  var e=chartEscala(),H=e.H,cw=S.cw,s=e.s,mx=e.mx,y=e.y;
   var g='<svg width="'+w+'" height="'+H+'" role="img" aria-label="Demanda por tipo de cliente y capacidad por mes">';
-  [0.5,1].forEach(function(f){var yy=y(mx*f);g+='<line x1="0" x2="'+w+'" y1="'+yy+'" y2="'+yy+'" stroke="var(--rule-soft)" stroke-width="1"/><text x="4" y="'+(yy-3)+'">'+hhK(mx*f)+'</text>';});
-  var path="";
+  [0.25,0.5,0.75,1].forEach(function(f){var yy=y(mx*f);g+='<line x1="0" x2="'+w+'" y1="'+yy+'" y2="'+yy+'" stroke="var(--rule-soft)" stroke-width="1"/>';});
+  var path="",iPico=-1;
+  s.forEach(function(r,i){if(iPico<0||r.dem>s[iPico].dem)iPico=i;});
   s.forEach(function(r,i){
-    var x=i*cw+4,bw=Math.max(2,cw-8),acc=0;
+    var x=i*cw+Math.max(2,cw*0.14),bw=Math.max(2,cw-2*Math.max(2,cw*0.14)),acc=0;
     r.tipos.forEach(function(v,t){
       if(v<=0)return;
       var y1=y(acc+v),y0=y(acc),hgt=Math.max(0,y0-y1-(acc>0?2:0));
-      g+='<rect x="'+x+'" y="'+y1+'" width="'+bw+'" height="'+hgt+'" fill="'+TIPOS[t].c+'" rx="'+(acc+v>=r.dem-0.01?2:0)+'"/>';
+      g+='<rect x="'+x+'" y="'+y1+'" width="'+bw+'" height="'+hgt+'" fill="'+TIPOS[t].c+'" rx="'+(acc+v>=r.dem-0.01?3:0)+'"/>';
       acc+=v;
     });
-    if(r.dem>r.cap&&r.cap>0){g+='<rect x="'+x+'" y="'+y(r.dem)+'" width="'+bw+'" height="'+Math.max(1,y(r.cap)-y(r.dem))+'" fill="none" stroke="var(--danger)" stroke-width="1.5"/>';}
+    if(r.dem>r.cap&&r.cap>0){g+='<rect x="'+x+'" y="'+y(r.dem)+'" width="'+bw+'" height="'+Math.max(1,y(r.cap)-y(r.dem))+'" fill="color-mix(in srgb,var(--danger) 18%,transparent)" stroke="var(--danger)" stroke-width="1.5"/>';}
+    /* etiquetas selectivas: el mes pico y los meses con exceso */
+    if(r.dem>=0.5&&(i===iPico||(r.dem>r.cap&&r.cap>0))&&cw>=26)g+='<text class="dl" x="'+(i*cw+cw/2)+'" y="'+(y(r.dem)-5)+'" text-anchor="middle">'+hhK(r.dem)+'</text>';
     var yc=y(r.cap);
     path+=(i===0?"M":"L")+(i*cw)+" "+yc+" L"+((i+1)*cw)+" "+yc+" ";
     g+='<rect x="'+(i*cw)+'" y="0" width="'+cw+'" height="'+H+'" fill="transparent" data-bar="'+i+'"/>';
   });
-  g+='<path d="'+path+'" fill="none" stroke="var(--ink)" stroke-width="2"/>';
+  g+='<path d="'+path+'" fill="none" stroke="var(--ink)" stroke-width="2.5" stroke-linejoin="round"/>';
   g+='<line x1="0" x2="'+w+'" y1="'+y(0)+'" y2="'+y(0)+'" stroke="var(--rule)" stroke-width="1"/>';
+  /* rótulo directo de la línea de capacidad, en el último mes */
+  var ul=s[s.length-1];if(ul&&ul.cap>0)g+='<text class="dl" x="'+(w-6)+'" y="'+(y(ul.cap)-6)+'" text-anchor="end">capacidad '+hhK(ul.cap)+'</text>';
   return g+'</svg>';
 }
 
@@ -2658,27 +2686,34 @@ function renderKPIs(){
    +kpi("Primer mes crítico",pc?mlabel(pc.mes):"ninguno",pcD,pc?esc(pc.especialidades.join(", ")):"Ningún mes supera el 100% desde "+mlabel(R.kpiDesde),!!pc)
    +kpi("HH excedidas",hh(k.hhExcedidas),dchip(k.hhExcedidas,kb.hhExcedidas,true,hh),"Demanda por encima de la capacidad",k.hhExcedidas>0.5)
    +kpi("HH forecast",hh(k.hhForecastHorizonte),dchip(k.hhForecastHorizonte,kb.hhForecastHorizonte,true,hh),"Desde "+mlabel(R.kpiDesde)+" a "+mlabel(R.meses[R.meses.length-1]),false)
-   +'<div class="kpi"><span class="k">DPI · DNN · O&amp;M</span><span class="v" style="font:600 12.5px/1.3 var(--f-num)">'
+   +'<div class="kpi" title="Cómo se reparte la demanda total de HH entre los tipos de cliente: DPI (Dirección de Proyectos), DNN (Desarrollo de Nuevos Negocios) y O&amp;M (Operación y Mantenimiento)"><span class="k">DPI · DNN · O&amp;M</span><span class="v" style="font:600 12.5px/1.3 var(--f-num)">'
      +TIPOS.map(function(t){return t.n+" "+NFP.format((mixT[t.k]||0)/tot);}).join(" · ")+'</span>'
      +'<div class="mix">'+TIPOS.map(function(t){var f=(mixT[t.k]||0)/tot;return f>0?'<i style="width:'+(f*100)+'%;background:'+t.c+'" title="'+t.n+': '+hh(mixT[t.k]||0)+' HH"></i>':"";}).join("")+'</div></div>'
    +kpi("ET + Líneas",hh(etl),"",NFP.format(etl/tot)+" de la demanda total",false);
   document.getElementById("kpis").innerHTML=html;
   document.getElementById("escName").textContent=S.nombre+(S.filtro?" · solo "+S.filtro:"");
 }
-function kpi(k,v,d,s,crit){return '<div class="kpi'+(crit?" crit":"")+'"><span class="k">'+k+'</span><span class="v"><b>'+v+'</b>'+(d||"")+'</span><span class="s">'+s+'</span></div>';}
+var KPI_DESC={
+  "Máxima ocupación":"Mayor relación entre la demanda de HH y las HH disponibles de una especialidad en un mes (desde el mes de inicio de los indicadores). Más de 100 % = esa especialidad no alcanza a cubrir el trabajo de ese mes.",
+  "Primer mes crítico":"Mes a partir del cual la demanda de HH de ingeniería supera las HH disponibles en alguna especialidad. Debajo, las especialidades que se exceden ese mes.",
+  "HH excedidas":"Suma de las HH de demanda que superan la capacidad, mes a mes y especialidad por especialidad. Son las horas que faltaría cubrir con más personas, subcontratos o moviendo proyectos.",
+  "HH forecast":"Total de HH de ingeniería que demandan los proyectos incluidos, desde el mes de inicio de los indicadores hasta el final del horizonte.",
+  "ET + Líneas":"HH de estaciones transformadoras y líneas (componentes eléctricos de los proyectos DPI) y su peso en la demanda total."
+};
+function kpi(k,v,d,s,crit){return '<div class="kpi'+(crit?" crit":"")+'"'+(KPI_DESC[k]?' title="'+esc(KPI_DESC[k])+'"':'')+'><span class="k">'+k+'</span><span class="v"><b>'+v+'</b>'+(d||"")+'</span><span class="s">'+s+'</span></div>';}
 
 /* ===================== render: pie ===================== */
 function renderFooter(){
   var f=document.getElementById("legend"),cnt={};
   S.datos.proyectos.forEach(function(p){cnt[p.tipoCliente]=(cnt[p.tipoCliente]||0)+1;});
-  var html='<span class="leg"><b>Ver demanda de:</b></span><button class="fchip'+(S.filtro?"":" on")+'" data-f="">Todos</button>';
+  var html='<span class="leg" title="Filtra la demanda por tipo de cliente, como un segmentador de Power BI. La capacidad no cambia"><b>Ver demanda de:</b></span><button class="fchip'+(S.filtro?"":" on")+'" data-f="" title="Demanda de todos los tipos de cliente">Todos</button>';
   TIPOS.forEach(function(t){
     if(!cnt[t.k])return;
-    html+='<button class="fchip'+(S.filtro===t.k?" on":"")+'" data-f="'+t.k+'" title="'+t.d+'"><i style="background:'+t.c+'"></i>'+t.n+' <b>'+cnt[t.k]+'</b></button>';
+    html+='<button class="fchip'+(S.filtro===t.k?" on":"")+'" data-f="'+t.k+'" title="Ver solo la demanda de '+t.d+' ('+cnt[t.k]+' proyectos)"><i style="background:'+t.c+'"></i>'+t.n+' <b>'+cnt[t.k]+'</b></button>';
   });
-  html+='<span class="sep"></span><span class="sem">Semáforo <i class="fl ok">&lt; 80%</i><i class="fl warn">&lt; 100%</i><i class="fl crit">≥ 100%</i></span>'
-    +'<span class="sep"></span><span class="leg">Base de comparación: <b style="color:var(--ink)">'+esc(S.baseNombre)+'</b></span>'
-    +'<span class="leg">Barra gris fina: ET · barra oscura: Línea · bordes de la barra: duración</span>';
+  html+='<span class="sep"></span><span class="sem" title="Colores de la ocupación (demanda ÷ capacidad): verde holgado, amarillo cerca del límite, rojo la demanda supera las HH disponibles">Semáforo <i class="fl ok">&lt; 80%</i><i class="fl warn">&lt; 100%</i><i class="fl crit">≥ 100%</i></span>'
+    +'<span class="sep"></span><span class="leg" title="Escenario contra el que se calculan las diferencias que muestran los indicadores (+/−). Se cambia en Escenarios">Base de comparación: <b style="color:var(--ink)">'+esc(S.baseNombre)+'</b></span>'
+    +'<span class="leg" title="Cómo leer las barras del Gantt">Barra gris fina: ET · barra oscura: Línea · bordes de la barra: duración</span>';
   f.innerHTML=html;
 }
 
@@ -3268,11 +3303,56 @@ function wireDrag(){
   rows.addEventListener("pointercancel",end);
 }
 
+/* ===================== ayudas al pasar el mouse ===================== */
+/* Todo elemento con title muestra su descripción en el mismo globo que la grilla (más visible y
+   sin la demora del navegador): el atributo title se pasa a data-tip al aparecer en la página. */
+function tipTxt(t){return esc(t).replace(/\n/g,"<br>");}
+function mostrarTip(h,e){
+  var tip=document.getElementById("tip");
+  tip.innerHTML=h;tip.className="on";
+  var x=e.clientX+14,y=e.clientY+16,w=tip.offsetWidth,hh2=tip.offsetHeight;
+  if(x+w>window.innerWidth-8)x=Math.max(8,e.clientX-w-14);
+  if(y+hh2>window.innerHeight-8)y=Math.max(8,e.clientY-hh2-14);
+  tip.style.left=px(x);tip.style.top=px(y);
+}
+function pasarTitulos(root){
+  var una=function(el){
+    if(el.nodeType!==1||!el.hasAttribute("title"))return;
+    if(el.namespaceURI==="http://www.w3.org/2000/svg")return;
+    var t=el.getAttribute("title");el.removeAttribute("title");
+    if(t)el.setAttribute("data-tip",t);
+  };
+  una(root);
+  if(root.querySelectorAll)root.querySelectorAll("[title]").forEach(una);
+}
+function wireTips(){
+  pasarTitulos(document.body);
+  new MutationObserver(function(ms){
+    ms.forEach(function(m){
+      if(m.type==="attributes")pasarTitulos(m.target);
+      else m.addedNodes.forEach(function(n){if(n.nodeType===1)pasarTitulos(n);});
+    });
+  }).observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:["title"]});
+  var tip=document.getElementById("tip"),activo=false;
+  document.addEventListener("pointermove",function(e){
+    if(drag||e.pointerType==="touch")return;
+    var t=e.target;
+    if(t.closest&&t.closest("#grid"))return; /* la grilla tiene su propio globo, más detallado */
+    var el=t.closest&&t.closest("[data-tip]");
+    if(!el){if(activo){tip.className="";activo=false;}return;}
+    mostrarTip(tipTxt(el.getAttribute("data-tip")),e);activo=true;
+  });
+  document.addEventListener("pointerdown",function(){if(activo){tip.className="";activo=false;}});
+  document.addEventListener("scroll",function(){if(activo){tip.className="";activo=false;}},true);
+}
+
 /* ===================== clics y tooltip ===================== */
 function wireClicks(){
   var grid=document.getElementById("grid");
   grid.addEventListener("click",function(e){
     var t=e.target;
+    var csz=t.closest("[data-chsz]");
+    if(csz){S.chartSz=csz.dataset.chsz;renderCap();renderOverlay();save();return;}
     var grp=t.closest("[data-grupo]");
     if(grp){
       var tipo=grp.dataset.grupo,ps=S.datos.proyectos.filter(function(p){return p.tipoCliente===tipo;});
@@ -3328,12 +3408,9 @@ function wireClicks(){
       if(seg.dataset.sens){var bl=E.bloques(p,S.datos.curvas,PV())[+seg.dataset.sens];k+=bl[0];}
       h='<div><b style="font-family:inherit">'+esc(p.proyecto)+'</b></div>'+mlabel(E.mesStr(E.mesIdx(R.meses[0])+sp.start+k))+': <b>'+hh(m[sp.start+k]||0)+'</b> HH<br>Total <b>'+hh(totalP(p))+'</b> HH'+'<br>Duración <b>'+sp.dur+'</b> meses'+(durMod(p)?' (curvas: '+sp.base+')':'')+(seg.dataset.sens?'<br>Sensibilidad '+seg.dataset.sens+(sensMod(p,+seg.dataset.sens)?' (ajustada)':' (automática)')+' · arrastrala para cambiar su inicio, bordes para su duración':'')+(p.simulable?'<br>Arrastrá para mover · bordes para la duración':'<br>Fecha y duración fijas');
     }
+    if(!h){var dt=t.closest&&t.closest("[data-tip]");if(dt)h=tipTxt(dt.getAttribute("data-tip"));}
     if(!h){tip.className="";return;}
-    tip.innerHTML=h;tip.className="on";
-    var x=e.clientX+14,y=e.clientY+14,w=tip.offsetWidth,hh2=tip.offsetHeight;
-    if(x+w>window.innerWidth-8)x=e.clientX-w-14;
-    if(y+hh2>window.innerHeight-8)y=e.clientY-hh2-14;
-    tip.style.left=px(x);tip.style.top=px(y);
+    mostrarTip(h,e);
   });
   grid.addEventListener("pointerleave",function(){tip.className="";});
   document.getElementById("legend").onclick=function(e){
@@ -4843,7 +4920,7 @@ function boot(){
   document.getElementById("zoom").value=S.cw;
   S.q="";
   recalc();render();
-  wireDrag();wireClicks();wireDlgDrag();
+  wireDrag();wireClicks();wireDlgDrag();wireTips();
   document.getElementById("edTab").onclick=function(){S.panelOculto=false;render();save();};wireFs();fsChip();fsRestaurar();
   document.getElementById("dlgClose").onclick=function(){dlg.close();};
   document.getElementById("dlgX").onclick=function(){dlg.close();};
