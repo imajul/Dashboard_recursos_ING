@@ -65,6 +65,9 @@ ni cuentas de Claude o GitHub: alcanza con la cuenta de Microsoft de la empresa 
   `capacidad.dotacion`). Pegar desde Excel, vacantes desde «Nivelar», cambios en el registro.
 - **HH manuales por proyecto:** en el panel del proyecto, HH por componente (modelo vs. asignadas) con motivo;
   vacío = modelo. Se exportan en las columnas «HH Estimadas …».
+- **HH por especialidad:** `hhEsp = {especialidad: HH}` pisa el total de cada especialidad (antes del solapamiento);
+  la forma en el tiempo es la de su curva, o la del proyecto si el modelo no le asigna horas. Si hay, mandan sobre
+  las HH por componente. Columna «HH por Especialidad» (JSON) en el CSV; `hh_esp_manual` en SQLite.
 - **Sensibilidades DNN editables:** cada sensibilidad repite el bloque (mismas HH); por defecto arranca 3 meses
   después del fin del anterior y dura lo mismo, pero `sensDetalle[i] = {separacion, duracion, hh}` fija otro inicio
   (relativo al bloque anterior), otra duración y otras HH (`hh` vacío = las del original). Cada bloque guarda su propia duración: al cambiar la del original, la UI fija antes

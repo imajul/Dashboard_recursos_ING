@@ -273,10 +273,39 @@ def _solap(p: dict) -> float:
     return 1.0 if _vacio(s) or es_otro(p) else float(s)  # «Otro»: sin solapamiento
 
 
-def hh_bloques(p: dict, params: dict) -> list[float]:
+def con_esp(p: dict) -> bool:
+    """¿Tiene HH por especialidad cargadas a mano? (p["hhEsp"] = {especialidad: HH antes del solapamiento})"""
+    return not es_otro(p) and any(not _vacio(v) for v in (p.get("hhEsp") or {}).values())
+
+
+def hh_especialidades(p: dict, curvas: dict, params: dict) -> tuple[dict, dict]:
+    """(modelo, asignadas): HH por especialidad según las curvas y con las cargadas a mano.
+
+    Las cargadas pisan el total de esa especialidad; las vacías siguen con el modelo."""
+    cv = curvas_de(p, curvas or {}, params)
+    modelo: dict = {}
+    for c in componentes(p, params):
+        for e, v in (cv.get(c["curva"]) or {}).items():
+            modelo[e] = modelo.get(e, 0.0) + c["hh"] * sum(v)
+    asignadas = dict(modelo)
+    if not es_otro(p):
+        for e, v in (p.get("hhEsp") or {}).items():
+            if not _vacio(v):
+                asignadas[e] = max(0.0, float(v))
+    return modelo, asignadas
+
+
+def hh_bruto(p: dict, curvas: dict | None, params: dict) -> float:
+    """HH del proyecto antes del solapamiento (las de cada especialidad si hay cargadas)."""
+    if con_esp(p) and curvas is not None:
+        return sum(hh_especialidades(p, curvas, params)[1].values())
+    return sum(c["hh"] for c in componentes(p, params))
+
+
+def hh_bloques(p: dict, params: dict, curvas: dict | None = None) -> list[float]:
     """HH netas de cada bloque (0 = original). sensDetalle[i]["hh"] fija las de una sensibilidad;
     vacío = las mismas HH que el original."""
-    base = sum(c["hh"] for c in componentes(p, params)) * _solap(p)
+    base = hh_bruto(p, curvas, params) * _solap(p)
     out = []
     for b in range(sensibilidades(p) + 1):
         v = _ajuste_sens(p, b).get("hh")
@@ -303,8 +332,20 @@ def forecast(proyectos: list[dict], curvas: dict, params: dict) -> list[dict]:
         comps = componentes(p, params)
         n_base = max((largo_curva(cv, c["curva"]) for c in comps), default=0)
         desplazamientos = [d for d, _ in bloques(p, curvas, params)]
-        hb = hh_bloques(p, params)
+        hb = hh_bloques(p, params, curvas)
         escala = [x / hb[0] if hb[0] > 0 else 1.0 for x in hb]  # HH propias de cada sensibilidad
+        # HH por especialidad: cada una escala su curva; una sin HH en el modelo toma la forma del proyecto
+        k_esp: dict | None = None
+        extras: list[tuple[str, float]] = []
+        if con_esp(p):
+            modelo, asignadas = hh_especialidades(p, curvas, params)
+            m_tot = sum(modelo.values())
+            k_esp = {}
+            for e, t in asignadas.items():
+                if modelo.get(e, 0.0) > 0:
+                    k_esp[e] = t / modelo[e]
+                elif t > 0 and m_tot > 0:
+                    extras.append((e, t / m_tot))
         for c in comps:
             curva = cv.get(c["curva"]) or {}
             n_c = largo_curva(cv, c["curva"])
@@ -314,16 +355,20 @@ def forecast(proyectos: list[dict], curvas: dict, params: dict) -> list[dict]:
                     factores = base
                     if n_nuevo != n_c:
                         factores = reescalar(base + [0.0] * (n_c - len(base)), n_nuevo)
+                    emitir = [(esp, k_esp.get(esp, 1.0) if k_esp is not None else 1.0)] + extras
                     for k, f in enumerate(factores):
                         if f == 0:
                             continue
-                        filas.append({
-                            "proyectoId": p["id"], "proyecto": p["proyecto"],
-                            "tipoCliente": p["tipoCliente"], "componente": c["componente"], "bloque": b,
-                            "curva": c["curva"], "mes": inicio + off + k, "mesCurva": k + 1, "especialidad": esp,
-                            "factor": f, "hhComponente": c["hh"],
-                            "hh": c["hh"] * f * solap * escala[b],
-                        })
+                        for e, mult in emitir:
+                            if mult == 0:
+                                continue
+                            filas.append({
+                                "proyectoId": p["id"], "proyecto": p["proyecto"],
+                                "tipoCliente": p["tipoCliente"], "componente": c["componente"], "bloque": b,
+                                "curva": c["curva"], "mes": inicio + off + k, "mesCurva": k + 1, "especialidad": e,
+                                "factor": f, "hhComponente": c["hh"],
+                                "hh": c["hh"] * f * solap * escala[b] * mult,
+                            })
     return filas
 
 

@@ -95,6 +95,18 @@ HH CARGADAS A MANO
   ET y Línea en la misma proporción; "HH netas" muestra el valor después del
   factor de solapamiento.
 
+HH POR ESPECIALIDAD
+  Cuando un proyecto se aparta de la curva estándar: panel del proyecto >
+  "HH por especialidad". Cada especialidad muestra las HH del modelo; escribí
+  las HH de la que quieras cambiar (por ejemplo Eléctricos 1800). Las vacías
+  siguen con el modelo. Cada especialidad conserva la forma de su curva en el
+  tiempo; si el modelo no le asigna horas (por ejemplo Estudios), toma la
+  forma del proyecto completo. Son HH antes del factor de solapamiento y
+  funcionan con cambios de duración y sensibilidades. Con HH por especialidad
+  cargadas, el total del proyecto sale de esa tabla (las HH por componente
+  quedan como referencia); en la tabla "Proyectos", cambiar "HH asignadas"
+  escala todas las especialidades en la misma proporción.
+
 SENSIBILIDADES (PROYECTOS DNN)
   Clic en un proyecto DNN > "Sensibilidades" > "Agregar sensibilidad": suma
   un bloque de trabajo igual al original (mismas HH, curva y duración) que

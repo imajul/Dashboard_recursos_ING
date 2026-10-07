@@ -185,13 +185,31 @@
     return out;
   }
 
+  // ---- HH por especialidad cargadas a mano (p.hhEsp = {especialidad: HH antes del solapamiento}) ----
+  // Pisan el total de esa especialidad; las vacías siguen con el modelo. La forma en el tiempo es la de
+  // su curva; una especialidad sin HH en el modelo toma la forma del proyecto completo.
+  const conEsp = (p) => !esOtro(p) && Object.values(p.hhEsp || {}).some((v) => !vacio(v));
+  function hhEspecialidades(p, curvas, params) {
+    const cv = curvasDe(p, curvas || {}, params), modelo = {};
+    for (const c of componentes(p, params))
+      for (const [e, v] of Object.entries(cv[c.curva] || {})) modelo[e] = (modelo[e] || 0) + c.hh * v.reduce((a, b) => a + b, 0);
+    const asignadas = Object.assign({}, modelo);
+    if (!esOtro(p)) for (const [e, v] of Object.entries(p.hhEsp || {})) if (!vacio(v)) asignadas[e] = Math.max(0, Number(v));
+    return { modelo, asignadas };
+  }
+  // HH del proyecto antes del solapamiento (las de cada especialidad si hay cargadas)
+  function hhBruto(p, curvas, params) {
+    let t = 0;
+    if (conEsp(p) && curvas) { for (const v of Object.values(hhEspecialidades(p, curvas, params).asignadas)) t += v; return t; }
+    for (const c of componentes(p, params)) t += c.hh;
+    return t;
+  }
+
   const solapDe = (p) => (vacio(p.factorSolapamiento) || esOtro(p) ? 1 : Number(p.factorSolapamiento)); // «Otro»: sin solapamiento
   // HH netas de cada bloque (0 = original). Una sensibilidad con sensDetalle[i].hh usa ese total;
   // vacío = las mismas HH que el original.
-  function hhBloques(p, params) {
-    let base = 0;
-    for (const c of componentes(p, params)) base += c.hh;
-    base *= solapDe(p);
+  function hhBloques(p, params, curvas) {
+    const base = hhBruto(p, curvas, params) * solapDe(p);
     return Array.from({ length: sensibilidades(p) + 1 }, (_, b) => {
       const v = ajusteSens(p, b).hh;
       return b > 0 && !vacio(v) && base > 0 ? Math.max(0, Number(v)) : base;
@@ -208,7 +226,17 @@
       const comps = componentes(p, params);
       const nBase = Math.max(0, ...comps.map((c) => largoCurva(cv, c.curva)));
       const desp = bloques(p, curvas, params).map((x) => x[0]);
-      const hb = hhBloques(p, params), escala = hb.map((x) => (hb[0] > 0 ? x / hb[0] : 1)); // HH propias de cada sensibilidad
+      const hb = hhBloques(p, params, curvas), escala = hb.map((x) => (hb[0] > 0 ? x / hb[0] : 1)); // HH propias de cada sensibilidad
+      let kEsp = null, extras = [], mTot = 0; // HH por especialidad: escala de cada una y especialidades sin modelo
+      if (conEsp(p)) {
+        const { modelo, asignadas } = hhEspecialidades(p, curvas, params);
+        kEsp = {};
+        for (const v of Object.values(modelo)) mTot += v;
+        for (const [e, t] of Object.entries(asignadas)) {
+          if ((modelo[e] || 0) > 0) kEsp[e] = t / modelo[e];
+          else if (t > 0 && mTot > 0) extras.push([e, t / mTot]);
+        }
+      }
       for (const c of comps) {
         const curva = cv[c.curva] || {};
         const nC = largoCurva(cv, c.curva);
@@ -217,13 +245,17 @@
             const nNuevo = largoComponente(nC, nBase, duracionBloque(p, b));
             let factores = curva[esp];
             if (nNuevo !== nC) factores = reescalar(factores.concat(new Array(nC - factores.length).fill(0)), nNuevo);
+            const emitir = [[esp, kEsp && kEsp[esp] !== undefined ? kEsp[esp] : 1]].concat(extras);
             factores.forEach((f, k) => {
               if (f === 0) return;
-              filas.push({
-                proyectoId: p.id, proyecto: p.proyecto, tipoCliente: p.tipoCliente,
-                componente: c.componente, bloque: b, curva: c.curva, mes: inicio + off + k, mesCurva: k + 1, especialidad: esp,
-                factor: f, hhComponente: c.hh, hh: c.hh * f * solap * escala[b],
-              });
+              for (const [e, mult] of emitir) {
+                if (mult === 0) continue;
+                filas.push({
+                  proyectoId: p.id, proyecto: p.proyecto, tipoCliente: p.tipoCliente,
+                  componente: c.componente, bloque: b, curva: c.curva, mes: inicio + off + k, mesCurva: k + 1, especialidad: e,
+                  factor: f, hhComponente: c.hh, hh: c.hh * f * solap * escala[b] * mult,
+                });
+              }
             });
           });
         }
@@ -412,6 +444,6 @@
   }
 
   return { TIPOS_CLIENTE, TAMANOS, tamano, mesIdx, mesStr, interpolar, componentes, aplicarEscenario, forecast,
-    esOtro, planHH, curvasDe, HH_PERSONA_DEFECTO, personasBase, personaActiva, sensibilidades, bloques, hhBloques, MESES_SENSIBILIDAD, largoCurva, duracionBase, reescalar, largoComponente,
+    esOtro, planHH, curvasDe, HH_PERSONA_DEFECTO, personasBase, personaActiva, sensibilidades, bloques, hhBloques, conEsp, hhEspecialidades, hhBruto, MESES_SENSIBILIDAD, largoCurva, duracionBase, reescalar, largoComponente,
     capacidadMes, calcular, detalle, mejorInicio, dotacionMinima };
 });

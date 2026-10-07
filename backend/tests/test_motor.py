@@ -160,6 +160,29 @@ class ReglasDeNegocio(unittest.TestCase):
         p2 = dict(dnn, sensibilidades=1, sensDetalle=[{"separacion": -10}])
         self.assertEqual(motor.bloques(p2, d["curvas"], d["parametros"])[1][0], 0)
 
+    def test_hh_por_especialidad(self):
+        d = dataset()
+        p0 = d["proyectos"][0]
+        modelo, _ = motor.hh_especialidades(p0, d["curvas"], d["parametros"])
+        esp = max(modelo, key=modelo.get)                       # la especialidad con más HH del modelo
+        sin = next(e for e in d["especialidades"] if modelo.get(e, 0) == 0)  # una sin HH (Estudios)
+        p = dict(p0, hhEsp={esp: 5000, sin: 300}, factorSolapamiento=0.5)
+        f = motor.forecast([p], d["curvas"], d["parametros"])
+        por = lambda e: sum(x["hh"] for x in f if x["especialidad"] == e)
+        self.assertAlmostEqual(por(esp), 5000 * 0.5)            # pisa el total (antes del solapamiento)
+        self.assertAlmostEqual(por(sin), 300 * 0.5)             # sin modelo: toma la forma del proyecto
+        otra = next(e for e in modelo if e != esp and modelo[e] > 0)
+        self.assertAlmostEqual(por(otra), modelo[otra] * 0.5)   # las vacías siguen con el modelo
+        total = sum(modelo.values()) - modelo[esp] + 5000 + 300
+        self.assertAlmostEqual(motor.hh_bruto(p, d["curvas"], d["parametros"]), total)
+        # sensibilidades: escalan con el nuevo total
+        dnn = next(q for q in d["proyectos"] if q["proyecto"] == "PEDAN")
+        m2, _ = motor.hh_especialidades(dnn, d["curvas"], d["parametros"])
+        e2 = next(iter(m2))
+        q = dict(dnn, hhEsp={e2: 1234}, sensibilidades=1)
+        f2 = motor.forecast([q], d["curvas"], d["parametros"])
+        self.assertAlmostEqual(sum(x["hh"] for x in f2 if x["bloque"] == 1 and x["especialidad"] == e2), 1234)
+
     def test_sensibilidad_hh_propias(self):
         d = dataset()
         dnn = next(p for p in d["proyectos"] if p["proyecto"] == "PEDAN")
@@ -358,7 +381,7 @@ class ParidadJavaScript(unittest.TestCase):
     def test_paridad_escenario(self):
         self._comparar({
             "proyectos": {"8": {"desplazamiento": 4}, "3": {"incluir": False},
-                          "1": {"duracion": 7, "desplazamiento": 26}, "2": {"duracion": 20}, "9": {"duracion": 4},
+                          "1": {"duracion": 7, "desplazamiento": 26}, "2": {"duracion": 20, "hhEsp": {"Eléctricos": 4000, "Estudios": 250}}, "9": {"duracion": 4},
                           "13": {"sensibilidades": 2, "duracion": 5, "sensDetalle": [{"separacion": 6, "duracion": 2, "hh": 777}]}, "15": {"sensibilidades": 1}},
             "capacidad": {"dotacion": {"Eléctricos": 16}, "eficiencia": 0.8,
                           "eventos": [{"especialidad": "Civiles", "desde": "2027-01", "hasta": "2027-09", "delta": 2}]},

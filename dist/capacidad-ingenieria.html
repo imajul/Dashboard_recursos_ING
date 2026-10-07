@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<!-- Versión autocontenida generada el 06/10/2026 -->
+<!-- Versión autocontenida generada el 07/10/2026 -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Capacidad de Ingeniería</title>
@@ -2019,13 +2019,31 @@ window.SAMPLE_DATA = {
     return out;
   }
 
+  // ---- HH por especialidad cargadas a mano (p.hhEsp = {especialidad: HH antes del solapamiento}) ----
+  // Pisan el total de esa especialidad; las vacías siguen con el modelo. La forma en el tiempo es la de
+  // su curva; una especialidad sin HH en el modelo toma la forma del proyecto completo.
+  const conEsp = (p) => !esOtro(p) && Object.values(p.hhEsp || {}).some((v) => !vacio(v));
+  function hhEspecialidades(p, curvas, params) {
+    const cv = curvasDe(p, curvas || {}, params), modelo = {};
+    for (const c of componentes(p, params))
+      for (const [e, v] of Object.entries(cv[c.curva] || {})) modelo[e] = (modelo[e] || 0) + c.hh * v.reduce((a, b) => a + b, 0);
+    const asignadas = Object.assign({}, modelo);
+    if (!esOtro(p)) for (const [e, v] of Object.entries(p.hhEsp || {})) if (!vacio(v)) asignadas[e] = Math.max(0, Number(v));
+    return { modelo, asignadas };
+  }
+  // HH del proyecto antes del solapamiento (las de cada especialidad si hay cargadas)
+  function hhBruto(p, curvas, params) {
+    let t = 0;
+    if (conEsp(p) && curvas) { for (const v of Object.values(hhEspecialidades(p, curvas, params).asignadas)) t += v; return t; }
+    for (const c of componentes(p, params)) t += c.hh;
+    return t;
+  }
+
   const solapDe = (p) => (vacio(p.factorSolapamiento) || esOtro(p) ? 1 : Number(p.factorSolapamiento)); // «Otro»: sin solapamiento
   // HH netas de cada bloque (0 = original). Una sensibilidad con sensDetalle[i].hh usa ese total;
   // vacío = las mismas HH que el original.
-  function hhBloques(p, params) {
-    let base = 0;
-    for (const c of componentes(p, params)) base += c.hh;
-    base *= solapDe(p);
+  function hhBloques(p, params, curvas) {
+    const base = hhBruto(p, curvas, params) * solapDe(p);
     return Array.from({ length: sensibilidades(p) + 1 }, (_, b) => {
       const v = ajusteSens(p, b).hh;
       return b > 0 && !vacio(v) && base > 0 ? Math.max(0, Number(v)) : base;
@@ -2042,7 +2060,17 @@ window.SAMPLE_DATA = {
       const comps = componentes(p, params);
       const nBase = Math.max(0, ...comps.map((c) => largoCurva(cv, c.curva)));
       const desp = bloques(p, curvas, params).map((x) => x[0]);
-      const hb = hhBloques(p, params), escala = hb.map((x) => (hb[0] > 0 ? x / hb[0] : 1)); // HH propias de cada sensibilidad
+      const hb = hhBloques(p, params, curvas), escala = hb.map((x) => (hb[0] > 0 ? x / hb[0] : 1)); // HH propias de cada sensibilidad
+      let kEsp = null, extras = [], mTot = 0; // HH por especialidad: escala de cada una y especialidades sin modelo
+      if (conEsp(p)) {
+        const { modelo, asignadas } = hhEspecialidades(p, curvas, params);
+        kEsp = {};
+        for (const v of Object.values(modelo)) mTot += v;
+        for (const [e, t] of Object.entries(asignadas)) {
+          if ((modelo[e] || 0) > 0) kEsp[e] = t / modelo[e];
+          else if (t > 0 && mTot > 0) extras.push([e, t / mTot]);
+        }
+      }
       for (const c of comps) {
         const curva = cv[c.curva] || {};
         const nC = largoCurva(cv, c.curva);
@@ -2051,13 +2079,17 @@ window.SAMPLE_DATA = {
             const nNuevo = largoComponente(nC, nBase, duracionBloque(p, b));
             let factores = curva[esp];
             if (nNuevo !== nC) factores = reescalar(factores.concat(new Array(nC - factores.length).fill(0)), nNuevo);
+            const emitir = [[esp, kEsp && kEsp[esp] !== undefined ? kEsp[esp] : 1]].concat(extras);
             factores.forEach((f, k) => {
               if (f === 0) return;
-              filas.push({
-                proyectoId: p.id, proyecto: p.proyecto, tipoCliente: p.tipoCliente,
-                componente: c.componente, bloque: b, curva: c.curva, mes: inicio + off + k, mesCurva: k + 1, especialidad: esp,
-                factor: f, hhComponente: c.hh, hh: c.hh * f * solap * escala[b],
-              });
+              for (const [e, mult] of emitir) {
+                if (mult === 0) continue;
+                filas.push({
+                  proyectoId: p.id, proyecto: p.proyecto, tipoCliente: p.tipoCliente,
+                  componente: c.componente, bloque: b, curva: c.curva, mes: inicio + off + k, mesCurva: k + 1, especialidad: e,
+                  factor: f, hhComponente: c.hh, hh: c.hh * f * solap * escala[b] * mult,
+                });
+              }
             });
           });
         }
@@ -2246,7 +2278,7 @@ window.SAMPLE_DATA = {
   }
 
   return { TIPOS_CLIENTE, TAMANOS, tamano, mesIdx, mesStr, interpolar, componentes, aplicarEscenario, forecast,
-    esOtro, planHH, curvasDe, HH_PERSONA_DEFECTO, personasBase, personaActiva, sensibilidades, bloques, hhBloques, MESES_SENSIBILIDAD, largoCurva, duracionBase, reescalar, largoComponente,
+    esOtro, planHH, curvasDe, HH_PERSONA_DEFECTO, personasBase, personaActiva, sensibilidades, bloques, hhBloques, conEsp, hhEspecialidades, hhBruto, MESES_SENSIBILIDAD, largoCurva, duracionBase, reescalar, largoComponente,
     capacidadMes, calcular, detalle, mejorInicio, dotacionMinima };
 });
 
@@ -2388,7 +2420,13 @@ function spanOf(p){
 /* HH manuales: pisan la base de datos de HH (tablas de Parámetros) para un componente puntual */
 var CAMPO_HH={"Parque":"hhParque","ET":"hhEt","Línea":"hhLinea","DNN":"hhProy","O&M":"hhProy"};
 function vacioV(v){return v==null||v==="";}
-function hhManual(p){return ["hhParque","hhEt","hhLinea","hhProy"].some(function(k){return !vacioV(p[k]);});}
+function hhManual(p){return ["hhParque","hhEt","hhLinea","hhProy"].some(function(k){return !vacioV(p[k]);})||E.conEsp(p);}
+/* HH de una especialidad cargadas a mano (null = vuelve al modelo) */
+function setHHEsp(p,e,v){
+  var o=Object.assign({},p.hhEsp||{});
+  if(v==null)delete o[e];else o[e]=Math.max(0,Math.round(v));
+  p.hhEsp=Object.keys(o).length?o:null;
+}
 function hhModelo(p){return E.componentes(Object.assign({},p,{hhParque:null,hhEt:null,hhLinea:null,hhProy:null}),PV());}
 function durMod(p){return p.duracion!=null&&p.duracion!=="";}
 /* fija la duración; si coincide con la de las curvas vuelve a "automática" */
@@ -2430,7 +2468,7 @@ function congelarSens(p){if(nSens(p))p.sensDetalle=detalleCongelado(p);}
 function sensDurMod(p,b){var a=sensAj(p,b);return a.duracion!=null&&a.duracion!==""&&+a.duracion!==spanOf(p).dur;}
 function sensHHMod(p,b){var a=sensAj(p,b);return a.hh!=null&&a.hh!=="";}
 function sensMod(p,b){var a=sensAj(p,b);return (a.separacion!=null&&a.separacion!=="")||sensDurMod(p,b)||sensHHMod(p,b);}
-function totalP(p){return E.hhBloques(p,PV()).reduce(function(a,b){return a+b;},0);} /* netas: original + cada sensibilidad con sus HH */
+function totalP(p){return E.hhBloques(p,PV(),S.datos.curvas).reduce(function(a,b){return a+b;},0);} /* netas: original + cada sensibilidad con sus HH */
 
 /* ===================== render: cabecera ===================== */
 function renderHead(){
@@ -2746,6 +2784,18 @@ function edProyecto(p){
   });
   html+='<tr><td><b>Total</b></td><td class="calc">'+hh(totMod)+'</td><td class="calc">'+hh(tot)+(solap<1?'<br><small style="color:var(--ink-soft)">× '+pctEnt(solap)+' = '+hh(tot*solap)+'</small>':'')+'</td><td></td><td></td></tr></table>';
   html+='<div class="hint">Dejá vacío para usar la base de datos de HH (Parámetros). Un valor cargado pisa el modelo solo para este proyecto'+(solap<1?'; el factor de solapamiento se aplica igual sobre ese valor':'')+'.</div>';
+  /* HH por especialidad: pisan el total de la especialidad elegida (antes del solapamiento) */
+  var ee=E.hhEspecialidades(p,S.datos.curvas,PV()),hhE=p.hhEsp||{},conE=E.conEsp(p),totM=0,totA=0;
+  html+='<h4>HH por especialidad</h4><table class="pk"><tr><th>Especialidad</th><th class="r">Modelo</th><th class="r">HH asignadas</th><th></th></tr>';
+  S.datos.especialidades.forEach(function(e){
+    var m=ee.modelo[e]||0,a=ee.asignadas[e]||0,esM=!vacioV(hhE[e]);totM+=m;totA+=a;
+    html+='<tr><td>'+esc(e)+'</td><td class="calc">'+(m?hh(m):'·')+'</td>'
+      +'<td><input type="number" min="0" step="100" data-hhe="'+esc(e)+'" placeholder="'+Math.round(m)+'" value="'+(esM?esc(hhE[e]):"")+'" aria-label="HH asignadas a '+esc(e)+'" style="width:96px'+(esM?';border-color:var(--warn-ink);font-weight:600':'')+'"></td>'
+      +'<td class="x">'+(esM?'<button data-hher="'+esc(e)+'" title="Volver al valor del modelo">↺</button>':'')+'</td></tr>';
+  });
+  html+='<tr><td><b>Total</b></td><td class="calc">'+hh(totM)+'</td><td class="calc">'+hh(totA)+(solap<1?'<br><small style="color:var(--ink-soft)">× '+pctEnt(solap)+' = '+hh(totA*solap)+'</small>':'')+'</td><td></td></tr></table>';
+  html+='<div class="hint">Escribí las HH de la especialidad que se aparta de la curva estándar; las vacías siguen con el modelo. Cada especialidad mantiene la forma de su curva en el tiempo; si el modelo no le asigna horas, toma la forma del proyecto completo. Valores antes del factor de solapamiento.</div>';
+  if(conE)html+='<div class="holg">Con HH por especialidad cargadas, el total del proyecto (<b>'+hh(totA)+' HH</b>) sale de esta tabla; las HH por componente quedan como referencia.</div>';
   if(man)html+='<div class="f" style="margin-top:8px"><label for="edNotaHH">Motivo del ajuste de HH</label><input type="text" id="edNotaHH" value="'+esc(p.notaHH||"")+'" placeholder="Ej.: alcance reducido, ingeniería del cliente"></div>'
     +'<div class="row-actions"><button class="btn sm" id="edHHReset">Volver todo al modelo</button></div>';
   }
@@ -2760,7 +2810,7 @@ function edProyecto(p){
     +'<button class="btn sm" data-du="1"'+(p.simulable?"":" disabled")+'>+1 m</button><button class="btn sm" data-du="3"'+(p.simulable?"":" disabled")+'>+3 m</button>'
     +'<button class="btn sm primary" id="bestDurBtn"'+(p.simulable?"":" disabled")+' title="Prueba duraciones de 50 % a 200 % y elige la que menos HH excede">Mejor duración</button></div><div id="bestDurBox"></div>';
   if(tipo==="DNN"){
-    var bls=E.bloques(p,S.datos.curvas,PV()),i0=E.mesIdx(p.fechaInicio),hb=tot*solap,hbs=E.hhBloques(p,PV());
+    var bls=E.bloques(p,S.datos.curvas,PV()),i0=E.mesIdx(p.fechaInicio),hbs=E.hhBloques(p,PV(),S.datos.curvas),hb=hbs[0];
     html+='<h4>Sensibilidades</h4><div class="psub" style="margin-bottom:6px">Cada sensibilidad repite el bloque de trabajo con la misma curva. Arranca '+E.MESES_SENSIBILIDAD+' meses después de que termina el bloque anterior; su inicio, su duración y sus HH se editan por separado (HH vacías = las mismas del original). Se edita acá o arrastrando las barras en el Gantt.</div>'
       +'<table class="pk"><tr><th>Bloque</th><th>Inicio → fin</th><th class="r">Meses</th><th class="r">HH</th><th></th></tr>'
       +bls.map(function(bl,i){
@@ -2804,7 +2854,14 @@ function edProyecto(p){
   ed.querySelectorAll("[data-hhr]").forEach(function(b){b.onclick=function(){var k=b.dataset.hhr;set(function(){p[k]=null;if(!hhManual(p))p.notaHH=null;});};});
   if(ge("edPlan"))ge("edPlan").onclick=function(){openPlan(p);};
   if(ge("edNotaHH"))ge("edNotaHH").onchange=function(){var v=this.value.trim()||null;set(function(){p.notaHH=v;});};
-  if(ge("edHHReset"))ge("edHHReset").onclick=function(){set(function(){p.hhParque=p.hhEt=p.hhLinea=p.hhProy=null;p.notaHH=null;});toast("HH de "+p.proyecto+" vuelven al modelo");};
+  ed.querySelectorAll("[data-hhe]").forEach(function(inp){inp.onchange=function(){
+    var e=inp.dataset.hhe,v=inp.value===""?null:parseFloat(String(inp.value).replace(",","."));
+    if(v!=null&&(isNaN(v)||v<0)){toast("Ingresá un número de HH mayor o igual a cero");renderEditor();return;}
+    set(function(){setHHEsp(p,e,v);});
+    if(v!=null){var n=document.getElementById("edNotaHH");if(n&&!n.value)n.focus();}
+  };});
+  ed.querySelectorAll("[data-hher]").forEach(function(b){b.onclick=function(){var e=b.dataset.hher;set(function(){setHHEsp(p,e,null);if(!hhManual(p))p.notaHH=null;});};});
+  if(ge("edHHReset"))ge("edHHReset").onclick=function(){set(function(){p.hhParque=p.hhEt=p.hhLinea=p.hhProy=null;p.hhEsp=null;p.notaHH=null;});toast("HH de "+p.proyecto+" vuelven al modelo");};
   ge("edSim").onchange=function(){var v=this.checked;set(function(){p.simulable=v;});};
   ge("edInc").onchange=function(){var v=this.checked;set(function(){p.incluir=v;});};
   ed.querySelectorAll("[data-mv]").forEach(function(b){b.onclick=function(){moverP(p,+b.dataset.mv);};});
@@ -2863,7 +2920,7 @@ function aOtro(p){
   Object.keys(val).forEach(function(e){val[e]=val[e].map(r2);});
   p.tecnologia="Otro";
   if(!p.planManual||!p.planManual.meses)p.planManual={unidad:"personas",meses:dur,valores:val};
-  p.duracion=null;p.factorSolapamiento=1;p.hhParque=p.hhEt=p.hhLinea=p.hhProy=null;
+  p.duracion=null;p.factorSolapamiento=1;p.hhParque=p.hhEt=p.hhLinea=p.hhProy=null;p.hhEsp=null;
 }
 /* escala todo el plan para que sume «total» HH */
 function escalarPlan(p,total){
@@ -3687,18 +3744,20 @@ var CAMPOS=[
   {k:"incluir",n:"Incluir",t:"chk"}
 ];
 /* campos que entran al registro de cambios (además de los de la tabla) */
-var CAMPOS_DIFF=CAMPOS.concat([{k:"planManual",n:"Plan de recursos",vacio:"—"},{k:"sensDetalle",n:"Ajuste sensibilidades",vacio:"automático"},{k:"hhParque",n:"HH manual parque",vacio:"modelo"},{k:"hhEt",n:"HH manual ET",vacio:"modelo"},{k:"hhLinea",n:"HH manual línea",vacio:"modelo"},{k:"hhProy",n:"HH manual proyecto",vacio:"modelo"},{k:"notaHH",n:"Motivo HH"}]);
+var CAMPOS_DIFF=CAMPOS.concat([{k:"planManual",n:"Plan de recursos",vacio:"—"},{k:"sensDetalle",n:"Ajuste sensibilidades",vacio:"automático"},{k:"hhParque",n:"HH manual parque",vacio:"modelo"},{k:"hhEt",n:"HH manual ET",vacio:"modelo"},{k:"hhLinea",n:"HH manual línea",vacio:"modelo"},{k:"hhProy",n:"HH manual proyecto",vacio:"modelo"},{k:"hhEsp",n:"HH por especialidad",vacio:"modelo"},{k:"notaHH",n:"Motivo HH"}]);
 function valorCampo(p,k){
   if(k==="fijo")return !p.simulable;
   if(k==="incluir")return p.incluir!==false;
   if(k==="planManual")return esOtro(p)&&p.planManual?JSON.stringify(p.planManual):"";
   if(k==="sensDetalle")return p.sensDetalle&&p.sensDetalle.length?JSON.stringify(p.sensDetalle):"";
+  if(k==="hhEsp")return E.conEsp(p)?JSON.stringify(p.hhEsp):"";
   var v=p[k];return v==null?"":v;
 }
 function txtCampo(k,v){
   if(v===""||v==null){var c=CAMPOS_DIFF.filter(function(x){return x.k===k;})[0];return c&&c.vacio?c.vacio:"—";}
   if(v===true)return "sí";if(v===false)return "no";
   if(k==="fechaInicio")return mlabel(v);
+  if(k==="hhEsp"){try{var o=JSON.parse(v);return Object.keys(o).map(function(e){return (ABREV[e]||e)+" "+hh(o[e]);}).join(", ");}catch(e){return "—";}}
   if(k==="sensDetalle"){try{return JSON.parse(v).map(function(o,i){var t=[];if(o.separacion!=null)t.push("inicio "+(o.separacion>=0?"+":"")+o.separacion+" m");if(o.duracion!=null)t.push(o.duracion+" meses");if(o.hh!=null)t.push(hh(o.hh)+" HH");return "S"+(i+1)+" "+(t.join(", ")||"auto");}).join("; ");}catch(e){return "—";}}
   if(k==="planManual"){try{var pl=JSON.parse(v);return pl.meses+" meses · "+hh(totalPlan({planManual:pl}))+" HH";}catch(e){return "—";}}
   if(k==="factorSolapamiento")return pctEnt(+v);
@@ -3713,7 +3772,7 @@ function avisosProyecto(p,cod){
   if(!/^\d{4}-\d{2}$/.test(p.fechaInicio||""))a.push("Falta la fecha de inicio");
   if(p.tipoCliente==="DNN"&&["DNN Cat1","DNN Cat2"].indexOf(p.nivelDNN)<0)a.push("DNN sin nivel");
   if(esOtro(p)){if(!(totalPlan(p)>0))a.push("Plan de recursos vacío: no suma HH");}
-  else if(!(+p.potencia>0)&&(p.hhProy==null||p.hhProy==="")&&(p.hhParque==null||p.hhParque===""))a.push("Sin potencia ni HH manuales");
+  else if(!(+p.potencia>0)&&(p.hhProy==null||p.hhProy==="")&&(p.hhParque==null||p.hhParque==="")&&!E.conEsp(p))a.push("Sin potencia ni HH manuales");
   if(p.tipoCliente!=="DNN"&&+p.sensibilidades>0)a.push("Las sensibilidades solo aplican a proyectos DNN");
   if(p.tipoCliente!=="DPI"&&(p.est||p.linea))a.push("ET/Línea no se usan en "+p.tipoCliente);
   return a;
@@ -3740,9 +3799,9 @@ function openProyectos(){
     });
     var man=hhManual(p)||esOtro(p),totMod=0,totAsig=0;
     hhModelo(p).forEach(function(c){totMod+=c.hh;});
-    E.componentes(p,PV()).forEach(function(c){totAsig+=c.hh;});
+    totAsig=E.hhBruto(p,S.datos.curvas,PV());
     html+='<td><input type="number" min="0" step="100" data-pc="'+esc(p.id)+'|hhTotal" aria-label="HH asignadas '+esc(p.proyecto)+'" placeholder="'+Math.round(totMod)+'" value="'+(man?Math.round(totAsig):"")+'"'
-      +' title="'+(esOtro(p)?'Total del plan de recursos manual. Otro valor escala todo el plan en la misma proporción.':man?'Cargadas a mano (modelo: '+hh(totMod)+' HH). Vaciá la celda para volver al modelo.':'Modelo: '+hh(totMod)+' HH. Escribí otro valor para pisarlo.')+'" style="width:96px'+(man?';border-color:var(--warn-ink);font-weight:600':'')+'"></td>'
+      +' title="'+(esOtro(p)?'Total del plan de recursos manual. Otro valor escala todo el plan en la misma proporción.':E.conEsp(p)?'HH por especialidad cargadas a mano (modelo: '+hh(totMod)+' HH). Otro valor escala todas las especialidades en la misma proporción; vaciá la celda para volver al modelo.':man?'Cargadas a mano (modelo: '+hh(totMod)+' HH). Vaciá la celda para volver al modelo.':'Modelo: '+hh(totMod)+' HH. Escribí otro valor para pisarlo.')+'" style="width:96px'+(man?';border-color:var(--warn-ink);font-weight:600':'')+'"></td>'
       +'<td><input type="text" data-pc="'+esc(p.id)+'|notaHH" aria-label="Motivo del ajuste de HH de '+esc(p.proyecto)+'" value="'+esc(p.notaHH||"")+'" placeholder="'+(man?"¿por qué?":"")+'" style="width:150px"></td>'
       +'<td class="calc">'+hhK(totalP(p))+'</td><td class="x"><button data-lpdel="'+esc(p.id)+'" title="Eliminar '+esc(p.proyecto)+'">✕</button></td></tr>';
   });
@@ -3814,7 +3873,17 @@ function openProyectos(){
    en la proporción actual (manual o del modelo). null = todo vuelve al modelo. */
 function asignarHHTotal(p,total){
   if(esOtro(p)){if(total!=null)escalarPlan(p,total);return;}
-  if(total==null){p.hhParque=p.hhEt=p.hhLinea=p.hhProy=null;p.notaHH=null;return;}
+  if(total==null){p.hhParque=p.hhEt=p.hhLinea=p.hhProy=null;p.hhEsp=null;p.notaHH=null;return;}
+  if(E.conEsp(p)){ /* con HH por especialidad: escala todas en la misma proporción */
+    var as=E.hhEspecialidades(p,S.datos.curvas,PV()).asignadas,s=0,o={};
+    Object.keys(as).forEach(function(e){s+=as[e];});
+    if(s>0){
+      var mayor=null,suma=0;
+      Object.keys(as).forEach(function(e){if(as[e]>0){o[e]=Math.round(as[e]*total/s);suma+=o[e];if(!mayor||as[e]>as[mayor])mayor=e;}});
+      if(mayor)o[mayor]+=Math.round(total)-suma; /* el redondeo lo absorbe la especialidad más grande */
+    }
+    p.hhEsp=Object.keys(o).length?o:null;return;
+  }
   if(p.tipoCliente!=="DPI"){p.hhProy=Math.round(total);return;}
   var comps=E.componentes(p,PV()),suma=0;
   comps.forEach(function(c){suma+=c.hh;});
@@ -3842,14 +3911,14 @@ function csvProyectos(){
   var na=function(v){return v==null||v===""?"N/A":v;};
   var dec=function(v,d){return v==null||v===""?"":Number(v).toFixed(d).replace(".",",");};
   var head=["Proyectos","Nombre","Tipo Cliente","Nivel DNN","Tecnología","Factor Solapa","Potencia","Tensión POE","Est Transformadora","Linea","Fecha Inicio","Estado","Calendario Fijo","% Avance","Duración meses","Tamaño","Incluir","Sensibilidades",
-    "HH Estimadas Parque","HH Estimadas ET","HH Estimadas Línea","HH Estimadas Proy","Motivo HH","Plan Manual","Ajuste Sensibilidades"];
+    "HH Estimadas Parque","HH Estimadas ET","HH Estimadas Línea","HH Estimadas Proy","Motivo HH","Plan Manual","Ajuste Sensibilidades","HH por Especialidad"];
   var rows=[head.map(q).join(",")];
   S.datos.proyectos.forEach(function(p){
     var f=p.fechaInicio?("01/"+p.fechaInicio.slice(5)+"/"+p.fechaInicio.slice(0,4)+" 0:00"):"";
     rows.push([p.proyecto,p.nombre||"",p.tipoCliente,p.nivelDNN?p.nivelDNN.replace("DNN Cat","Cat "):"N/A",p.tecnologia,dec(p.factorSolapamiento==null?1:p.factorSolapamiento,2),
       p.potencia==null?"":String(p.potencia).replace(".",","),p.tensionPOE==null?"":p.tensionPOE,na(p.est),na(p.linea),f,p.estado||"",p.simulable?"No":"Si",
       p.avance==null?"":p.avance,p.duracion==null?"":p.duracion,p.tamano||"",p.incluir===false?"No":"Si",p.sensibilidades||"",
-      vacioV(p.hhParque)?"":p.hhParque,vacioV(p.hhEt)?"":p.hhEt,vacioV(p.hhLinea)?"":p.hhLinea,vacioV(p.hhProy)?"":p.hhProy,p.notaHH||"",esOtro(p)&&p.planManual?JSON.stringify(p.planManual):"",p.sensDetalle&&p.sensDetalle.length?JSON.stringify(p.sensDetalle):""].map(q).join(","));
+      vacioV(p.hhParque)?"":p.hhParque,vacioV(p.hhEt)?"":p.hhEt,vacioV(p.hhLinea)?"":p.hhLinea,vacioV(p.hhProy)?"":p.hhProy,p.notaHH||"",esOtro(p)&&p.planManual?JSON.stringify(p.planManual):"",p.sensDetalle&&p.sensDetalle.length?JSON.stringify(p.sensDetalle):"",E.conEsp(p)?JSON.stringify(p.hhEsp):""].map(q).join(","));
   });
   return rows.join("\r\n");
 }
@@ -4047,6 +4116,8 @@ function proyectosDesdeCSV(texto){
       notaHH:tx(col(r,"Motivo HH")),factorSolapamiento:nm(col(r,"Factor Solapa","Factor Solapamiento"))||1,
       duracion:nm(col(r,"Duración meses","Duracion meses")),sensibilidades:nm(col(r,"Sensibilidades"))||null,tensionPOE:nm(col(r,"Tensión POE")),avance:nm(col(r,"% Avance"))};
     if(/^(no|false|0)$/i.test(tx(col(r,"Incluir"))||""))p.incluir=false;
+    var he=tx(col(r,"HH por Especialidad"));
+    if(he){try{p.hhEsp=JSON.parse(he);}catch(e){av.push(cod+": «HH por Especialidad» ilegible (se ignora)");}}
     var sd=tx(col(r,"Ajuste Sensibilidades"));
     if(sd){try{p.sensDetalle=JSON.parse(sd);normSens(p);}catch(e){av.push(cod+": «Ajuste Sensibilidades» ilegible (se ignora)");}}
     var pm=tx(col(r,"Plan Manual"));

@@ -126,6 +126,12 @@ def leer(texto: str) -> tuple[list[dict], list[str]]:
         }
         if (_txt(f.get("Incluir")) or "").lower() in ("no", "false", "0"):
             p["incluir"] = False
+        por_esp = _txt(f.get("HH por Especialidad"))  # HH cargadas por especialidad (JSON)
+        if por_esp:
+            try:
+                p["hhEsp"] = json.loads(por_esp)
+            except ValueError:
+                avisos.append(f"{codigo}: «HH por Especialidad» ilegible (se ignora)")
         ajuste = _txt(f.get("Ajuste Sensibilidades"))  # inicio/duración de cada sensibilidad DNN (JSON)
         if ajuste:
             try:

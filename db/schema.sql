@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS dim_proyecto (
     hh_proy_manual       REAL,
     factor_solapamiento  REAL NOT NULL DEFAULT 1 CHECK (factor_solapamiento BETWEEN 0 AND 1),
     duracion_meses       INTEGER CHECK (duracion_meses >= 1),  -- NULL = la de las curvas; si no, se reescalan
+    hh_esp_manual        TEXT,                     -- HH por especialidad cargadas a mano: JSON {especialidad: HH}
     plan_manual          TEXT,                     -- tecnología «Otro»: JSON {unidad, meses, valores{especialidad:[..]}}
     sp_modified          TEXT,                     -- lastModifiedDateTime de Graph
     sincronizado_ts      TEXT NOT NULL DEFAULT (datetime('now'))
