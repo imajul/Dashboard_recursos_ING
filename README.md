@@ -6,7 +6,7 @@ simulación de recursos en vivo.
 | Carpeta | Contenido |
 |---|---|
 | [`docs/PROPUESTA_TECNICA.md`](docs/PROPUESTA_TECNICA.md) | Propuesta técnica completa: arquitectura, modelo de datos, SharePoint, reemplazo de las tablas DAX, simulación, escenarios, viabilidad y diagramas. |
-| [`prototipo/`](prototipo) | Prototipo funcional en HTML/JS: Gantt de proyectos arrastrable (inicio y duración), matriz de ocupación con semáforo, gráfico demanda vs capacidad, edición de recursos y de los parámetros del modelo (tablas de HH y curvas), escenarios, comparación, exportación CSV/JSON y reporte PDF. Abrir `prototipo/index.html`. |
+| [`prototipo/`](prototipo) | Prototipo funcional en HTML/JS: Gantt de proyectos arrastrable (inicio y duración), matriz de ocupación con semáforo, saturación por especialidad (un panel por especialidad), edición de recursos y de los parámetros del modelo (tablas de HH y curvas), escenarios, comparación, exportación CSV/JSON y reporte PDF. Abrir `prototipo/index.html`. |
 | [`dist/`](dist) | **Versión para usar en equipo**: `capacidad-ingenieria.html` (la herramienta en un solo archivo) y `LEEME.txt` (guía). Se copian a una carpeta sincronizada con SharePoint. |
 | [`backend/`](backend) | Motor de cálculo en Python (`app/motor.py`), API FastAPI, repositorio SQLite/SQL Server y conector SharePoint vía Microsoft Graph. |
 | [`db/schema.sql`](db/schema.sql) | Modelo de datos. |
@@ -62,9 +62,15 @@ ni cuentas de Claude o GitHub: alcanza con la cuenta de Microsoft de la empresa 
   (con vista previa de altas, cambios y bajas); Exportar → Lista de proyectos genera el CSV en el mismo formato.
 - **Staff de Ingeniería (Recursos):** nómina con nombre, especialidad, dedicación, ingreso y egreso; la
   cantidad de personas por especialidad y mes sale de la lista (`capacidad.staff`; sin lista se usa
-  `capacidad.dotacion`). Pegar desde Excel, vacantes desde «Nivelar», cambios en el registro.
-- **HH manuales por proyecto:** en el panel del proyecto, HH por componente (modelo vs. asignadas) con motivo;
-  vacío = modelo. Se exportan en las columnas «HH Estimadas …».
+  `capacidad.dotacion`). Pegar desde Excel, casillero «Simulado» por persona, cambios en el registro.
+- **Altas y bajas:** solo por la nómina (fecha de ingreso / egreso). Las altas sin nombre son vacantes
+  («Vacante Eléctrico 1»); «Nivelar» y «+N pers.» de Cuellos de botella las agregan con ingreso en el primer
+  mes crítico. Las «altas y bajas programadas» (`capacidad.eventos`) ya no se usan en la UI: al abrir un plan
+  viejo las altas pasan a vacantes y las bajas quedan en `capacidad.bajasPendientes` (aviso en Recursos hasta
+  cargar el egreso). El motor sigue aceptando `eventos` por compatibilidad.
+- **HH del proyecto (un solo bloque en el panel):** Total editable (reparte la diferencia en la misma
+  proporción), «Por especialidad» y «Por componente» (modelo vs. asignadas, vacío = modelo) con motivo; el
+  total es siempre la suma por especialidad. Las de componente se exportan en las columnas «HH Estimadas …».
 - **HH por especialidad:** `hhEsp = {especialidad: HH}` pisa el total de cada especialidad (antes del solapamiento);
   la forma en el tiempo es la de su curva, o la del proyecto si el modelo no le asigna horas. Si hay, mandan sobre
   las HH por componente. Columna «HH por Especialidad» (JSON) en el CSV; `hh_esp_manual` en SQLite.
@@ -76,6 +82,17 @@ ni cuentas de Claude o GitHub: alcanza con la cuenta de Microsoft de la empresa 
   (`planManual`: especialidad × mes, en personas equivalentes o HH) en lugar de tablas de HH y curvas; sin
   factor de solapamiento. Editor con generador desde un total de HH, escalado desde la tabla, reescalado al
   cambiar la duración y exportación del plan. El motor (Python y JS) lo trata como una curva «Manual».
+- **Curvas (Parámetros):** cada especialidad tiene un **peso** editable (% de las HH del componente) y un
+  reparto en el tiempo relativo a la especialidad (cada fila suma 100 %). El motor sigue usando factores
+  absolutos (peso × relativo); «Ajustar a 100 %» lleva pesos y filas a enteros que suman 100.
+- **Saturación por especialidad:** debajo de la matriz, un panel por especialidad con su demanda (por tipo de
+  cliente), su capacidad y el exceso en rojo; vista HH o Personas (sobran / faltan), escala propia o común,
+  alto C/M/G; hover con el detalle y clic para ver los proyectos del mes.
+- **Reporte PDF (A3):** indicadores, Gantt con las HH mensuales de cada proyecto y sus sensibilidades,
+  ocupación, paneles de saturación por especialidad, cuellos de botella, Pareto y ficha de proyectos;
+  paginado con la cabecera de meses repetida. Necesita internet para cargar jsPDF.
+- **Ayudas al pasar el mouse:** indicadores, botones, cabeceras y leyendas muestran qué significan (los
+  `title` se convierten en el globo de la herramienta).
 - **Registro de cambios:** cada guardado anota qué cambió (altas, bajas, campos con valor anterior y nuevo,
   recursos, parámetros) y quién; se ve en el historial y en el aviso de conflicto.
 - Sin carpeta conectada sigue funcionando como antes (datos en el navegador, Exportar/Importar JSON).
